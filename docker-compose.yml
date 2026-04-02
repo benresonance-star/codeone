@@ -8,6 +8,8 @@ services:
     environment:
       POSTGRES_URL: postgresql://postgres:postgres@postgres:5432/ncc
       REDIS_URL: redis://redis:6379/0
+    volumes:
+      - runtime-data:/app/runtime-data
     depends_on:
       - postgres
       - redis
@@ -41,3 +43,4 @@ services:
 
 volumes:
   postgres-data:
+  runtime-data:

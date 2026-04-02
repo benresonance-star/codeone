@@ -4,14 +4,19 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from difflib import SequenceMatcher
-from io import BytesIO
 from typing import Any
 import re
 import xml.etree.ElementTree as ET
 
-import pdfplumber
-
 from app.core.contracts import load_contracts, validate_payload
+from app.models.document_strategy import (
+    DocumentStrategyDecision,
+    ExtractedPdf,
+    ReviewPolicy,
+    StructuredBlock,
+)
+from app.services.document_strategy import DocumentStrategyRouter
+from app.services.extractors import DoclingStubExtractor, PdfPlumberExtractor
 
 
 def utc_now_iso() -> str:
@@ -57,18 +62,51 @@ class PdfFragment:
 class IngestionService:
     def __init__(self) -> None:
         self.contracts = load_contracts()
+        self.router = DocumentStrategyRouter()
+        self.extractors = {
+            "pdfplumber": PdfPlumberExtractor(),
+            "docling": DoclingStubExtractor(),
+        }
 
-    def process(self, pdf_bytes: bytes, pdf_name: str, xml_bytes: bytes, xml_name: str) -> dict[str, Any]:
+    def process(
+        self,
+        pdf_bytes: bytes,
+        pdf_name: str,
+        xml_bytes: bytes,
+        xml_name: str,
+        *,
+        document_class: str | None = None,
+        extraction_profile: str | None = None,
+        evaluation_profile: str | None = None,
+        extractor_strategy: str | None = None,
+    ) -> dict[str, Any]:
         xml_context = self._validate_xml(xml_bytes, xml_name)
-        pdf_context = self._validate_pdf(pdf_bytes, pdf_name, xml_context)
+        strategy = self.router.route(
+            pdf_name=pdf_name,
+            xml_name=xml_name,
+            requested_document_class=document_class,
+            requested_extraction_profile=extraction_profile,
+            requested_evaluation_profile=evaluation_profile,
+            requested_extractor_strategy=extractor_strategy,
+        )
+        pdf_context = self._validate_pdf(pdf_bytes, pdf_name, xml_context, strategy)
+        document_family_id = self._build_document_family_id(pdf_name=pdf_name, xml_name=xml_name)
+        canonical_snippets = self._build_canonical_snippets(
+            can_progress=bool(pdf_context["result"]["gate_decision"]["can_progress_to_semantic_layer"]),
+            fragments=pdf_context["fragments"],
+            alignments=pdf_context["alignments"],
+        )
 
         return {
             "summary": {
+                "ingestion_run_status": "active",
                 "xml_status": xml_context["result"]["overall_status"],
                 "pdf_status": pdf_context["result"]["overall_status"],
                 "can_progress": bool(pdf_context["result"]["gate_decision"]["can_progress_to_semantic_layer"]),
                 "paired_document_id": pdf_context["result"]["document"].get("paired_xml_doc_id")
                 or xml_context["result"]["document"].get("paired_pdf_doc_id"),
+                "document_strategy": pdf_context["strategy"],
+                "parity_summary": pdf_context["parity_scaffold"]["summary"],
             },
             "results": {
                 "xml_validation": xml_context["result"],
@@ -77,6 +115,17 @@ class IngestionService:
             "raw_metrics": {
                 "xml": xml_context["metrics"],
                 "pdf": pdf_context["metrics"],
+            },
+            "lineage": {
+                "document_family_id": document_family_id,
+                "xml_nodes": xml_context["xml_nodes"],
+                "pdf_fragments": pdf_context["fragments"],
+                "structured_blocks": pdf_context["structured_blocks"],
+                "alignments": pdf_context["alignments"],
+                "parity_scaffold": pdf_context["parity_scaffold"],
+                "canonical_snippets": canonical_snippets,
+                "pdf_tables": pdf_context["result"].get("table_validation", []),
+                "xml_tables": xml_context["result"].get("table_validation", []),
             },
         }
 
@@ -486,30 +535,25 @@ class IngestionService:
         validate_payload("xml_result_schema", result)
         return {"result": result, "metrics": metrics, "xml_nodes": xml_nodes}
 
-    def _validate_pdf(self, pdf_bytes: bytes, pdf_name: str, xml_context: dict[str, Any]) -> dict[str, Any]:
+    def _validate_pdf(
+        self,
+        pdf_bytes: bytes,
+        pdf_name: str,
+        xml_context: dict[str, Any],
+        strategy: DocumentStrategyDecision,
+    ) -> dict[str, Any]:
         contract = self.contracts["pdf_contract"]
         thresholds = contract["thresholds"]
         xml_result = xml_context["result"]
         xml_nodes: list[XmlNode] = xml_context["xml_nodes"]
 
-        fragments: list[PdfFragment] = []
-        page_count = 0
-        total_words = 0
-        tables_found: list[list[list[str | None]]] = []
-
-        with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
-            page_count = len(pdf.pages)
-            for page_index, page in enumerate(pdf.pages, start=1):
-                words = page.extract_words() or []
-                total_words += len(words)
-                fragments.extend(self._page_fragments(words, page_index))
-
-                page_tables = page.extract_tables() or []
-                tables_found.extend(page_tables)
-
+        extracted = self._extract_pdf(pdf_bytes, strategy)
+        fragments = self._fragments_from_blocks(extracted.blocks)
+        page_count = extracted.pages_processed
+        total_words = extracted.total_words
         text_based_ratio = 1.0 if page_count and total_words > 0 else 0.0
         line_texts = [fragment.text for fragment in fragments if fragment.text]
-        split_scope = "section"
+        split_scope = strategy.extraction_profile.expected_split_scope
         is_split = bool(page_count)
 
         alignments = [self._align_fragment(fragment, xml_nodes) for fragment in fragments]
@@ -518,18 +562,30 @@ class IngestionService:
         low_confidence = [item for item in aligned if item["confidence"] < thresholds["preferred_alignment_confidence"]]
 
         missing_clause_metadata = len(unresolved)
-        missing_traceability_metadata = len([fragment for fragment in fragments if not fragment.fragment_id])
-        invalid_tables = len([table for table in tables_found if not table or not any(row for row in table if row)])
-        missing_headers = 0
+        missing_traceability_metadata = len(
+            [
+                block
+                for block in extracted.blocks
+                if not block.block_id or not block.source_strategy or len(block.bbox) != 4
+            ]
+        )
+        invalid_tables = len([table for table in extracted.tables if not table.rows or not any(row for row in table.rows if any(row))])
+        missing_headers = len(
+            [
+                table
+                for table in extracted.tables
+                if strategy.extraction_profile.require_table_headers and table.rows and not table.headers_present
+            ]
+        )
         empty_row_sets = invalid_tables
         table_validation = []
-        for index, table in enumerate(tables_found, start=1):
-            rows_extracted = len(table or [])
+        for table in extracted.tables:
+            rows_extracted = len(table.rows or [])
             table_confidence = 0.99 if rows_extracted > 0 else 0.0
-            related_node = aligned[index - 1]["node_id"] if index - 1 < len(aligned) else None
+            related_node = table.related_block_id
             table_validation.append(
                 {
-                    "table_id": f"tbl_{index}",
+                    "table_id": table.table_id,
                     "node_id": related_node,
                     "related_xml_node": related_node,
                     "status": "PASS" if rows_extracted > 0 else "FAIL",
@@ -540,13 +596,17 @@ class IngestionService:
             )
 
         alignment_avg = average([item["confidence"] for item in aligned]) if aligned else 0.0
-        block_structure_score = 1.0 if fragments else 0.0
-        table_score = 1.0 if invalid_tables == 0 else max(0.0, 1.0 - invalid_tables / max(len(tables_found), 1))
+        missing_bbox = len([block for block in extracted.blocks if len(block.bbox) != 4])
+        untyped_fragments = len([block for block in extracted.blocks if not block.block_type])
+        missing_page_reference = len([block for block in extracted.blocks if block.page <= 0])
+        block_structure_score = 1.0 if fragments and missing_bbox == 0 and untyped_fragments == 0 and missing_page_reference == 0 else 0.0
+        table_score = 1.0 if invalid_tables == 0 else max(0.0, 1.0 - invalid_tables / max(len(extracted.tables), 1))
         alignment_score = alignment_avg
         metadata_score = 1.0 if missing_clause_metadata == 0 and missing_traceability_metadata == 0 else max(
             0.0, 1.0 - ((missing_clause_metadata + missing_traceability_metadata) / max(len(fragments), 1))
         )
         overall_confidence = round(average([block_structure_score, table_score, alignment_score, metadata_score]), 3)
+        parity_scaffold = self._build_parity_scaffold(strategy, fragments, alignments, xml_nodes)
 
         rule_results: list[dict[str, Any]] = []
         warnings: list[dict[str, Any]] = []
@@ -598,18 +658,19 @@ class IngestionService:
                 "status": "PASS" if c3_pass else "FAIL",
                 "details": {
                     "fragments_checked": len(fragments),
-                    "missing_bbox": 0,
-                    "untyped_fragments": 0,
-                    "missing_page_reference": 0,
+                    "missing_bbox": missing_bbox,
+                    "untyped_fragments": untyped_fragments,
+                    "missing_page_reference": missing_page_reference,
+                    "block_types": sorted({block.block_type for block in extracted.blocks}),
                 },
             }
         )
-        if not c3_pass:
+        if not c3_pass or missing_bbox or untyped_fragments or missing_page_reference:
             errors.append(
                 {
                     "code": "BLOCK_STRUCTURE_FAILURE",
                     "severity": "error",
-                    "message": "No usable PDF fragments were extracted.",
+                    "message": "PDF structured blocks are incomplete or unusable.",
                     "rule_id": "C3_BLOCK_STRUCTURE",
                 }
             )
@@ -620,7 +681,7 @@ class IngestionService:
                 "rule_id": "C4_TABLE_STRUCTURE",
                 "status": "PASS" if c4_pass else "FAIL",
                 "details": {
-                    "tables_checked": len(tables_found),
+                    "tables_checked": len(extracted.tables),
                     "invalid_tables": invalid_tables,
                     "missing_headers_where_expected": missing_headers,
                 },
@@ -735,7 +796,14 @@ class IngestionService:
             warnings=warnings,
             quality_score=overall_confidence,
             min_quality=thresholds["min_quality_score"],
-            review_required=False,
+            review_required=self._should_require_review(
+                strategy.review_policy,
+                strategy,
+                unresolved=unresolved,
+                low_confidence=low_confidence,
+                parity_scaffold=parity_scaffold,
+                alignment_avg=alignment_avg,
+            ),
             progression_target="semantic",
         )
 
@@ -763,7 +831,7 @@ class IngestionService:
                 "paired_xml_doc_id": xml_result["document"]["doc_id"],
                 "pages_processed": page_count,
                 "fragments_extracted": len(fragments),
-                "tables_extracted": len(tables_found),
+                "tables_extracted": len(extracted.tables),
             },
             "overall_status": overall_status,
             "gate_decision": {
@@ -818,8 +886,174 @@ class IngestionService:
                 "aligned": len(aligned),
                 "unresolved": len(unresolved),
                 "quality_score": overall_confidence,
+                "runtime_mode": extracted.runtime_mode,
+            },
+            "fragments": fragments,
+            "structured_blocks": [self._serialize_block(block) for block in extracted.blocks],
+            "alignments": alignments,
+            "strategy": self._serialize_strategy(strategy, extracted),
+            "parity_scaffold": parity_scaffold,
+        }
+
+    def _extract_pdf(self, pdf_bytes: bytes, strategy: DocumentStrategyDecision) -> ExtractedPdf:
+        extractor = self.extractors.get(strategy.extractor_strategy)
+        if extractor is None:
+            raise ValueError(f"Unsupported extractor strategy: {strategy.extractor_strategy}")
+        return extractor.extract(pdf_bytes, decision=strategy)
+
+    def _fragments_from_blocks(self, blocks: list[StructuredBlock]) -> list[PdfFragment]:
+        return [
+            PdfFragment(
+                fragment_id=block.block_id,
+                page=block.page,
+                text=block.text,
+                bbox=block.bbox,
+            )
+            for block in blocks
+        ]
+
+    def _serialize_block(self, block: StructuredBlock) -> dict[str, Any]:
+        return {
+            "block_id": block.block_id,
+            "page": block.page,
+            "bbox": block.bbox,
+            "block_type": block.block_type,
+            "text": block.text,
+            "table_id": block.table_id,
+            "section_hint": block.section_hint,
+            "heading_level": block.heading_level,
+            "source_strategy": block.source_strategy,
+            "metadata": block.metadata,
+        }
+
+    def _serialize_strategy(self, strategy: DocumentStrategyDecision, extracted: ExtractedPdf) -> dict[str, Any]:
+        return {
+            "document_class": strategy.document_class,
+            "extractor_strategy": strategy.extractor_strategy,
+            "runtime_strategy": extracted.strategy_name,
+            "runtime_mode": extracted.runtime_mode,
+            "extraction_profile": strategy.extraction_profile.profile_id,
+            "evaluation_profile": strategy.evaluation_profile.profile_id,
+            "parity_mode": strategy.evaluation_profile.parity_mode,
+            "notes": [*strategy.notes, *extracted.notes],
+        }
+
+    def _should_require_review(
+        self,
+        review_policy: ReviewPolicy,
+        strategy: DocumentStrategyDecision,
+        *,
+        unresolved: list[dict[str, Any]],
+        low_confidence: list[dict[str, Any]],
+        parity_scaffold: dict[str, Any],
+        alignment_avg: float,
+    ) -> bool:
+        if alignment_avg < review_policy.min_alignment_confidence_for_review:
+            return False
+        if 0 < len(unresolved) <= review_policy.max_unresolved_for_review:
+            return True
+        if 0 < len(low_confidence) <= review_policy.max_low_confidence_for_review:
+            return True
+        if review_policy.require_review_for_grouped_parity and parity_scaffold["summary"]["review_required_groups"] > 0:
+            return True
+        if review_policy.require_review_for_interpretive_content and strategy.document_class in {
+            "definitions_glossary",
+            "governance_interpretation",
+        }:
+            return bool(unresolved or low_confidence or parity_scaffold["summary"]["unmapped_targets"] > 0)
+        return False
+
+    def _build_parity_scaffold(
+        self,
+        strategy: DocumentStrategyDecision,
+        fragments: list[PdfFragment],
+        alignments: list[dict[str, Any]],
+        xml_nodes: list[XmlNode],
+    ) -> dict[str, Any]:
+        if not strategy.evaluation_profile.grouped_targets:
+            return {
+                "state": "scaffolded",
+                "parity_mode": strategy.evaluation_profile.parity_mode,
+                "groups": [],
+                "summary": {
+                    "group_count": 0,
+                    "matched_groups": 0,
+                    "review_required_groups": 0,
+                    "unmapped_targets": 0,
+                },
+            }
+
+        target_groups: dict[str, dict[str, Any]] = {}
+        for node in xml_nodes:
+            group_key = self._group_key_for_node(node, strategy.document_class)
+            group = target_groups.setdefault(
+                group_key,
+                {"group_id": group_key, "target_node_ids": [], "fragment_ids": [], "confidences": []},
+            )
+            group["target_node_ids"].append(node.node_id)
+
+        for alignment in alignments:
+            if not alignment["matched"] or not alignment["node_id"]:
+                continue
+            node = next((item for item in xml_nodes if item.node_id == alignment["node_id"]), None)
+            if node is None:
+                continue
+            group_key = self._group_key_for_node(node, strategy.document_class)
+            group = target_groups.setdefault(
+                group_key,
+                {"group_id": group_key, "target_node_ids": [], "fragment_ids": [], "confidences": []},
+            )
+            group["fragment_ids"].append(alignment["fragment_id"])
+            group["confidences"].append(float(alignment["confidence"]))
+
+        groups: list[dict[str, Any]] = []
+        review_required_groups = 0
+        matched_groups = 0
+        unmapped_targets = 0
+        for group in target_groups.values():
+            confidence = average(group["confidences"]) if group["confidences"] else 0.0
+            coverage = ratio(len(set(group["fragment_ids"])), max(len(set(group["target_node_ids"])), 1))
+            review_required = bool(group["target_node_ids"] and not group["fragment_ids"])
+            if review_required:
+                review_required_groups += 1
+                unmapped_targets += len(group["target_node_ids"])
+            if group["fragment_ids"]:
+                matched_groups += 1
+            groups.append(
+                {
+                    "group_id": group["group_id"],
+                    "target_node_ids": sorted(set(group["target_node_ids"])),
+                    "source_fragment_ids": sorted(set(group["fragment_ids"])),
+                    "average_confidence": confidence,
+                    "coverage": coverage,
+                    "review_required": review_required,
+                }
+            )
+
+        return {
+            "state": "scaffolded",
+            "parity_mode": strategy.evaluation_profile.parity_mode,
+            "glossary_semantics": strategy.evaluation_profile.glossary_semantics,
+            "groups": groups,
+            "summary": {
+                "group_count": len(groups),
+                "matched_groups": matched_groups,
+                "review_required_groups": review_required_groups,
+                "unmapped_targets": unmapped_targets,
             },
         }
+
+    def _group_key_for_node(self, node: XmlNode, document_class: str) -> str:
+        normalized = normalize_text(node.text)
+        if document_class == "definitions_glossary":
+            for marker in ("means", "refers to", "includes"):
+                token = f" {marker} "
+                if token in f" {normalized} ":
+                    return normalized.split(token, 1)[0][:80] or node.node_id
+        tokens = normalized.split()
+        if not tokens:
+            return node.node_id
+        return "_".join(tokens[:4])
 
     def _build_xml_result(
         self,
@@ -955,6 +1189,46 @@ class IngestionService:
             if match:
                 metadata["volume"] = match.group(1)
         return metadata
+
+    def _build_document_family_id(self, *, pdf_name: str, xml_name: str) -> str:
+        pdf_stem = re.sub(r"\.pdf$", "", pdf_name, flags=re.IGNORECASE)
+        xml_stem = re.sub(r"\.xml$", "", xml_name, flags=re.IGNORECASE)
+        common_tokens = [
+            token
+            for token in self._slugify(pdf_stem).split("_")
+            if token and token in self._slugify(xml_stem).split("_")
+        ]
+        if common_tokens:
+            return "_".join(common_tokens[:8])
+        return f"{self._slugify(pdf_stem)}__{self._slugify(xml_stem)}"
+
+    def _build_canonical_snippets(
+        self,
+        *,
+        can_progress: bool,
+        fragments: list[PdfFragment],
+        alignments: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        if not can_progress:
+            return []
+
+        fragment_by_id = {fragment.fragment_id: fragment for fragment in fragments}
+        snippets: list[dict[str, Any]] = []
+        for alignment in alignments:
+            if not alignment["matched"] or not alignment["node_id"]:
+                continue
+            fragment = fragment_by_id.get(alignment["fragment_id"])
+            if not fragment:
+                continue
+            snippets.append(
+                {
+                    "clause_id": alignment["node_id"],
+                    "fragment_id": fragment.fragment_id,
+                    "content": fragment.text,
+                    "confidence": alignment["confidence"],
+                }
+            )
+        return snippets
 
     def _page_fragments(self, words: list[dict[str, Any]], page_number: int) -> list[PdfFragment]:
         grouped: dict[int, list[dict[str, Any]]] = defaultdict(list)
