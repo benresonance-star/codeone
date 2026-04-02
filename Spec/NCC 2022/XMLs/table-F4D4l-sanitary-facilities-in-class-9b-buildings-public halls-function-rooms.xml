@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><table-reference xmlns:xt="urn:xpressauthor:trackchanges" graph="None" id="_413df910-5000-4a6b-bd15-1781f09cc92c"><num>F4D4l</num><title id="_844c0e84-0dd5-47db-bba3-5d8763ba8b09">Sanitary facilities in Class 9b buildings – public halls, function rooms or the like</title><table id="_78d6c8f9-0f80-4d9b-b74a-5ba319c9b7c7" keycol="1"><tgroup cols="4"><colspec colname="001" colnum="1" colwidth="145.90*"/><colspec colname="002" colnum="2" colwidth="95.45*"/><colspec colname="003" colnum="3" colwidth="95.35*"/><colspec colname="004" colnum="4" colwidth="95.25*"/><thead><row><entry>User group</entry><entry>Facility type</entry><entry>Design occupancy</entry><entry>Number</entry></row></thead><tbody><row><entry morerows="10">Male patrons</entry><entry morerows="1">Closet pans
+
+</entry><entry>1 - 100</entry><entry>1</entry></row><row><entry>&gt;100</entry><entry>Add 1 per 200</entry></row><row><entry morerows="5">Urinals
+
+
+
+
+
+</entry><entry>1 - 50</entry><entry>1</entry></row><row><entry>51 - 100</entry><entry>2</entry></row><row><entry>101 - 150</entry><entry>3</entry></row><row><entry>151 - 200</entry><entry>4</entry></row><row><entry>201 - 250</entry><entry>5</entry></row><row><entry>&gt;250</entry><entry>Add 1 per 100</entry></row><row><entry morerows="2">Washbasins
+
+
+</entry><entry>1 - 50</entry><entry>1</entry></row><row><entry>51 - 200</entry><entry>2</entry></row><row><entry>&gt;200</entry><entry>Add 1 per 200</entry></row><row><entry morerows="9">Female patrons</entry><entry morerows="6">Closet pans
+
+
+
+
+
+
+</entry><entry>1 - 25</entry><entry>1</entry></row><row><entry>26 - 50</entry><entry>2</entry></row><row><entry>51 - 100</entry><entry>3</entry></row><row><entry>101 - 150</entry><entry>4</entry></row><row><entry>151 - 200</entry><entry>5</entry></row><row><entry>201 - 250</entry><entry>6</entry></row><row><entry>&gt;250</entry><entry>Add 1 per 100</entry></row><row><entry morerows="2">Washbasins
+
+
+</entry><entry>1 - 50</entry><entry>1</entry></row><row><entry>51 - 150</entry><entry>2</entry></row><row><entry>&gt;150</entry><entry>Add 1 per 200</entry></row></tbody></tgroup></table><desc-note id="_6aa2f55f-91c7-47eb-9c90-7399c939a6d8"><p>Sanitary facilities need not be provided for patrons if the total number of persons accommodated in the building is not more than 20.</p></desc-note></table-reference>

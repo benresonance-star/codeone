@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><table-reference xmlns:xt="urn:xpressauthor:trackchanges" graph="None" id="_1a81ef10-9ea5-4722-957b-c1bbeacc23b5"><num>F4D4a</num><title id="_eb8eccac-a97f-42ee-a052-bf8d4f252b60">Sanitary facilities in Class 3, 5, 6 and 9 buildings other than schools</title><table id="_7e02f0eb-c303-4a46-8153-8d4b37379ac1" keycol="1"><tgroup cols="4"><colspec colname="001" colnum="1" colwidth="145.65*"/><colspec colname="002" colnum="2" colwidth="95.25*"/><colspec colname="003" colnum="3" colwidth="95.05*"/><colspec colname="004" colnum="4" colwidth="95.05*"/><thead><row><entry>User group</entry><entry>Facility type</entry><entry>Design occupancy</entry><entry>Number</entry></row></thead><tbody><row><entry morerows="7">Male employees</entry><entry morerows="1">Closet pans
+
+</entry><entry>1 - 20</entry><entry>1</entry></row><row><entry>&gt;20</entry><entry>Add 1 per 20</entry></row><row><entry morerows="3">Urinals
+
+
+
+</entry><entry>1 - 10</entry><entry>0</entry></row><row><entry>11 - 25</entry><entry>1</entry></row><row><entry>26 - 50</entry><entry>2</entry></row><row><entry>&gt;50</entry><entry>Add 1 per 50</entry></row><row><entry morerows="1">Washbasins
+
+</entry><entry>1 - 30</entry><entry>1</entry></row><row><entry>&gt;30</entry><entry>Add 1 per 30</entry></row><row><entry morerows="3">Female employees</entry><entry morerows="1">Closet pans
+
+</entry><entry>1 - 15</entry><entry>1</entry></row><row><entry>&gt;15</entry><entry>Add 1 per 15</entry></row><row><entry morerows="1">Washbasins
+
+</entry><entry>1 - 30</entry><entry>1</entry></row><row><entry>&gt;30</entry><entry>Add 1 per 30</entry></row></tbody></tgroup></table></table-reference>

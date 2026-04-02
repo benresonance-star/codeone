@@ -1,0 +1,118 @@
+{
+  "contract_id": "xml_source_v1",
+  "contract_version": "1.1.0",
+  "description": "Deterministic validation contract for NCC XML source ingestion.",
+  "representation_model": {
+    "primary_representation": "xml",
+    "paired_representation": "pdf",
+    "relationship": "same_ncc_content_different_form",
+    "xml_role": "structural_authority",
+    "pdf_role": "rendered_spatial_authority",
+    "alignment_dependency": "XML must pass its gate before XML-to-PDF alignment can be trusted downstream."
+  },
+  "thresholds": {
+    "expected_root_elements": [
+      "ncc",
+      "NCC"
+    ],
+    "section_or_part_context_required_when_applicable": true,
+    "max_empty_required_nodes_for_review": 2,
+    "max_unresolved_references_for_warning": 5,
+    "max_definition_link_failures_for_warning": 5,
+    "max_table_structure_issues_for_review": 1,
+    "min_quality_score": 0.95
+  },
+  "status_model": {
+    "PASS": "All blocking rules pass and no review-or-warning outcomes are triggered.",
+    "PASS_WITH_WARNINGS": "All blocking rules pass and one or more warning outcomes are triggered.",
+    "REVIEW_REQUIRED": "No blocking rule is triggered, but one or more review-required outcomes must be resolved before alignment progression.",
+    "FAIL": "Validation completed and the source did not satisfy contract requirements.",
+    "BLOCKED": "A blocking rule prevents progression to alignment and later semantic stages."
+  },
+  "rules": [
+    {
+      "rule_id": "X1_XML_WELL_FORMED",
+      "description": "XML must parse successfully, use valid encoding, and expose an expected NCC root element.",
+      "severity": "blocking",
+      "pass_when": "xml.is_well_formed == true AND xml.encoding_valid == true AND xml.root_element in thresholds.expected_root_elements",
+      "block_when": "xml.is_well_formed != true OR xml.encoding_valid != true OR xml.root_element not in thresholds.expected_root_elements",
+      "error_code": "SCHEMA_ERROR"
+    },
+    {
+      "rule_id": "X2_REQUIRED_METADATA",
+      "description": "XML must expose edition, amendment or version, volume, and section or part context where applicable.",
+      "severity": "blocking",
+      "pass_when": "xml.metadata.edition != null AND xml.metadata.amendment != null AND xml.metadata.volume != null AND (xml.metadata.section != null OR xml.metadata.part != null OR xml.context_not_applicable == true)",
+      "block_when": "xml.metadata.edition == null OR xml.metadata.amendment == null OR xml.metadata.volume == null OR ((xml.metadata.section == null AND xml.metadata.part == null) AND xml.context_not_applicable != true)",
+      "error_code": "SOURCE_MISMATCH"
+    },
+    {
+      "rule_id": "X3_HIERARCHY_INTEGRITY",
+      "description": "XML hierarchy must preserve valid NCC nesting and contain no invalid parent-child links, impossible nesting, or orphaned structural nodes.",
+      "severity": "blocking",
+      "pass_when": "xml.invalid_parent_child_links == 0 AND xml.impossible_nesting_count == 0 AND xml.orphaned_structural_nodes == 0",
+      "block_when": "xml.invalid_parent_child_links > 0 OR xml.impossible_nesting_count > 0 OR xml.orphaned_structural_nodes > 0",
+      "error_code": "SCHEMA_ERROR"
+    },
+    {
+      "rule_id": "X4_UNIQUE_IDS",
+      "description": "Addressable clause, table, figure, definition, and node identifiers must be unique and stable.",
+      "severity": "blocking",
+      "pass_when": "xml.duplicate_ids == 0",
+      "block_when": "xml.duplicate_ids > 0",
+      "error_code": "SCHEMA_ERROR"
+    },
+    {
+      "rule_id": "X5_CONTENT_PRESENCE",
+      "description": "Required structural nodes must contain usable content, including non-empty headings, clause bodies, and table containers unless explicitly allowed to be empty.",
+      "severity": "review_or_block",
+      "pass_when": "xml.empty_required_nodes == 0",
+      "review_required_when": "xml.empty_required_nodes > 0 AND xml.empty_required_nodes <= thresholds.max_empty_required_nodes_for_review",
+      "block_when": "xml.empty_required_nodes > thresholds.max_empty_required_nodes_for_review",
+      "error_code": "SOURCE_MISMATCH"
+    },
+    {
+      "rule_id": "X6_REFERENCE_RESOLUTION",
+      "description": "Internal references must resolve to existing XML targets when required. Small bounded unresolved sets may pass with warnings.",
+      "severity": "warning_or_block",
+      "pass_when": "xml.unresolved_references == 0",
+      "warn_when": "xml.unresolved_references > 0 AND xml.unresolved_references <= thresholds.max_unresolved_references_for_warning",
+      "block_when": "xml.unresolved_references > thresholds.max_unresolved_references_for_warning",
+      "error_code": "UNRESOLVED_REFERENCE"
+    },
+    {
+      "rule_id": "X7_DEFINITION_STRUCTURE",
+      "description": "Defined terms must remain structurally identifiable and linkable from referencing clauses where available. Small bounded failures may pass with warnings.",
+      "severity": "warning_or_block",
+      "pass_when": "xml.definition_link_failures == 0",
+      "warn_when": "xml.definition_link_failures > 0 AND xml.definition_link_failures <= thresholds.max_definition_link_failures_for_warning",
+      "block_when": "xml.definition_link_failures > thresholds.max_definition_link_failures_for_warning",
+      "error_code": "UNRESOLVED_REFERENCE"
+    },
+    {
+      "rule_id": "X8_TABLE_STRUCTURE",
+      "description": "XML table structures must preserve enough row, header, and cell-grouping information for downstream interpretation and later PDF/XML relationship checks.",
+      "severity": "review_or_block",
+      "pass_when": "xml.table_structure_issues == 0",
+      "review_required_when": "xml.table_structure_issues > 0 AND xml.table_structure_issues <= thresholds.max_table_structure_issues_for_review",
+      "block_when": "xml.table_structure_issues > thresholds.max_table_structure_issues_for_review",
+      "error_code": "TABLE_INCONSISTENCY"
+    },
+    {
+      "rule_id": "X9_SNIPPET_READINESS",
+      "description": "XML must be suitable for canonical snippet generation by preserving stable clause identity, hierarchy, node content, references, and traceability metadata needed for later PDF relationships.",
+      "severity": "blocking",
+      "pass_when": "xml.snippet_readiness == true AND xml.traceability_metadata_complete == true",
+      "block_when": "xml.snippet_readiness != true OR xml.traceability_metadata_complete != true",
+      "error_code": "EXECUTION_BLOCKED"
+    },
+    {
+      "rule_id": "X10_QUALITY_SCORE",
+      "description": "Overall XML quality score must meet the configured minimum threshold.",
+      "severity": "blocking",
+      "pass_when": "xml.quality_score >= thresholds.min_quality_score",
+      "block_when": "xml.quality_score < thresholds.min_quality_score",
+      "error_code": "EXECUTION_BLOCKED"
+    }
+  ]
+}

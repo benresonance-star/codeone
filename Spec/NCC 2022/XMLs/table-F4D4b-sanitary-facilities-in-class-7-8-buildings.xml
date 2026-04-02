@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><table-reference xmlns:xt="urn:xpressauthor:trackchanges" graph="None" id="_a01f7587-02cc-4dec-9ffa-0f16636ea132"><num>F4D4b</num><title id="_c7f8d542-2a00-4e42-a750-5477a1799c45">Sanitary facilities in Class 7 and 8 buildings</title><table id="_1d512ee6-5038-461c-a0a1-d05e1e35faf4" keycol="1"><tgroup cols="4"><colspec colname="001" colnum="1" colwidth="146.00*"/><colspec colname="002" colnum="2" colwidth="95.45*"/><colspec colname="003" colnum="3" colwidth="95.25*"/><colspec colname="004" colnum="4" colwidth="95.25*"/><thead><row><entry>User group</entry><entry>Facility type</entry><entry>Design occupancy</entry><entry>Number</entry></row></thead><tbody><row><entry morerows="7">Male employees</entry><entry morerows="1">Closet pans
+
+</entry><entry>1 - 20</entry><entry>1</entry></row><row><entry>&gt;20</entry><entry>Add 1 per 20</entry></row><row><entry morerows="3">Urinals
+
+
+
+</entry><entry>1 - 10</entry><entry>0</entry></row><row><entry>11 - 25</entry><entry>1</entry></row><row><entry>26 - 50</entry><entry>2</entry></row><row><entry>&gt;50</entry><entry>Add 1 per 50</entry></row><row><entry morerows="1">Washbasins
+
+</entry><entry>1 - 20</entry><entry>1</entry></row><row><entry>&gt;20</entry><entry>Add 1 per 20</entry></row><row><entry morerows="3">Female employees
+
+</entry><entry morerows="1">Closet pans
+
+</entry><entry>1 - 15</entry><entry>1</entry></row><row><entry>&gt;15</entry><entry>Add 1 per 15</entry></row><row><entry morerows="1">Washbasins
+
+</entry><entry>1 - 20</entry><entry>1</entry></row><row><entry>&gt;20</entry><entry>Add 1 per 20</entry></row></tbody></tgroup></table><desc-note id="_4a455db2-a0cb-4345-a051-fe4aaf7d3244"><p>Sanitary facilities need not be provided for a Class 8 <xref format="dita" href="/tmp/QppServer/Publishing/5e2c1f63-e589-4ce1-95e8-5c3e286a7aff/1255_0.4.0.xml#_7a37df1f-0b8b-4b03-94ca-69ea423a363f" id="_9a079fd1-5eb3-4c90-9560-02febae4271e" scope="local" type="abcb-glossentry">electricity network substation</xref>.</p></desc-note></table-reference>

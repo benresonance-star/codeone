@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><table-reference xmlns:xt="urn:xpressauthor:trackchanges" graph="None" id="_33e3fae4-0a3f-4909-9ae8-049e29d940a3"><num>F4D4c</num><title id="_c12d6e57-9a5a-4990-aadc-3547fa48663f">Sanitary facilities in Class 6 buildings – department stores, shopping centres </title><table id="_0a7791eb-9ecb-4101-bb08-ade4a8c44dca" keycol="1"><tgroup cols="4"><colspec colname="001" colnum="1" colwidth="145.90*"/><colspec colname="002" colnum="2" colwidth="95.60*"/><colspec colname="003" colnum="3" colwidth="95.20*"/><colspec colname="004" colnum="4" colwidth="95.25*"/><thead><row><entry>User group</entry><entry>Facility type</entry><entry>Design occupancy</entry><entry>Number</entry></row></thead><tbody><row><entry morerows="5">Male patrons</entry><entry morerows="1">Closet pans
+
+</entry><entry>1 - 1200</entry><entry>1</entry></row><row><entry>&gt;1200</entry><entry>Add 1 per 1200</entry></row><row><entry morerows="1">Urinals
+
+</entry><entry>1 - 600</entry><entry>1</entry></row><row><entry>&gt;600</entry><entry>Add 1 per 1200</entry></row><row><entry morerows="1">Washbasins
+
+</entry><entry>1 - 600</entry><entry>1</entry></row><row><entry>&gt;600</entry><entry>Add 1 per 1200</entry></row><row><entry morerows="5">Female patrons</entry><entry morerows="2">Closet pans
+
+
+</entry><entry>1 - 300</entry><entry>1</entry></row><row><entry>301 - 600</entry><entry>2</entry></row><row><entry>&gt;600</entry><entry>Add 1 per 1200</entry></row><row><entry morerows="2">Washbasins
+
+
+</entry><entry>1-600</entry><entry>1</entry></row><row><entry>601 - 1200</entry><entry>2</entry></row><row><entry>&gt;1200</entry><entry>Add 1 per 1200</entry></row></tbody></tgroup></table><desc-note id="_7aebdacc-fc6b-473f-a9af-c1913750e8cf"><p>Sanitary facilities need not be provided for patrons if the total number of persons accommodated in the building is not more than 600.</p></desc-note></table-reference>

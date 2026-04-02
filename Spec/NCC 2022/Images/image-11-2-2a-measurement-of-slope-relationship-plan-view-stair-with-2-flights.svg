@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 25.2.1, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 552.8 201.7" style="enable-background:new 0 0 552.8 201.7;" xml:space="preserve">
+<style type="text/css">
+	.st0{display:none;}
+	.st1{font-family:'ArialMT';}
+	.st2{font-size:12px;}
+	.st3{font-family:'Arial-ItalicMT';}
+	.st4{fill:none;stroke:#000000;stroke-width:0.25;stroke-miterlimit:10;}
+	.st5{fill:none;stroke:#000000;stroke-miterlimit:10;}
+	.st6{fill:none;stroke:#000000;stroke-width:0.75;stroke-miterlimit:10;}
+	.st7{fill:none;stroke:#000000;stroke-width:0.75;stroke-miterlimit:10;stroke-dasharray:12.1488,6.0744;}
+</style>
+<g id="Trace" class="st0">
+</g>
+<g id="Layer_1">
+	<text transform="matrix(1 0 0 1 28.3464 121.3247)"><tspan x="0" y="0" class="st1 st2">Unobstructed width of the </tspan><tspan x="0" y="14.4" class="st1 st2">stair</tspan><tspan x="22.7" y="14.4" class="st3 st2"> flight</tspan><tspan x="51.4" y="14.4" class="st1 st2"> – measured from </tspan><tspan x="0" y="28.8" class="st1 st2">innermost projection of </tspan><tspan x="0" y="43.2" class="st1 st2">handrail, newel post etc.</tspan></text>
+	<text transform="matrix(1 0 0 1 28.3461 39.9914)"><tspan x="0" y="0" class="st1 st2">Slope relationship </tspan><tspan x="0" y="14.4" class="st1 st2">quantity not </tspan><tspan x="65.4" y="14.4" class="st3 st2">required </tspan><tspan x="0" y="28.8" class="st1 st2">for </tspan><tspan x="17.3" y="28.8" class="st3 st2">landing</tspan></text>
+	<text transform="matrix(1 0 0 1 406.3464 50.9911)"><tspan x="0" y="0" class="st1 st2">Constant rise, </tspan><tspan x="77.4" y="0" class="st3 st2">going </tspan><tspan x="0" y="14.4" class="st1 st2">and slope relationship </tspan><tspan x="0" y="28.8" class="st1 st2">quantity for each stair </tspan><tspan x="0" y="43.2" class="st3 st2">flight</tspan></text>
+	<text transform="matrix(1 0 0 1 310.013 119.3332)"><tspan x="0" y="0" class="st3 st2">Flight</tspan><tspan x="29.3" y="0" class="st1 st2"> number 2</tspan></text>
+	<text transform="matrix(1 0 0 1 310.0129 154.9914)"><tspan x="0" y="0" class="st3 st2">Flight</tspan><tspan x="29.3" y="0" class="st1 st2"> number 1</tspan></text>
+	<rect x="259.7" y="88.4" width="11.5" height="11.5"/>
+	<g>
+		<g>
+			<g>
+				<line class="st4" x1="91" y1="66.8" x2="211.9" y2="66.8"/>
+				<g>
+					<polygon points="210.4,69 218.5,66.8 210.4,64.7 					"/>
+				</g>
+			</g>
+		</g>
+		<g>
+			<g>
+				<polyline class="st4" points="305.5,116.3 286,116.3 278.6,96.1 				"/>
+				<g>
+					<polygon points="281.2,96.7 276.4,89.8 277.1,98.2 					"/>
+				</g>
+			</g>
+		</g>
+		<g>
+			<g>
+				<line class="st4" x1="400" y1="46.8" x2="353.1" y2="46.8"/>
+				<g>
+					<polygon points="354.6,44.7 346.5,46.8 354.6,49 					"/>
+				</g>
+			</g>
+		</g>
+		<g>
+			<g>
+				<line class="st4" x1="305.5" y1="151.2" x2="268.6" y2="151.2"/>
+				<g>
+					<polygon points="270.1,149 262,151.2 270.1,153.4 					"/>
+				</g>
+			</g>
+		</g>
+	</g>
+	<g>
+		<g>
+			<line class="st4" x1="207.1" y1="169.8" x2="253.1" y2="169.8"/>
+			<g>
+				<polygon points="208.6,172 200.5,169.8 208.6,167.7 				"/>
+			</g>
+			<g>
+				<polygon points="251.6,172 259.7,169.8 251.6,167.7 				"/>
+			</g>
+		</g>
+	</g>
+	<polyline class="st4" points="159,161.3 230.1,161.3 230.1,169.8 	"/>
+	<g>
+		<line class="st4" x1="200.5" y1="165.6" x2="200.5" y2="173.3"/>
+	</g>
+	<g>
+		<polygon class="st5" points="200.5,158.3 200.5,28.3 350.8,28.3 350.8,93.3 265.8,93.3 265.8,158.3 		"/>
+		<line class="st5" x1="200.5" y1="94.3" x2="265.8" y2="94.3"/>
+		<line class="st5" x1="200.5" y1="115.3" x2="265.8" y2="115.3"/>
+		<line class="st5" x1="200.5" y1="137.1" x2="265.8" y2="137.1"/>
+		<line class="st5" x1="265.8" y1="28.6" x2="265.8" y2="93.3"/>
+		<line class="st5" x1="286.5" y1="28.6" x2="286.5" y2="93.3"/>
+		<line class="st5" x1="308.5" y1="28.6" x2="308.5" y2="93.3"/>
+		<line class="st5" x1="329.2" y1="28.6" x2="329.2" y2="93.3"/>
+	</g>
+	<g>
+		<text transform="matrix(1 0 0 1 204.5129 130.9615)" class="st1 st2">2</text>
+		<text transform="matrix(1 0 0 1 204.5132 152.2115)" class="st1 st2">1</text>
+		<text transform="matrix(1 0 0 1 204.513 88.4615)" class="st1 st2">4</text>
+		<text transform="matrix(1 0 0 1 204.5128 109.7115)" class="st1 st2">3</text>
+	</g>
+	<g>
+		<text transform="matrix(1 0 0 1 290.013 41.6918)" class="st1 st2">2</text>
+		<text transform="matrix(1 0 0 1 268.5129 41.6919)" class="st1 st2">1</text>
+		<text transform="matrix(1 0 0 1 333.5134 41.6916)" class="st1 st2">4</text>
+		<text transform="matrix(1 0 0 1 312.0132 41.6917)" class="st1 st2">3</text>
+		<text transform="matrix(1 0 0 1 354.2634 41.6919)" class="st1 st2">5</text>
+	</g>
+	<g>
+		<g>
+			<line class="st6" x1="259.7" y1="100.8" x2="259.7" y2="106.8"/>
+			<polyline class="st7" points="259.7,112.9 259.7,158.7 259.7,164.5 			"/>
+			<line class="st6" x1="259.7" y1="167.6" x2="259.7" y2="173.6"/>
+		</g>
+	</g>
+</g>
+</svg>

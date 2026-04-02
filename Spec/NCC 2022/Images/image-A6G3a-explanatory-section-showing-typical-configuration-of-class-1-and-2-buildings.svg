@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 25.2.1, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" id="_x30_" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 552.8 349.4" style="enable-background:new 0 0 552.8 349.4;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill-rule:evenodd;clip-rule:evenodd;fill:none;}
+	.st1{clip-path:url(#SVGID_2_);fill:none;stroke:#221F1F;stroke-width:0.5;stroke-linejoin:round;}
+	.st2{fill-rule:evenodd;clip-rule:evenodd;fill:url(#SVGID_3_);}
+	.st3{fill:none;stroke:#231F20;stroke-width:0.25;stroke-miterlimit:10;}
+	.st4{fill:#231F20;}
+	.st5{font-family:'Arial-BoldMT';}
+	.st6{font-size:12px;}
+	.st7{font-family:'ArialMT';}
+	.st8{fill:none;stroke:#231F20;stroke-linecap:round;stroke-miterlimit:10;}
+</style>
+<pattern  x="-23.6" y="315.2" width="72" height="72" patternUnits="userSpaceOnUse" id="diagonal_cross_hatch" viewBox="6.2 -86.2 72 72" style="overflow:visible;">
+	<g>
+		<rect x="6.2" y="-86.2" class="st0" width="72" height="72"/>
+		<g>
+			<defs>
+				<rect id="SVGID_1_" x="6.2" y="-86.2" width="72" height="72"/>
+			</defs>
+			<clipPath id="SVGID_2_">
+				<use xlink:href="#SVGID_1_"  style="overflow:visible;"/>
+			</clipPath>
+			<line class="st1" x1="0.2" y1="-74.2" x2="18.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-68.2" x2="24.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-62.2" x2="30.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-56.2" x2="36.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-50.2" x2="42.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-44.2" x2="48.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-38.2" x2="54.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-32.2" x2="60.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-26.2" x2="66.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-20.2" x2="72.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-14.2" x2="78.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-8.2" x2="84.2" y2="-92.2"/>
+			<line class="st1" x1="6.2" y1="-8.2" x2="84.2" y2="-86.2"/>
+			<line class="st1" x1="12.2" y1="-8.2" x2="84.2" y2="-80.2"/>
+			<line class="st1" x1="18.2" y1="-8.2" x2="84.2" y2="-74.2"/>
+			<line class="st1" x1="24.2" y1="-8.2" x2="84.2" y2="-68.2"/>
+			<line class="st1" x1="30.2" y1="-8.2" x2="84.2" y2="-62.2"/>
+			<line class="st1" x1="36.2" y1="-8.2" x2="84.2" y2="-56.2"/>
+			<line class="st1" x1="42.2" y1="-8.2" x2="84.2" y2="-50.2"/>
+			<line class="st1" x1="48.2" y1="-8.2" x2="84.2" y2="-44.2"/>
+			<line class="st1" x1="54.2" y1="-8.2" x2="84.2" y2="-38.2"/>
+			<line class="st1" x1="52.2" y1="-0.2" x2="94.2" y2="-42.2"/>
+			<line class="st1" x1="58.2" y1="-0.2" x2="94.2" y2="-36.2"/>
+			<line class="st1" x1="64.2" y1="-0.2" x2="94.2" y2="-30.2"/>
+		</g>
+	</g>
+</pattern>
+<pattern  id="SVGID_3_" xlink:href="#diagonal_cross_hatch" patternTransform="matrix(1 0 0 1 197.6326 -29.0177)">
+</pattern>
+<rect x="177.9" y="119.9" class="st2" width="7.2" height="169.2"/>
+<g>
+	<g>
+		<polyline class="st3" points="183.2,113.5 204.4,34 213.3,34 		"/>
+		<g>
+			<polygon class="st4" points="185.7,112.6 181.5,119.9 181.5,111.5 			"/>
+		</g>
+	</g>
+</g>
+<g id="LINE_1_">
+	<g id="LINE_22_">
+		<g>
+			<g>
+				<g>
+					<line class="st3" x1="359.1" y1="138.9" x2="398.5" y2="138.9"/>
+					<g>
+						<polygon class="st4" points="360.6,141.1 352.4,138.9 360.6,136.7 						"/>
+					</g>
+				</g>
+			</g>
+		</g>
+	</g>
+</g>
+<text transform="matrix(1 0 0 1 248.7032 320.6126)" class="st4 st5 st6">Elevation</text>
+<g id="MTEXT_1_">
+	<g>
+		<text transform="matrix(1 0 0 1 403.2755 143.2035)"><tspan x="0" y="0" class="st4 st7 st6">Class 2 building</tspan><tspan x="0" y="14.4" class="st4 st7 st6">containing two or more</tspan><tspan x="0" y="28.8" class="st4 st7 st6">separate dwellings</tspan><tspan x="0" y="43.2" class="st4 st7 st6">located one above  </tspan><tspan x="0" y="57.6" class="st4 st7 st6">the other</tspan></text>
+	</g>
+</g>
+<g id="MTEXT_5_">
+	<g>
+		<text transform="matrix(1 0 0 1 232.546 166.5706)" class="st4 st7 st6">Class 2 dwelling</text>
+	</g>
+</g>
+<g id="MTEXT_6_">
+	<g>
+		<text transform="matrix(1 0 0 1 231.0806 251.7845)" class="st4 st7 st6">Class 2 dwelling</text>
+	</g>
+</g>
+<g id="MTEXT_7_">
+	<g>
+		<text transform="matrix(1 0 0 1 78.005 182.4212)"><tspan x="0" y="0" class="st4 st7 st6">Class 1 single</tspan><tspan x="15.7" y="14.4" class="st4 st7 st6">dwelling </tspan><tspan x="-3" y="28.8" class="st4 st7 st6">(may be one or</tspan><tspan x="0.7" y="43.2" class="st4 st7 st6">more storeys)</tspan></text>
+	</g>
+</g>
+<g id="MTEXT_13_">
+	<g>
+		<text transform="matrix(1 0 0 1 219.1466 37.5194)"><tspan x="0" y="0" class="st4 st7 st6">Common wall between</tspan><tspan x="0" y="14.4" class="st4 st7 st6">Class 1 and Class 2 buildings</tspan></text>
+	</g>
+</g>
+<g id="LINE">
+	<g>
+		<line class="st8" x1="29.3" y1="288.9" x2="389.7" y2="288.9"/>
+	</g>
+</g>
+<g id="POLYLINE">
+	<g>
+		<polyline class="st8" points="177.9,288.9 177.9,119.7 185.1,119.7 185.1,288.9 		"/>
+	</g>
+</g>
+<g id="LINE_2_">
+	<g>
+		<line class="st8" x1="368.7" y1="288.9" x2="368.7" y2="119.7"/>
+	</g>
+</g>
+<g id="LINE_3_">
+	<g>
+		<line class="st8" x1="368.7" y1="119.7" x2="185.1" y2="119.7"/>
+	</g>
+</g>
+<g id="LINE_4_">
+	<g>
+		<line class="st8" x1="52.8" y1="119.7" x2="52.8" y2="288.9"/>
+	</g>
+</g>
+<g id="LINE_5_">
+	<g>
+		<line class="st8" x1="177.9" y1="119.7" x2="52.8" y2="119.7"/>
+	</g>
+</g>
+<g id="LINE_9_">
+	<g>
+		<line class="st8" x1="185.1" y1="119.7" x2="276.9" y2="84.5"/>
+	</g>
+</g>
+<g id="LINE_10_">
+	<g>
+		<line class="st8" x1="276.9" y1="84.5" x2="368.7" y2="119.7"/>
+	</g>
+</g>
+<g id="LINE_11_">
+	<g>
+		<line class="st8" x1="185.1" y1="203.5" x2="368.7" y2="203.5"/>
+	</g>
+</g>
+<g id="LINE_12_">
+	<g>
+		<line class="st8" x1="52.8" y1="119.7" x2="115.4" y2="78.5"/>
+	</g>
+</g>
+<g id="LINE_13_">
+	<g>
+		<line class="st8" x1="115.4" y1="78.5" x2="177.9" y2="119.7"/>
+	</g>
+</g>
+</svg>

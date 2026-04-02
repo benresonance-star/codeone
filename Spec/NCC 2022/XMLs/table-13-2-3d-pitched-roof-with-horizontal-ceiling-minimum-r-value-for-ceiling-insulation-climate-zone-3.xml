@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><table-reference author="Brandon Kiem" dateTime="2021-06-22T09:27:04" graph="None" id="_c76c4868-a0d6-4ee8-b764-6daf1ed96225" type="insert"><num>13.2.3d</num><title id="_c2a6f6a5-d623-4e71-a974-a00fd64b61b4">Pitched roof with horizontal ceiling – minimum R-Value for ceiling insulation: climate zone 3</title><table id="_125ebef4-de82-49ba-a514-46f1bd7f440b" keycol="1"><tgroup cols="8"><colspec colname="001" colnum="1" colwidth="56.05*"/><colspec colname="002" colnum="2" colwidth="57.65*"/><colspec colname="003" colnum="3" colwidth="54.10*"/><colspec colname="004" colnum="4" colwidth="52.75*"/><colspec colname="005" colnum="5" colwidth="52.85*"/><colspec colname="006" colnum="6" colwidth="52.85*"/><colspec colname="007" colnum="7" colwidth="52.85*"/><colspec colname="008" colnum="8" colwidth="52.85*"/><thead><row><entry>Roof ventilation</entry><entry><xref format="dita" href="/tmp/QppServer/Publishing/5e2c1f63-e589-4ce1-95e8-5c3e286a7aff/1427_4.6.0.xml#_710062da-7211-491f-ad4c-b3f12b9b96bb" id="_d31c3ef2-ea0f-443c-afd5-0537602d8537" referencetype="Text" scope="local" synctargettext="false" type="abcb-glossentry">Reflective insulation</xref> under-roof</entry><entry>Under-roof insulation <xref format="dita" href="/tmp/QppServer/Publishing/5e2c1f63-e589-4ce1-95e8-5c3e286a7aff/1420_0.4.0.xml#_e5acb40f-3d3d-4a3d-8987-f09f7eaadf77" id="_f4ecd7ab-0552-4462-a1e3-5aa0d586c858" referencetype="Text" scope="local" synctargettext="false" type="abcb-glossentry">R-Value</xref></entry><entry>SA ≤ 0.23</entry><entry>0.23 &lt; SA ≤ 0.32</entry><entry>0.32 &lt; SA ≤ 0.42</entry><entry>0.42 &lt; SA ≤ 0.53</entry><entry>0.53 &lt; SA ≤ 0.64</entry></row></thead><tbody><row><entry morerows="9">Vented
+
+
+
+
+
+
+
+
+
+</entry><entry morerows="4">Yes
+
+
+
+
+</entry><entry>&lt; 0.5</entry><entry nameend="008" namest="004">2.5</entry></row><row><entry>≥ 0.5 to &lt; 1.0</entry><entry nameend="008" namest="004">2.0</entry></row><row><entry>≥ 1.0 to &lt; 1.5</entry><entry>2.0</entry><entry>2.5</entry><entry>2.5</entry><entry>2.5</entry><entry>2.5</entry></row><row><entry>≥ 1.5 to &lt; 2.0</entry><entry>2.0</entry><entry>2.0</entry><entry>2.5</entry><entry>2.5</entry><entry>2.5</entry></row><row><entry>≥ 2.0</entry><entry>2.5</entry><entry>2.5</entry><entry>3.0</entry><entry>3.0</entry><entry>3.0</entry></row><row><entry morerows="4">No
+
+
+
+
+</entry><entry>&lt; 0.5</entry><entry>3.5</entry><entry>4.0</entry><entry>4.5</entry><entry>5.0</entry><entry>X</entry></row><row><entry>≥ 0.5 to &lt; 1.0</entry><entry>3.0</entry><entry>3.5</entry><entry>3.5</entry><entry>4.0</entry><entry>4.5</entry></row><row><entry>≥ 1.0 to &lt; 1.5</entry><entry>2.5</entry><entry>3.0</entry><entry>3.0</entry><entry>3.0</entry><entry>3.5</entry></row><row><entry>≥ 1.5 to &lt; 2.0</entry><entry>2.5</entry><entry>3.0</entry><entry>3.0</entry><entry>3.0</entry><entry>3.0</entry></row><row><entry>≥ 2.0</entry><entry>2.5</entry><entry>2.5</entry><entry>3.0</entry><entry>3.0</entry><entry>3.0</entry></row><row><entry morerows="9">Standard
+
+
+
+
+
+
+
+
+
+</entry><entry morerows="4">Yes
+
+
+
+
+</entry><entry>&lt; 0.5</entry><entry>2.0</entry><entry>2.0</entry><entry>2.5</entry><entry>2.5</entry><entry>2.5</entry></row><row><entry>≥ 0.5 to &lt; 1.0</entry><entry>2.0</entry><entry>2.0</entry><entry>2.5</entry><entry>2.5</entry><entry>2.5</entry></row><row><entry>≥ 1.0 to &lt; 1.5</entry><entry>2.0</entry><entry>2.0</entry><entry>2.0</entry><entry>2.0</entry><entry>2.5</entry></row><row><entry>≥ 1.5 to &lt; 2.0</entry><entry>2.0</entry><entry>2.5</entry><entry>2.5</entry><entry>2.5</entry><entry>3.0</entry></row><row><entry>≥ 2.0</entry><entry>2.0</entry><entry>2.0</entry><entry>2.5</entry><entry>2.5</entry><entry>2.5</entry></row><row><entry morerows="4">No
+
+
+
+
+</entry><entry>&lt; 0.5</entry><entry>3.5</entry><entry>4.0</entry><entry>5.0</entry><entry>X</entry><entry>X</entry></row><row><entry>≥ 0.5 to &lt; 1.0</entry><entry>3.0</entry><entry>3.0</entry><entry>3.5</entry><entry>4.0</entry><entry>5.0</entry></row><row><entry>≥ 1.0 to &lt; 1.5</entry><entry>2.5</entry><entry>2.5</entry><entry>3.0</entry><entry>3.0</entry><entry>3.5</entry></row><row><entry>≥ 1.5 to &lt; 2.0</entry><entry>2.0</entry><entry>2.0</entry><entry>2.5</entry><entry>2.5</entry><entry>2.5</entry></row><row><entry>≥ 2.0</entry><entry>2.0</entry><entry>2.0</entry><entry>2.5</entry><entry>2.5</entry><entry>2.5</entry></row></tbody></tgroup></table><desc-note id="_26216145-b9ff-47ad-b341-898d362b9c57"><ol outputclass="numbered"><li id="_e1c15403-dfb9-499f-9f0b-976f9dab2326">SA = solar absorptance.</li><li xmlns:inv="urn:xpressauthor:xpressdocument" id="_9058174e-1126-47d4-9fa3-67c82b9d6c86" inv:numbering="continue">A roof is considered ‘vented’ if it—<ol><li>has one wind-driven roof ventilator per 50 m<sup id="_9815595d-9cd0-4aa4-9d8f-920ef1bb6a6c">2</sup> of ceiling area, with gable, eave or ridge vents; or</li><li>has one powered roof ventilator per 200 m<sup id="_2e4ec637-e5ca-4dae-bf33-80543cbbbe4c">2</sup> of ceiling area, with gable, eave or ridge vents; or</li><li>is a tiled roof without <xref format="dita" href="/tmp/QppServer/Publishing/5e2c1f63-e589-4ce1-95e8-5c3e286a7aff/1446_24.0.0.xml#_58664f4b-1409-41b5-987a-54aec55ac608" id="_6971c086-80dd-4efc-95e8-f6bd6dd4b3c4" referencetype="Text" scope="local" synctargettext="false" type="abcb-glossentry">sarking-type material</xref> at roof level.</li></ol></li><li id="_4da7dd95-c558-46f7-8042-b221f2cd9713">If a roof is not ‘vented’, it is a ‘standard’ roof.</li><li id="_3f6653bd-6fd4-4c9a-acf3-97ab69667854">The <xref format="dita" href="/tmp/QppServer/Publishing/5e2c1f63-e589-4ce1-95e8-5c3e286a7aff/1420_0.4.0.xml#_e5acb40f-3d3d-4a3d-8987-f09f7eaadf77" id="_8847a288-40e9-4506-b67a-7cba4bd1f50c" referencetype="Text" scope="local" synctargettext="false" type="abcb-glossentry">R-Value</xref> of <xref format="dita" href="/tmp/QppServer/Publishing/5e2c1f63-e589-4ce1-95e8-5c3e286a7aff/1427_4.6.0.xml#_710062da-7211-491f-ad4c-b3f12b9b96bb" id="_d6a4af9a-3b5a-44e1-a9d4-272173b72622" referencetype="Text" scope="local" synctargettext="false" type="abcb-glossentry">reflective insulation</xref> is not to be included in the <xref format="dita" href="/tmp/QppServer/Publishing/5e2c1f63-e589-4ce1-95e8-5c3e286a7aff/1420_0.4.0.xml#_e5acb40f-3d3d-4a3d-8987-f09f7eaadf77" id="_e5cae15f-81b8-418b-9ed2-e8daa6e818a0" referencetype="Text" scope="local" synctargettext="false" type="abcb-glossentry">R-Value</xref> of any under-roof or ceiling insulation.</li><li id="_c7ae340c-243f-471b-9363-03058af971ec"><xref format="dita" href="/tmp/QppServer/Publishing/5e2c1f63-e589-4ce1-95e8-5c3e286a7aff/1420_0.4.0.xml#_e5acb40f-3d3d-4a3d-8987-f09f7eaadf77" id="_14002aaf-985b-45b0-9f7e-87db0aeb8103" referencetype="Text" scope="local" synctargettext="false" type="abcb-glossentry">R-Values</xref> listed are for the labelled, declared <xref format="dita" href="/tmp/QppServer/Publishing/5e2c1f63-e589-4ce1-95e8-5c3e286a7aff/1420_0.4.0.xml#_e5acb40f-3d3d-4a3d-8987-f09f7eaadf77" id="_9abcd8bf-8813-4c55-bc3e-3ff89d51d805" referencetype="Text" scope="local" synctargettext="false" type="abcb-glossentry">R-Value</xref> of insulation.</li><li id="_39030180-255c-4b84-8e12-ddb858c775c5">X = not permitted.</li></ol></desc-note></table-reference>

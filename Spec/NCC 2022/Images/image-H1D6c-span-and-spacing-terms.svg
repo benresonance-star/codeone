@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 25.2.1, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" id="_x30_" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 552.8 226.7" style="enable-background:new 0 0 552.8 226.7;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill:none;stroke:#231F20;stroke-width:0.25;stroke-linecap:round;stroke-linejoin:round;}
+	.st1{fill:#231F20;}
+	.st2{font-family:'Arial-BoldMT';}
+	.st3{font-size:12px;}
+	.st4{font-family:'ArialMT';}
+	.st5{font-family:'Arial-ItalicMT';}
+	.st6{fill:none;stroke:#231F20;stroke-miterlimit:10;}
+	.st7{fill:none;stroke:#231F20;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}
+	.st8{fill:none;stroke:#231F20;stroke-width:0.25;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}
+	.st9{fill:none;stroke:#231F20;stroke-width:0.75;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}
+</style>
+<g id="LINE_12_">
+	<g>
+		<g>
+			<line class="st0" x1="64.2" y1="53.9" x2="269" y2="53.9"/>
+			<g>
+				<polygon class="st1" points="65.7,56.1 57.6,53.9 65.7,51.7 				"/>
+			</g>
+			<g>
+				<polygon class="st1" points="267.5,56.1 275.6,53.9 267.5,51.7 				"/>
+			</g>
+		</g>
+	</g>
+</g>
+<g id="MTEXT">
+</g>
+<g id="MTEXT_1_">
+	<g>
+		<text transform="matrix(1 0 0 1 85.7459 35.9365)"><tspan x="0" y="0" class="st1 st2 st3">Spacing</tspan><tspan x="46.7" y="0" class="st1 st4 st3"> – the centre to centre </tspan><tspan x="-2.3" y="14.4" class="st1 st4 st3">distance for </tspan><tspan x="63" y="14.4" class="st1 st5 st3">structural members</tspan></text>
+	</g>
+</g>
+<g id="MTEXT_2_">
+</g>
+<g id="MTEXT_3_">
+</g>
+<g id="MTEXT_4_">
+	<g>
+		<text transform="matrix(1 0 0 1 80.2639 133.5097)"><tspan x="0" y="0" class="st1 st2 st3">Span</tspan><tspan x="29.3" y="0" class="st1 st4 st3"> – the face to face distance </tspan><tspan x="-2.3" y="14.4" class="st1 st4 st3">between points giving full support </tspan><tspan x="28.4" y="28.8" class="st1 st4 st3">to </tspan><tspan x="41.7" y="28.8" class="st1 st5 st3">structural members</tspan></text>
+	</g>
+</g>
+<g id="MTEXT_6_">
+	<g>
+		<text transform="matrix(1 0 0 1 67.6992 198.9298)"><tspan x="0" y="0" class="st1 st2 st3">Continuous span</tspan><tspan x="98" y="0" class="st1 st4 st3"> – members which are continuous over two or more spans </tspan></text>
+	</g>
+</g>
+<path class="st6" d="M7.3,101.2"/>
+<g id="POLYLINE_4_">
+	<rect x="27.3" y="76.2" class="st7" width="497.1" height="20.4"/>
+</g>
+<g>
+	<g id="LINE_10_">
+		<line class="st8" x1="57.6" y1="115.5" x2="57.6" y2="48.2"/>
+	</g>
+	<g id="LINE_13_">
+		<line class="st8" x1="71.5" y1="142" x2="71.5" y2="185.7"/>
+	</g>
+	<g id="LINE_14_">
+		<line class="st8" x1="261.7" y1="142" x2="261.7" y2="171.1"/>
+	</g>
+	<g id="LINE_17_">
+		<line class="st8" x1="469.2" y1="140.6" x2="469.2" y2="185"/>
+	</g>
+	<g id="LINE_11_">
+		<line class="st8" x1="275.4" y1="115.5" x2="275.4" y2="48.2"/>
+	</g>
+</g>
+<g id="LINE_1_">
+	<g>
+		<g>
+			<line class="st0" x1="78.1" y1="166.8" x2="255.1" y2="166.8"/>
+			<g>
+				<polygon class="st1" points="79.6,169 71.5,166.8 79.6,164.6 				"/>
+			</g>
+			<g>
+				<polygon class="st1" points="253.6,169 261.7,166.8 253.6,164.6 				"/>
+			</g>
+		</g>
+	</g>
+</g>
+<g id="LINE_4_">
+	<g>
+		<g>
+			<line class="st0" x1="78.1" y1="181.8" x2="462.6" y2="181.8"/>
+			<g>
+				<polygon class="st1" points="79.6,184 71.5,181.8 79.6,179.6 				"/>
+			</g>
+			<g>
+				<polygon class="st1" points="461.1,184 469.2,181.8 461.1,179.6 				"/>
+			</g>
+		</g>
+	</g>
+</g>
+<g>
+	<rect x="43.6" y="96.6" class="st7" width="27.8" height="37.8"/>
+	<line class="st9" x1="71.5" y1="96.6" x2="43.6" y2="134.4"/>
+	<line class="st9" x1="43.6" y1="96.6" x2="71.5" y2="134.4"/>
+</g>
+<g>
+	<rect x="261.7" y="96.6" class="st7" width="27.8" height="37.8"/>
+	<line class="st9" x1="289.6" y1="96.6" x2="261.7" y2="134.4"/>
+	<line class="st9" x1="261.7" y1="96.6" x2="289.6" y2="134.4"/>
+</g>
+<g>
+	<rect x="467.8" y="96.6" class="st7" width="27.8" height="37.8"/>
+	<line class="st9" x1="495.6" y1="96.6" x2="467.8" y2="134.4"/>
+	<line class="st9" x1="467.8" y1="96.6" x2="495.6" y2="134.4"/>
+</g>
+</svg>

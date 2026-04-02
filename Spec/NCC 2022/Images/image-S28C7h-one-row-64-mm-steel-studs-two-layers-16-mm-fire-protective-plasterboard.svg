@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 25.2.1, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" id="HATCH_x5F_18" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px"
+	 y="0px" viewBox="0 0 552.8 154.1" style="enable-background:new 0 0 552.8 154.1;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill-rule:evenodd;clip-rule:evenodd;fill:none;}
+	.st1{clip-path:url(#SVGID_2_);fill:none;stroke:#221F1F;stroke-width:0.5;stroke-linejoin:round;}
+	.st2{fill:none;stroke:#231F20;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}
+	
+		.st3{fill-rule:evenodd;clip-rule:evenodd;fill:#231F20;stroke:#231F20;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}
+	.st4{fill:url(#SVGID_3_);}
+	.st5{fill:url(#SVGID_4_);}
+	.st6{fill:url(#SVGID_5_);}
+	.st7{fill:url(#SVGID_6_);}
+</style>
+<pattern  x="-318.9" y="498" width="72" height="72" patternUnits="userSpaceOnUse" id="diagonal_cross_hatch" viewBox="6.2 -86.2 72 72" style="overflow:visible;">
+	<g>
+		<rect x="6.2" y="-86.2" class="st0" width="72" height="72"/>
+		<g>
+			<defs>
+				<rect id="SVGID_1_" x="6.2" y="-86.2" width="72" height="72"/>
+			</defs>
+			<clipPath id="SVGID_2_">
+				<use xlink:href="#SVGID_1_"  style="overflow:visible;"/>
+			</clipPath>
+			<line class="st1" x1="0.2" y1="-74.2" x2="18.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-68.2" x2="24.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-62.2" x2="30.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-56.2" x2="36.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-50.2" x2="42.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-44.2" x2="48.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-38.2" x2="54.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-32.2" x2="60.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-26.2" x2="66.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-20.2" x2="72.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-14.2" x2="78.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-8.2" x2="84.2" y2="-92.2"/>
+			<line class="st1" x1="6.2" y1="-8.2" x2="84.2" y2="-86.2"/>
+			<line class="st1" x1="12.2" y1="-8.2" x2="84.2" y2="-80.2"/>
+			<line class="st1" x1="18.2" y1="-8.2" x2="84.2" y2="-74.2"/>
+			<line class="st1" x1="24.2" y1="-8.2" x2="84.2" y2="-68.2"/>
+			<line class="st1" x1="30.2" y1="-8.2" x2="84.2" y2="-62.2"/>
+			<line class="st1" x1="36.2" y1="-8.2" x2="84.2" y2="-56.2"/>
+			<line class="st1" x1="42.2" y1="-8.2" x2="84.2" y2="-50.2"/>
+			<line class="st1" x1="48.2" y1="-8.2" x2="84.2" y2="-44.2"/>
+			<line class="st1" x1="54.2" y1="-8.2" x2="84.2" y2="-38.2"/>
+			<line class="st1" x1="52.2" y1="-0.2" x2="94.2" y2="-42.2"/>
+			<line class="st1" x1="58.2" y1="-0.2" x2="94.2" y2="-36.2"/>
+			<line class="st1" x1="64.2" y1="-0.2" x2="94.2" y2="-30.2"/>
+		</g>
+	</g>
+</pattern>
+<g>
+	<g id="LINE">
+		<line class="st2" x1="28.1" y1="114.4" x2="524.1" y2="114.4"/>
+	</g>
+	<g id="LINE_1_">
+		<line class="st2" x1="28.1" y1="102.2" x2="524.1" y2="102.2"/>
+	</g>
+	<g id="LINE_3_">
+		<line class="st2" x1="28.1" y1="126.6" x2="524.1" y2="126.6"/>
+	</g>
+	<g id="LINE_5_">
+		<line class="st2" x1="28.1" y1="102.2" x2="28.1" y2="126.6"/>
+	</g>
+	<g id="LINE_7_">
+		<line class="st2" x1="524.1" y1="102.2" x2="524.1" y2="126.6"/>
+	</g>
+	<g id="POLYLINE_4_">
+		<rect x="28.1" y="104" class="st2" width="496.1" height="8.5"/>
+	</g>
+	<g id="POLYLINE_5_">
+		<rect x="28.1" y="116.2" class="st2" width="496.1" height="8.5"/>
+	</g>
+</g>
+<g>
+	<g id="LINE_17_">
+		<line class="st2" x1="28.1" y1="40.7" x2="524.1" y2="40.7"/>
+	</g>
+	<g id="LINE_16_">
+		<line class="st2" x1="28.1" y1="28.5" x2="524.1" y2="28.5"/>
+	</g>
+	<g id="LINE_6_">
+		<line class="st2" x1="28.1" y1="53" x2="524.1" y2="53"/>
+	</g>
+	<g id="LINE_4_">
+		<line class="st2" x1="28.1" y1="28.5" x2="28.1" y2="53"/>
+	</g>
+	<g id="LINE_2_">
+		<line class="st2" x1="524.1" y1="28.5" x2="524.1" y2="53"/>
+	</g>
+	<g id="POLYLINE_6_">
+		<rect x="28.1" y="30.4" class="st2" width="496.1" height="8.5"/>
+	</g>
+	<g id="POLYLINE_1_">
+		<rect x="28.1" y="42.5" class="st2" width="496.1" height="8.5"/>
+	</g>
+</g>
+<g>
+	<g id="HATCH_4_">
+		<polygon class="st3" points="35.8,94 57.6,94 57.6,91.1 65.3,91.1 65.3,101.7 28.1,101.7 28.1,53.5 65.3,53.5 65.3,64 57.6,64 
+			57.6,61.2 35.8,61.2 		"/>
+	</g>
+	<g id="HATCH_5_">
+		<polygon class="st3" points="494.6,94 516.4,94 516.4,91.1 524.1,91.1 524.1,101.7 486.9,101.7 486.9,53.5 524.1,53.5 524.1,64 
+			516.4,64 516.4,61.2 494.6,61.2 		"/>
+	</g>
+</g>
+<g>
+	<g id="POLYLINE_3_">
+		<pattern  id="SVGID_3_" xlink:href="#diagonal_cross_hatch" patternTransform="matrix(1 0 0 1 -10.1581 -101.4778)">
+		</pattern>
+		<rect x="28.1" y="104" class="st4" width="496.1" height="8.5"/>
+	</g>
+	<g id="POLYLINE_2_">
+		<pattern  id="SVGID_4_" xlink:href="#diagonal_cross_hatch" patternTransform="matrix(1 0 0 1 -10.1581 -101.4778)">
+		</pattern>
+		<rect x="28.1" y="116.2" class="st5" width="496.1" height="8.5"/>
+	</g>
+	<g id="POLYLINE_8_">
+		<pattern  id="SVGID_5_" xlink:href="#diagonal_cross_hatch" patternTransform="matrix(1 0 0 1 -10.1581 -101.4778)">
+		</pattern>
+		<rect x="28.1" y="30.4" class="st6" width="496.1" height="8.5"/>
+	</g>
+	<g id="POLYLINE_7_">
+		<pattern  id="SVGID_6_" xlink:href="#diagonal_cross_hatch" patternTransform="matrix(1 0 0 1 -10.1581 -101.4778)">
+		</pattern>
+		<rect x="28.1" y="42.5" class="st7" width="496.1" height="8.5"/>
+	</g>
+</g>
+</svg>

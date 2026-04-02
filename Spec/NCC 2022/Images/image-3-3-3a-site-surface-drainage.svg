@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 25.2.1, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 552.8 357.3" style="enable-background:new 0 0 552.8 357.3;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill:none;stroke:#231F20;stroke-width:0.25;stroke-miterlimit:10;}
+	.st1{fill:#231F20;}
+	.st2{font-family:'ArialMT';}
+	.st3{font-size:12px;}
+	.st4{fill:none;}
+	.st5{font-family:'Arial-BoldMT';}
+	.st6{fill:none;stroke:#231F20;stroke-width:0.75;stroke-miterlimit:10;}
+	.st7{fill:none;stroke:#231F20;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}
+</style>
+<g id="LINE_18">
+	<g id="LINE_20_">
+		<line class="st0" x1="269.1" y1="210.5" x2="269.1" y2="181.1"/>
+	</g>
+	<g id="LEADER">
+		<line class="st0" x1="266.3" y1="195.8" x2="243.8" y2="195.8"/>
+		<line class="st0" x1="243.8" y1="195.8" x2="243.8" y2="166.6"/>
+		<line class="st0" x1="243.8" y1="166.6" x2="231.7" y2="166.6"/>
+	</g>
+	<g id="LEADER_1_">
+		<line class="st0" x1="74.3" y1="217.9" x2="100.8" y2="247.6"/>
+		<line class="st0" x1="100.8" y1="247.6" x2="108.3" y2="247.6"/>
+	</g>
+	<g id="LINE_23_">
+		<line class="st0" x1="73.4" y1="223.2" x2="73.4" y2="210.5"/>
+	</g>
+</g>
+<g id="TEXT_25">
+	<g id="MTEXT_14_">
+		<g>
+			<text transform="matrix(1 0 0 1 196.6072 42.2065)" class="st1 st2 st3">1 m</text>
+		</g>
+	</g>
+	<g id="MTEXT_12_">
+		<g>
+			<rect x="114.6" y="130.3" class="st4" width="112" height="56.1"/>
+			<text transform="matrix(1 0 0 1 126.6011 140.5617)"><tspan x="0" y="0" class="st1 st2 st3">Finished floor level </tspan><tspan x="22.7" y="14.4" class="st1 st2 st3">above finished </tspan><tspan x="14.7" y="28.8" class="st1 st2 st3">external surface </tspan></text>
+		</g>
+	</g>
+	<g id="MTEXT_9_">
+		<g>
+			<rect x="114" y="241.2" class="st4" width="105" height="56.7"/>
+			<text transform="matrix(1 0 0 1 114.0232 251.5122)"><tspan x="0" y="0" class="st1 st2 st3">Fall in finished </tspan><tspan x="0" y="14.4" class="st1 st2 st3">external surface </tspan></text>
+		</g>
+	</g>
+	<g id="MTEXT_2_">
+		<g>
+			<text transform="matrix(1 0 0 1 245.1338 327.2707)" class="st1 st5 st3">Elevation</text>
+		</g>
+	</g>
+</g>
+<g id="_x30_">
+	<g id="LWPOLYLINE_2_">
+		<g>
+			<path class="st1" d="M75.3,218.9c1.2-1.1,1.2-2.8,0.2-4c-1.1-1.2-2.8-1.2-4-0.2c-1.2,1.1-1.2,2.8-0.2,4
+				C72.4,219.9,74.2,220,75.3,218.9z"/>
+		</g>
+	</g>
+	<g id="LWPOLYLINE_1_">
+		<g>
+			<path class="st1" d="M271,197.9c1.2-1.1,1.2-2.8,0.2-4c-1.1-1.2-2.8-1.2-4-0.2c-1.2,1.1-1.2,2.8-0.2,4
+				C268,198.9,269.8,198.9,271,197.9z"/>
+		</g>
+	</g>
+	<g>
+		<g id="LINE_16_">
+			<g id="LINE_21_">
+				<g>
+					<g>
+						<g>
+							<line class="st0" x1="269.1" y1="173.9" x2="269.1" y2="148.1"/>
+							<g>
+								<polygon class="st1" points="271.2,172.4 269.1,180.5 266.9,172.4 								"/>
+							</g>
+						</g>
+					</g>
+				</g>
+			</g>
+		</g>
+		<g id="LINE_17_">
+			<g>
+				<g>
+					<line class="st0" x1="269.1" y1="217.1" x2="269.1" y2="243.5"/>
+					<g>
+						<polygon class="st1" points="266.9,218.6 269.1,210.5 271.2,218.6 						"/>
+					</g>
+				</g>
+			</g>
+		</g>
+		<g id="LINE_18_">
+			<g>
+				<g>
+					<line class="st0" x1="73.4" y1="203.8" x2="73.4" y2="177.4"/>
+					<g>
+						<polygon class="st1" points="75.6,202.3 73.4,210.5 71.2,202.3 						"/>
+					</g>
+				</g>
+			</g>
+		</g>
+		<g id="LINE_19_">
+			<g id="LINE_22_">
+				<g>
+					<g>
+						<g>
+							<line class="st0" x1="73.4" y1="229.9" x2="73.4" y2="256.3"/>
+							<g>
+								<polygon class="st1" points="71.2,231.4 73.4,223.2 75.6,231.4 								"/>
+							</g>
+						</g>
+					</g>
+				</g>
+			</g>
+		</g>
+		<g>
+			<g>
+				<g>
+					<line class="st0" x1="80" y1="49.7" x2="324.1" y2="49.7"/>
+					<g>
+						<polygon class="st1" points="81.5,51.9 73.4,49.7 81.5,47.6 						"/>
+					</g>
+					<g>
+						<polygon class="st1" points="322.6,51.9 330.7,49.7 322.6,47.6 						"/>
+					</g>
+				</g>
+			</g>
+		</g>
+	</g>
+	<g>
+		<polyline class="st6" points="327.9,63.8 361.6,63.8 365.1,59.6 365.1,68 368.7,63.8 402.4,63.8 		"/>
+		<polyline class="st6" points="518,178 518,193 522.2,196 513.9,196 518,199.1 518,214.1 		"/>
+	</g>
+	<g>
+		<g id="LINE_1_">
+			<g>
+				<line class="st7" x1="330.7" y1="288" x2="416.5" y2="288"/>
+			</g>
+		</g>
+		<g>
+			<g id="LINE">
+				<g>
+					<line class="st7" x1="330.7" y1="63.8" x2="330.7" y2="288"/>
+				</g>
+			</g>
+			<g id="LINE_2_">
+				<g>
+					<line class="st7" x1="416.5" y1="288" x2="416.5" y2="232"/>
+				</g>
+			</g>
+			<g id="LINE_3_">
+				<g>
+					<line class="st7" x1="437.3" y1="211.1" x2="518" y2="211.1"/>
+				</g>
+			</g>
+			<g id="LINE_4_">
+				<g>
+					<line class="st7" x1="518" y1="181.1" x2="372.5" y2="181.1"/>
+				</g>
+			</g>
+			<g id="LINE_5_">
+				<g>
+					<line class="st7" x1="372.5" y1="191.7" x2="372.5" y2="63.8"/>
+				</g>
+			</g>
+			<g id="LINE_6_">
+				<g>
+					<line class="st7" x1="359.9" y1="191.7" x2="359.9" y2="63.8"/>
+				</g>
+			</g>
+			<g id="LINE_7_">
+				<g>
+					<line class="st7" x1="399.3" y1="181.1" x2="399.3" y2="63.8"/>
+				</g>
+			</g>
+			<g id="LINE_8_">
+				<g>
+					<line class="st7" x1="372.5" y1="191.7" x2="330.7" y2="191.7"/>
+				</g>
+			</g>
+			<g id="LINE_9_">
+				<g>
+					<line class="st7" x1="437.3" y1="211.1" x2="416.5" y2="232"/>
+				</g>
+			</g>
+			<g id="LINE_11_">
+				<g>
+					<line class="st7" x1="330.7" y1="210.5" x2="28.7" y2="225.4"/>
+				</g>
+			</g>
+			<g id="LINE_13_">
+				<g>
+					<line class="st7" x1="330.7" y1="63.8" x2="330.7" y2="39.5"/>
+				</g>
+			</g>
+		</g>
+	</g>
+	<g>
+		<g id="LINE_10_">
+			<g>
+				<line class="st0" x1="279" y1="210.5" x2="28.3" y2="210.5"/>
+			</g>
+		</g>
+		<g id="LINE_12_">
+			<g>
+				<line class="st0" x1="73.4" y1="122" x2="73.4" y2="39.5"/>
+			</g>
+		</g>
+		<g id="LINE_15_">
+			<g>
+				<line class="st0" x1="319.7" y1="181.1" x2="260.8" y2="181.1"/>
+			</g>
+		</g>
+	</g>
+</g>
+</svg>

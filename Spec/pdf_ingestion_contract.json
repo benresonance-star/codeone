@@ -1,0 +1,91 @@
+{
+  "contract_id": "pdf_ingestion_v1",
+  "contract_version": "1.1.0",
+  "description": "Deterministic validation contract for NCC PDF ingestion and XML-linked validation.",
+  "representation_model": {
+    "primary_representation": "pdf",
+    "paired_representation": "xml",
+    "relationship": "same_ncc_content_different_form",
+    "pdf_role": "rendered_spatial_authority",
+    "xml_role": "structural_authority",
+    "alignment_dependency": "PDF-to-XML alignment can only support semantic progression when the paired XML source has passed its gate and alignment evidence remains within configured thresholds."
+  },
+  "thresholds": {
+    "min_text_based_ratio": 0.99,
+    "require_section_level_split": true,
+    "max_missing_bbox": 0,
+    "max_untyped_fragments": 0,
+    "max_invalid_tables": 0,
+    "min_alignment_confidence_for_warning": 0.9,
+    "preferred_alignment_confidence": 0.95,
+    "max_unresolved_alignments_for_warning": 5,
+    "max_low_confidence_alignments_for_warning": 5,
+    "min_quality_score": 0.95
+  },
+  "status_model": {
+    "PASS": "All blocking rules pass and no warning outcomes remain.",
+    "PASS_WITH_WARNINGS": "All blocking rules pass and only bounded warning outcomes remain.",
+    "REVIEW_REQUIRED": "The PDF output is structurally usable but requires review before semantic progression.",
+    "FAIL": "Validation completed and the PDF output did not satisfy contract requirements.",
+    "BLOCKED": "A blocking rule prevents progression to the semantic layer."
+  },
+  "rules": [
+    {
+      "rule_id": "C1_PDF_QUALITY",
+      "description": "The PDF must be text-based and parseable enough to support deterministic extraction.",
+      "severity": "blocking",
+      "pass_when": "pdf.is_text_based == true AND pdf.text_based_ratio >= thresholds.min_text_based_ratio",
+      "block_when": "pdf.is_text_based != true OR pdf.text_based_ratio < thresholds.min_text_based_ratio",
+      "error_code": "PDF_QUALITY_FAILURE"
+    },
+    {
+      "rule_id": "C2_SPLITTING",
+      "description": "The PDF must be split to the required section-level scope before canonical ingestion proceeds.",
+      "severity": "blocking",
+      "pass_when": "pdf.is_split == true AND pdf.split_scope == 'section'",
+      "block_when": "pdf.is_split != true OR pdf.split_scope != 'section'",
+      "error_code": "SPLIT_FAILURE"
+    },
+    {
+      "rule_id": "C3_BLOCK_STRUCTURE",
+      "description": "Every extracted fragment must retain a bounding box, type, page reference, and stable fragment identity.",
+      "severity": "blocking",
+      "pass_when": "fragments.total > 0 AND fragments.missing_bbox <= thresholds.max_missing_bbox AND fragments.untyped == thresholds.max_untyped_fragments AND fragments.missing_page_reference == 0 AND fragments.missing_fragment_id == 0",
+      "block_when": "fragments.total == 0 OR fragments.missing_bbox > thresholds.max_missing_bbox OR fragments.untyped > thresholds.max_untyped_fragments OR fragments.missing_page_reference > 0 OR fragments.missing_fragment_id > 0",
+      "error_code": "BLOCK_STRUCTURE_FAILURE"
+    },
+    {
+      "rule_id": "C4_TABLE_STRUCTURE",
+      "description": "Extracted PDF tables must preserve row structure and usable header information where present.",
+      "severity": "blocking",
+      "pass_when": "tables.invalid_count <= thresholds.max_invalid_tables AND tables.empty_row_sets == 0 AND tables.missing_headers_where_expected == 0",
+      "block_when": "tables.invalid_count > thresholds.max_invalid_tables OR tables.empty_row_sets > 0 OR tables.missing_headers_where_expected > 0",
+      "error_code": "TABLE_INCONSISTENCY"
+    },
+    {
+      "rule_id": "C5_XML_ALIGNMENT",
+      "description": "PDF fragments must align to the paired XML representation with sufficient confidence and bounded unresolved mappings.",
+      "severity": "warning_or_block",
+      "pass_when": "xml_validation.can_progress_to_alignment_layer == true AND alignment.unresolved == 0 AND alignment.low_confidence == 0 AND alignment.average_confidence >= thresholds.preferred_alignment_confidence",
+      "warn_when": "xml_validation.can_progress_to_alignment_layer == true AND alignment.average_confidence >= thresholds.min_alignment_confidence_for_warning AND alignment.unresolved <= thresholds.max_unresolved_alignments_for_warning AND alignment.low_confidence <= thresholds.max_low_confidence_alignments_for_warning",
+      "block_when": "xml_validation.can_progress_to_alignment_layer != true OR alignment.average_confidence < thresholds.min_alignment_confidence_for_warning OR alignment.unresolved > thresholds.max_unresolved_alignments_for_warning OR alignment.low_confidence > thresholds.max_low_confidence_alignments_for_warning",
+      "error_code": "ALIGNMENT_FAILURE"
+    },
+    {
+      "rule_id": "C6_METADATA",
+      "description": "Fragments must carry sufficient metadata to support clause traceability, page provenance, and XML relationship lookup.",
+      "severity": "blocking",
+      "pass_when": "fragments.missing_clause_metadata == 0 AND fragments.missing_page_reference == 0 AND fragments.missing_traceability_metadata == 0",
+      "block_when": "fragments.missing_clause_metadata > 0 OR fragments.missing_page_reference > 0 OR fragments.missing_traceability_metadata > 0",
+      "error_code": "METADATA_FAILURE"
+    },
+    {
+      "rule_id": "C7_QUALITY_SCORE",
+      "description": "Overall PDF ingestion quality score must meet the configured threshold before semantic progression.",
+      "severity": "blocking",
+      "pass_when": "confidence.overall >= thresholds.min_quality_score",
+      "block_when": "confidence.overall < thresholds.min_quality_score",
+      "error_code": "EXECUTION_BLOCKED"
+    }
+  ]
+}

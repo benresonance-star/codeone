@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 25.2.1, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" id="_x30_" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 552.8 297.6" style="enable-background:new 0 0 552.8 297.6;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill-rule:evenodd;clip-rule:evenodd;fill:none;}
+	.st1{clip-path:url(#SVGID_2_);fill:none;stroke:#221F1F;stroke-width:0.5;stroke-linejoin:round;}
+	.st2{fill:url(#SVGID_3_);}
+	.st3{fill:#FFFFFF;}
+	.st4{fill-rule:evenodd;clip-rule:evenodd;fill:#C7C8CA;}
+	.st5{fill:none;stroke:#231F20;stroke-width:0.25;stroke-miterlimit:10;}
+	.st6{fill:#231F20;}
+	.st7{font-family:'ArialMT';}
+	.st8{font-size:12px;}
+	.st9{font-family:'Arial-BoldMT';}
+	.st10{fill:none;stroke:#231F20;stroke-linecap:round;stroke-miterlimit:10;}
+</style>
+<pattern  x="-23.6" y="298.8" width="72" height="72" patternUnits="userSpaceOnUse" id="diagonal_cross_hatch" viewBox="6.2 -86.2 72 72" style="overflow:visible;">
+	<g>
+		<rect x="6.2" y="-86.2" class="st0" width="72" height="72"/>
+		<g>
+			<defs>
+				<rect id="SVGID_1_" x="6.2" y="-86.2" width="72" height="72"/>
+			</defs>
+			<clipPath id="SVGID_2_">
+				<use xlink:href="#SVGID_1_"  style="overflow:visible;"/>
+			</clipPath>
+			<line class="st1" x1="0.2" y1="-74.2" x2="18.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-68.2" x2="24.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-62.2" x2="30.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-56.2" x2="36.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-50.2" x2="42.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-44.2" x2="48.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-38.2" x2="54.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-32.2" x2="60.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-26.2" x2="66.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-20.2" x2="72.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-14.2" x2="78.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-8.2" x2="84.2" y2="-92.2"/>
+			<line class="st1" x1="6.2" y1="-8.2" x2="84.2" y2="-86.2"/>
+			<line class="st1" x1="12.2" y1="-8.2" x2="84.2" y2="-80.2"/>
+			<line class="st1" x1="18.2" y1="-8.2" x2="84.2" y2="-74.2"/>
+			<line class="st1" x1="24.2" y1="-8.2" x2="84.2" y2="-68.2"/>
+			<line class="st1" x1="30.2" y1="-8.2" x2="84.2" y2="-62.2"/>
+			<line class="st1" x1="36.2" y1="-8.2" x2="84.2" y2="-56.2"/>
+			<line class="st1" x1="42.2" y1="-8.2" x2="84.2" y2="-50.2"/>
+			<line class="st1" x1="48.2" y1="-8.2" x2="84.2" y2="-44.2"/>
+			<line class="st1" x1="54.2" y1="-8.2" x2="84.2" y2="-38.2"/>
+			<line class="st1" x1="52.2" y1="-0.2" x2="94.2" y2="-42.2"/>
+			<line class="st1" x1="58.2" y1="-0.2" x2="94.2" y2="-36.2"/>
+			<line class="st1" x1="64.2" y1="-0.2" x2="94.2" y2="-30.2"/>
+		</g>
+	</g>
+</pattern>
+<pattern  id="SVGID_3_" xlink:href="#diagonal_cross_hatch" patternTransform="matrix(1 0 0 1 -0.7393 -1.3025)">
+</pattern>
+<rect x="235.6" y="112.5" class="st2" width="110.6" height="89.5"/>
+<g id="POLYLINE_4_">
+	<g>
+		<rect x="263.3" y="126.5" class="st3" width="56.5" height="17.3"/>
+	</g>
+</g>
+<g id="HATCH">
+	<rect x="255.9" y="48.1" class="st4" width="109.9" height="42.7"/>
+</g>
+<g id="POLYLINE_5_">
+	<g id="POLYLINE_16_">
+		<g>
+			<g>
+				<g>
+					<polyline class="st5" points="161.7,201.2 128.7,220.7 115.6,220.7 					"/>
+					<g>
+						<polygon class="st6" points="159.3,200.1 167.4,197.8 161.5,203.8 						"/>
+					</g>
+				</g>
+			</g>
+		</g>
+	</g>
+</g>
+<g id="POLYLINE_7_">
+	<g id="POLYLINE_15_">
+		<g>
+			<g>
+				<g>
+					<polyline class="st5" points="265.3,69.6 121.5,47.7 89.6,47.7 					"/>
+					<g>
+						<polygon class="st6" points="264.1,67.2 272.1,70.6 263.4,71.5 						"/>
+					</g>
+				</g>
+			</g>
+		</g>
+	</g>
+</g>
+<g id="LINE">
+	<g id="LINE_26_">
+		<g>
+			<g>
+				<g>
+					<line class="st5" x1="403" y1="53.3" x2="439.4" y2="53.3"/>
+					<g>
+						<polygon class="st6" points="404.5,55.5 396.4,53.3 404.5,51.1 						"/>
+					</g>
+				</g>
+			</g>
+		</g>
+	</g>
+</g>
+<g id="LINE_1_">
+	<g id="LINE_25_">
+		<g>
+			<g>
+				<g>
+					<line class="st5" x1="383.5" y1="154.8" x2="440.5" y2="154.8"/>
+					<g>
+						<polygon class="st6" points="385,157 376.9,154.8 385,152.6 						"/>
+					</g>
+				</g>
+			</g>
+		</g>
+	</g>
+</g>
+<g id="MTEXT">
+	<g>
+		<text transform="matrix(1 0 0 1 27.0001 223.9332)" class="st6 st7 st8">Class 10a shed</text>
+	</g>
+</g>
+<g id="MTEXT_1_">
+	<g>
+		<text transform="matrix(1 0 0 1 271.5345 139.6499)" class="st6 st7 st8">Class 2</text>
+	</g>
+</g>
+<g id="MTEXT_3_">
+	<g>
+		<text transform="matrix(1 0 0 1 444.0948 57.8882)"><tspan x="0" y="0" class="st6 st7 st8">Class 10b</tspan><tspan x="0" y="14.4" class="st6 st7 st8">allotment fence</tspan></text>
+	</g>
+</g>
+<g id="MTEXT_5_">
+	<g>
+		<text transform="matrix(1 0 0 1 444.2491 160.0953)"><tspan x="0" y="0" class="st6 st7 st8">Class 10a</tspan><tspan x="0" y="14.4" class="st6 st7 st8">carport</tspan></text>
+	</g>
+</g>
+<g id="MTEXT_7_">
+	<g>
+		<text transform="matrix(1 0 0 1 27 52.104)"><tspan x="0" y="0" class="st6 st7 st8">Class 10b</tspan><tspan x="0" y="14.4" class="st6 st7 st8">swimming pool</tspan></text>
+	</g>
+</g>
+<g id="MTEXT_8_">
+	<g>
+		<text transform="matrix(1 0 0 1 249.0323 269.2085)" class="st6 st9 st8">Plan view</text>
+	</g>
+</g>
+<g>
+	<g id="POLYLINE">
+		<g>
+			<rect x="255.9" y="48.1" class="st10" width="109.9" height="42.7"/>
+		</g>
+	</g>
+	<g id="POLYLINE_2_">
+		<g>
+			<rect x="235.6" y="112.5" class="st10" width="110.6" height="89.5"/>
+		</g>
+	</g>
+	<g id="LINE_2_">
+		<g>
+			<line class="st10" x1="396.4" y1="124.8" x2="346.2" y2="124.8"/>
+		</g>
+	</g>
+	<g id="POLYLINE_13_">
+		<g>
+			<rect x="156.3" y="168.8" class="st10" width="51.7" height="55.2"/>
+		</g>
+	</g>
+	<g id="LINE_3_">
+		<g>
+			<line class="st10" x1="346.2" y1="179.4" x2="396.4" y2="179.4"/>
+		</g>
+	</g>
+	<g id="LINE_4_">
+		<g>
+			<line class="st10" x1="265.2" y1="157.3" x2="316.5" y2="157.3"/>
+		</g>
+	</g>
+	<g id="LINE_5_">
+		<g>
+			<line class="st10" x1="235.6" y1="112.5" x2="265.2" y2="157.3"/>
+		</g>
+	</g>
+	<g id="LINE_6_">
+		<g>
+			<line class="st10" x1="265.2" y1="157.3" x2="235.6" y2="202.1"/>
+		</g>
+	</g>
+	<g id="LINE_7_">
+		<g>
+			<line class="st10" x1="346.2" y1="112.5" x2="316.5" y2="157.3"/>
+		</g>
+	</g>
+	<g id="LINE_8_">
+		<g>
+			<line class="st10" x1="316.5" y1="157.3" x2="346.2" y2="202.1"/>
+		</g>
+	</g>
+	<g id="LINE_9_">
+		<g>
+			<line class="st10" x1="138.8" y1="244.1" x2="396.4" y2="244.1"/>
+		</g>
+	</g>
+	<g id="LINE_10_">
+		<g>
+			<line class="st10" x1="396.4" y1="244.1" x2="396.4" y2="26.4"/>
+		</g>
+	</g>
+	<g id="LINE_11_">
+		<g>
+			<line class="st10" x1="396.4" y1="26.4" x2="138.8" y2="26.4"/>
+		</g>
+	</g>
+	<g id="LINE_12_">
+		<g>
+			<line class="st10" x1="138.8" y1="26.4" x2="138.8" y2="244.1"/>
+		</g>
+	</g>
+</g>
+</svg>

@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 25.2.1, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" id="_x30_" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 552.8 160.9" style="enable-background:new 0 0 552.8 160.9;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill-rule:evenodd;clip-rule:evenodd;fill:#231F20;}
+	.st1{fill:none;stroke:#231F20;stroke-linecap:round;stroke-miterlimit:10;}
+	.st2{fill:none;stroke:#231F20;stroke-miterlimit:10;}
+	.st3{fill:none;stroke:#231F20;stroke-width:0.25;stroke-miterlimit:10;}
+	.st4{fill:#231F20;}
+	.st5{font-family:'ArialMT';}
+	.st6{font-size:12px;}
+</style>
+<g>
+	<g id="HATCH">
+		<path class="st0" d="M53.8,74.7H63c1.8,0,3.3,1.5,3.3,3.3c0,1.8-1.5,3.3-3.3,3.3H38c-1.8,0-3.3-1.5-3.3-3.3c0-1.8,1.5-3.3,3.3-3.3
+			h9.2v-21H38c-1.8,0-3.3-1.5-3.3-3.3c0-1.8,1.5-3.3,3.3-3.3H63c1.8,0,3.3,1.5,3.3,3.3c0,1.8-1.5,3.3-3.3,3.3h-9.2V74.7z"/>
+	</g>
+	<g id="HATCH_1_">
+		<path class="st0" d="M293.7,71.4h9.2c1.8,0,3.3,1.5,3.3,3.3c0,1.8-1.5,3.3-3.3,3.3h-25.1c-1.8,0-3.3-1.5-3.3-3.3
+			c0-1.8,1.5-3.3,3.3-3.3h9.2v-21h-9.2c-1.8,0-3.3-1.5-3.3-3.3c0-1.8,1.5-3.3,3.3-3.3h25.1c1.8,0,3.3,1.5,3.3,3.3
+			c0,1.8-1.5,3.3-3.3,3.3h-9.2V71.4z"/>
+	</g>
+</g>
+<g>
+	<g id="LINE_7_">
+		<g>
+			<line class="st1" x1="509.7" y1="78.5" x2="523.6" y2="78.5"/>
+		</g>
+	</g>
+	<rect x="50.5" y="48.1" class="st2" width="473.4" height="18.8"/>
+</g>
+<g id="LINE_12_">
+	<g id="LINE_28_">
+		<g>
+			<g>
+				<g>
+					<line class="st3" x1="57.1" y1="125" x2="283.7" y2="125"/>
+					<g>
+						<polygon class="st4" points="58.6,127.1 50.5,125 58.6,122.8 						"/>
+					</g>
+					<g>
+						<polygon class="st4" points="282.2,127.1 290.4,125 282.2,122.8 						"/>
+					</g>
+				</g>
+			</g>
+		</g>
+	</g>
+</g>
+<g>
+	<g id="LINE_10_">
+		<g>
+			<line class="st3" x1="50.5" y1="92.2" x2="50.5" y2="132.6"/>
+		</g>
+	</g>
+	<g id="LINE_11_">
+		<g>
+			<line class="st3" x1="290.4" y1="88.9" x2="290.4" y2="132.6"/>
+		</g>
+	</g>
+	<g id="LINE_13_">
+		<g>
+			<line class="st3" x1="508.7" y1="109.6" x2="508.7" y2="132.6"/>
+		</g>
+	</g>
+</g>
+<g id="LINE_14_">
+	<g id="LINE_26_">
+		<g>
+			<g>
+				<g>
+					<line class="st3" x1="297" y1="125" x2="502.1" y2="125"/>
+					<g>
+						<polygon class="st4" points="298.5,127.1 290.4,125 298.5,122.8 						"/>
+					</g>
+					<g>
+						<polygon class="st4" points="500.6,127.1 508.7,125 500.6,122.8 						"/>
+					</g>
+				</g>
+			</g>
+		</g>
+	</g>
+</g>
+<g>
+	<g id="MTEXT">
+		<g>
+			<text transform="matrix(1 0 0 1 147.5869 118.8119)" class="st4 st5 st6">Span 1</text>
+		</g>
+	</g>
+	<g id="MTEXT_1_">
+		<g>
+			<text transform="matrix(1 0 0 1 379.6924 118.8119)" class="st4 st5 st6">Span 2</text>
+		</g>
+	</g>
+	<g id="MTEXT_2_">
+		<g>
+			<text transform="matrix(1 0 0 1 356.1748 61.5682)" class="st4 st5 st6">Rafter or joist</text>
+		</g>
+	</g>
+	<g id="MTEXT_3_">
+		<g>
+			<text transform="matrix(1 0 0 1 265.208 38.0457)" class="st4 st5 st6">Member 2</text>
+		</g>
+	</g>
+	<g id="MTEXT_4_">
+		<g>
+			<text transform="matrix(1 0 0 1 28.3465 38.2923)" class="st4 st5 st6">Member 1</text>
+		</g>
+	</g>
+</g>
+<polygon class="st2" points="523.9,100.4 509.7,100.4 509.7,78.5 509.7,68.3 523.9,68.3 "/>
+</svg>

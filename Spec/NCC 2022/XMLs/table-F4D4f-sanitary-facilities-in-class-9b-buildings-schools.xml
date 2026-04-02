@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><table-reference xmlns:xt="urn:xpressauthor:trackchanges" graph="None" id="_70a82254-35b2-4d04-aa78-c4b60762d111"><num>F4D4f</num><title id="_dd65fc64-8a83-4152-a25c-fcfa0de6853a">Sanitary facilities in Class 9b buildings – schools</title><table id="_f863a77f-1744-4a3d-a6e9-27a7ecafc1a6" keycol="1"><tgroup cols="4"><colspec colname="001" colnum="1" colwidth="143.85*"/><colspec colname="002" colnum="2" colwidth="95.95*"/><colspec colname="003" colnum="3" colwidth="95.65*"/><colspec colname="004" colnum="4" colwidth="95.55*"/><thead><row><entry>User group</entry><entry>Facility type</entry><entry>Design occupancy</entry><entry>Number</entry></row></thead><tbody><row><entry morerows="7">Male employees</entry><entry morerows="1">Closet pans
+
+</entry><entry>1 - 20</entry><entry>1</entry></row><row><entry>&gt;20</entry><entry>Add 1 per 20</entry></row><row><entry morerows="3">Urinals
+
+
+
+</entry><entry>1 - 10</entry><entry>0</entry></row><row><entry>11 - 20</entry><entry>1</entry></row><row><entry>21 - 45</entry><entry>2</entry></row><row><entry>&gt;45</entry><entry>Add 1 per 30</entry></row><row><entry morerows="1">Washbasins
+
+</entry><entry>1 -30</entry><entry>1</entry></row><row><entry>&gt;30</entry><entry>Add 1 per 30</entry></row><row><entry morerows="3">Female employees</entry><entry morerows="1">Closet pans
+
+</entry><entry>1 - 5</entry><entry>1</entry></row><row><entry>&gt;5</entry><entry>Add 1 per 15</entry></row><row><entry morerows="1">Washbasins
+
+</entry><entry>1 - 30</entry><entry>1</entry></row><row><entry>&gt;30</entry><entry>Add 1 per 30</entry></row><row><entry morerows="11">Male students</entry><entry morerows="4">Closet pans
+
+
+
+
+</entry><entry>1 - 25</entry><entry>1</entry></row><row><entry>26 - 75</entry><entry>2</entry></row><row><entry>76 - 150</entry><entry>3</entry></row><row><entry>151 - 200</entry><entry>4</entry></row><row><entry>&gt;200</entry><entry>Add 1 per 100</entry></row><row><entry morerows="2">Urinals
+
+
+</entry><entry>1 - 50</entry><entry>1</entry></row><row><entry>51 - 100</entry><entry>2</entry></row><row><entry>&gt;100</entry><entry>Add 1 per 100</entry></row><row><entry morerows="3">Washbasins
+
+
+
+</entry><entry>1 - 10</entry><entry>1</entry></row><row><entry>11 - 50</entry><entry>2</entry></row><row><entry>51 - 100</entry><entry>3</entry></row><row><entry>&gt;100</entry><entry>Add 1 per 75</entry></row><row><entry morerows="7">Female students</entry><entry morerows="3">Closet pans
+
+
+
+</entry><entry>1 - 10</entry><entry>1</entry></row><row><entry>11 - 25</entry><entry>2</entry></row><row><entry>26 - 100</entry><entry>Add 1 per 25</entry></row><row><entry>&gt;100</entry><entry>Add 1 per 50</entry></row><row><entry morerows="3">Washbasins
+
+
+</entry><entry>1 - 10</entry><entry>1</entry></row><row><entry>11 - 50</entry><entry>2</entry></row><row><entry>51 - 100</entry><entry>3</entry></row><row><entry>&gt;100</entry><entry>Add 1 per 75</entry></row></tbody></tgroup></table></table-reference>

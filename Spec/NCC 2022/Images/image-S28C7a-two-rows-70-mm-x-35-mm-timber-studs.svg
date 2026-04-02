@@ -1,0 +1,557 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 25.2.1, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" id="HATCH_x5F_18" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px"
+	 y="0px" viewBox="0 0 552.8 274.6" style="enable-background:new 0 0 552.8 274.6;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill-rule:evenodd;clip-rule:evenodd;fill:none;}
+	.st1{clip-path:url(#SVGID_2_);fill:none;stroke:#221F1F;stroke-width:0.5;stroke-linejoin:round;}
+	.st2{fill:none;stroke:#231F20;stroke-miterlimit:10;}
+	.st3{fill:none;stroke:#231F20;stroke-linecap:round;stroke-miterlimit:10;}
+	.st4{fill:none;stroke:#000000;stroke-width:1.125;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}
+	.st5{fill:none;stroke:#000000;stroke-width:0.75;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}
+	.st6{fill:none;stroke:#000000;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}
+	.st7{fill-rule:evenodd;clip-rule:evenodd;fill:url(#SVGID_3_);}
+	.st8{fill-rule:evenodd;clip-rule:evenodd;fill:url(#SVGID_4_);}
+	.st9{fill-rule:evenodd;clip-rule:evenodd;fill:url(#SVGID_5_);}
+	.st10{fill-rule:evenodd;clip-rule:evenodd;fill:url(#SVGID_6_);}
+</style>
+<pattern  x="-574" y="987.8" width="72" height="72" patternUnits="userSpaceOnUse" id="diagonal_cross_hatch" viewBox="6.2 -86.2 72 72" style="overflow:visible;">
+	<g>
+		<rect x="6.2" y="-86.2" class="st0" width="72" height="72"/>
+		<g>
+			<defs>
+				<rect id="SVGID_1_" x="6.2" y="-86.2" width="72" height="72"/>
+			</defs>
+			<clipPath id="SVGID_2_">
+				<use xlink:href="#SVGID_1_"  style="overflow:visible;"/>
+			</clipPath>
+			<line class="st1" x1="0.2" y1="-74.2" x2="18.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-68.2" x2="24.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-62.2" x2="30.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-56.2" x2="36.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-50.2" x2="42.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-44.2" x2="48.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-38.2" x2="54.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-32.2" x2="60.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-26.2" x2="66.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-20.2" x2="72.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-14.2" x2="78.2" y2="-92.2"/>
+			<line class="st1" x1="0.2" y1="-8.2" x2="84.2" y2="-92.2"/>
+			<line class="st1" x1="6.2" y1="-8.2" x2="84.2" y2="-86.2"/>
+			<line class="st1" x1="12.2" y1="-8.2" x2="84.2" y2="-80.2"/>
+			<line class="st1" x1="18.2" y1="-8.2" x2="84.2" y2="-74.2"/>
+			<line class="st1" x1="24.2" y1="-8.2" x2="84.2" y2="-68.2"/>
+			<line class="st1" x1="30.2" y1="-8.2" x2="84.2" y2="-62.2"/>
+			<line class="st1" x1="36.2" y1="-8.2" x2="84.2" y2="-56.2"/>
+			<line class="st1" x1="42.2" y1="-8.2" x2="84.2" y2="-50.2"/>
+			<line class="st1" x1="48.2" y1="-8.2" x2="84.2" y2="-44.2"/>
+			<line class="st1" x1="54.2" y1="-8.2" x2="84.2" y2="-38.2"/>
+			<line class="st1" x1="52.2" y1="-0.2" x2="94.2" y2="-42.2"/>
+			<line class="st1" x1="58.2" y1="-0.2" x2="94.2" y2="-36.2"/>
+			<line class="st1" x1="64.2" y1="-0.2" x2="94.2" y2="-30.2"/>
+		</g>
+	</g>
+</pattern>
+<g>
+	<g id="LINE_54_">
+		<g>
+			<line class="st2" x1="28.6" y1="51.6" x2="524.4" y2="51.6"/>
+		</g>
+	</g>
+	<g id="LINE_55_">
+		<g>
+			<line class="st2" x1="28.6" y1="77.7" x2="524.4" y2="77.7"/>
+		</g>
+	</g>
+	<g id="LINE_63_">
+		<g>
+			<line class="st2" x1="28.6" y1="25.4" x2="524.4" y2="25.4"/>
+		</g>
+	</g>
+	<g id="LINE_64_">
+		<line class="st3" x1="524.4" y1="77.4" x2="524.4" y2="25.4"/>
+	</g>
+	<g id="LINE_66_">
+		<line class="st3" x1="28.6" y1="77.4" x2="28.6" y2="25.4"/>
+	</g>
+	<g id="POLYLINE">
+		<g>
+			<rect x="28.6" y="27.6" class="st2" width="495.9" height="21.9"/>
+		</g>
+	</g>
+	<g id="POLYLINE_1_">
+		<g>
+			<rect x="28.6" y="53.7" class="st2" width="495.9" height="21.9"/>
+		</g>
+	</g>
+	<g id="LINE_67_">
+		<g>
+			<line class="st2" x1="28.6" y1="223" x2="524.4" y2="223"/>
+		</g>
+	</g>
+	<g id="LINE_68_">
+		<g>
+			<line class="st3" x1="28.6" y1="249.1" x2="28.6" y2="197"/>
+		</g>
+	</g>
+	<g id="LINE_69_">
+		<g>
+			<line class="st2" x1="28.6" y1="196.9" x2="524.4" y2="196.9"/>
+		</g>
+	</g>
+	<g id="POLYLINE_3_">
+		<g>
+			<rect x="28.6" y="225.1" class="st2" width="495.9" height="21.9"/>
+		</g>
+	</g>
+	<g id="LINE_71_">
+		<g>
+			<line class="st2" x1="28.6" y1="249.1" x2="524.4" y2="249.1"/>
+		</g>
+	</g>
+	<g id="LINE_72_">
+		<g>
+			<line class="st3" x1="524.4" y1="249.1" x2="524.4" y2="197"/>
+		</g>
+	</g>
+	<g id="POLYLINE_2_">
+		<g>
+			<rect x="28.6" y="199" class="st2" width="495.9" height="21.9"/>
+		</g>
+	</g>
+</g>
+<g>
+	<g>
+		<g>
+			<g>
+				<path class="st4" d="M152,166.8c-0.3-3.2-3-5.6-6-5.3c-2.7,0.2-4.8,2.5-5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M149.6,181.2c0.3,3,2.6,5.3,5.5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M137.8,186.5c2.9,0,5.3-2.3,5.5-5.3"/>
+			</g>
+			<g>
+				<line class="st4" x1="149.6" y1="181.2" x2="152" y2="166.8"/>
+			</g>
+			<g>
+				<line class="st4" x1="143.3" y1="181.2" x2="140.9" y2="166.8"/>
+			</g>
+			<g>
+				<path class="st4" d="M100.5,166.8c-0.3-3.2-3-5.6-6-5.3c-2.7,0.2-4.8,2.5-5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M98.1,181.2c0.3,3,2.6,5.3,5.5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M86.3,186.5c2.9,0,5.3-2.3,5.5-5.3"/>
+			</g>
+			<g>
+				<line class="st4" x1="98.1" y1="181.2" x2="100.5" y2="166.8"/>
+			</g>
+			<g>
+				<line class="st4" x1="91.8" y1="181.2" x2="89.4" y2="166.8"/>
+			</g>
+			<g>
+				<path class="st4" d="M117.7,166.8c-0.3-3.2-3-5.6-6-5.3c-2.7,0.2-4.8,2.5-5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M115.4,181.2c0.3,3,2.6,5.3,5.5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M103.6,186.5c2.9,0,5.3-2.3,5.5-5.3"/>
+			</g>
+			<g>
+				<line class="st4" x1="115.4" y1="181.2" x2="117.7" y2="166.8"/>
+			</g>
+			<g>
+				<line class="st4" x1="109.1" y1="181.2" x2="106.7" y2="166.8"/>
+			</g>
+			<g>
+				<path class="st4" d="M83.2,166.8c-0.3-3.2-3-5.6-6-5.3c-2.7,0.2-4.8,2.5-5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M80.8,181.2c0.3,3,2.6,5.3,5.5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M69,186.5c2.9,0,5.3-2.3,5.5-5.3"/>
+			</g>
+			<g>
+				<line class="st4" x1="80.8" y1="181.2" x2="83.2" y2="166.8"/>
+			</g>
+			<g>
+				<line class="st4" x1="74.5" y1="181.2" x2="72.1" y2="166.8"/>
+			</g>
+			<g>
+				<path class="st4" d="M221.1,166.8c-0.3-3.2-3-5.6-6-5.3c-2.7,0.2-4.8,2.5-5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M218.8,181.2c0.3,3,2.6,5.3,5.5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M207,186.5c2.9,0,5.3-2.3,5.5-5.3"/>
+			</g>
+			<g>
+				<line class="st4" x1="218.8" y1="181.2" x2="221.1" y2="166.8"/>
+			</g>
+			<g>
+				<line class="st4" x1="212.5" y1="181.2" x2="210.1" y2="166.8"/>
+			</g>
+			<g>
+				<path class="st4" d="M186.6,166.8c-0.3-3.2-3-5.6-6-5.3c-2.7,0.2-4.8,2.5-5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M184.2,181.2c0.3,3,2.6,5.3,5.5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M172.4,186.5c2.9,0,5.3-2.3,5.5-5.3"/>
+			</g>
+			<g>
+				<line class="st4" x1="184.2" y1="181.2" x2="186.6" y2="166.8"/>
+			</g>
+			<g>
+				<line class="st4" x1="177.9" y1="181.2" x2="175.5" y2="166.8"/>
+			</g>
+			<g>
+				<path class="st4" d="M203.8,166.8c-0.3-3.2-3-5.6-6-5.3c-2.7,0.2-4.8,2.5-5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M201.5,181.2c0.3,3,2.6,5.3,5.5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M189.7,186.5c2.9,0,5.3-2.3,5.5-5.3"/>
+			</g>
+			<g>
+				<line class="st4" x1="201.5" y1="181.2" x2="203.8" y2="166.8"/>
+			</g>
+			<g>
+				<line class="st4" x1="195.2" y1="181.2" x2="192.8" y2="166.8"/>
+			</g>
+			<g>
+				<path class="st4" d="M169.3,166.8c-0.3-3.2-3-5.6-6-5.3c-2.7,0.2-4.8,2.5-5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M166.9,181.2c0.3,3,2.6,5.3,5.5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M155.1,186.5c2.9,0,5.3-2.3,5.5-5.3"/>
+			</g>
+			<g>
+				<line class="st4" x1="166.9" y1="181.2" x2="169.3" y2="166.8"/>
+			</g>
+			<g>
+				<line class="st4" x1="160.6" y1="181.2" x2="158.2" y2="166.8"/>
+			</g>
+			<g>
+				<path class="st4" d="M307.6,166.8c-0.3-3.2-3-5.6-6-5.3c-2.7,0.2-4.8,2.5-5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M305.3,181.2c0.3,3,2.6,5.3,5.5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M293.5,186.5c2.9,0,5.3-2.3,5.5-5.3"/>
+			</g>
+			<g>
+				<line class="st4" x1="305.3" y1="181.2" x2="307.6" y2="166.8"/>
+			</g>
+			<g>
+				<line class="st4" x1="299" y1="181.2" x2="296.6" y2="166.8"/>
+			</g>
+			<g>
+				<path class="st4" d="M324.9,166.8c-0.3-3.2-3-5.6-6-5.3c-2.7,0.2-4.8,2.5-5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M322.6,181.2c0.3,3,2.6,5.3,5.5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M310.8,186.5c2.9,0,5.3-2.3,5.5-5.3"/>
+			</g>
+			<g>
+				<line class="st4" x1="322.6" y1="181.2" x2="324.9" y2="166.8"/>
+			</g>
+			<g>
+				<line class="st4" x1="316.3" y1="181.2" x2="313.9" y2="166.8"/>
+			</g>
+			<g>
+				<path class="st4" d="M273,166.8c-0.3-3.2-3-5.6-6-5.3c-2.7,0.2-4.8,2.5-5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M270.7,181.2c0.3,3,2.6,5.3,5.5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M258.9,186.5c2.9,0,5.3-2.3,5.5-5.3"/>
+			</g>
+			<g>
+				<line class="st4" x1="270.7" y1="181.2" x2="273" y2="166.8"/>
+			</g>
+			<g>
+				<line class="st4" x1="264.4" y1="181.2" x2="262" y2="166.8"/>
+			</g>
+			<g>
+				<path class="st4" d="M290.3,166.8c-0.3-3.2-3-5.6-6-5.3c-2.7,0.2-4.8,2.5-5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M288,181.2c0.3,3,2.6,5.3,5.5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M276.2,186.5c2.9,0,5.3-2.3,5.5-5.3"/>
+			</g>
+			<g>
+				<line class="st4" x1="288" y1="181.2" x2="290.3" y2="166.8"/>
+			</g>
+			<g>
+				<line class="st4" x1="281.7" y1="181.2" x2="279.3" y2="166.8"/>
+			</g>
+			<g>
+				<path class="st4" d="M238.4,166.8c-0.3-3.2-3-5.6-6-5.3c-2.7,0.2-4.8,2.5-5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M236.1,181.2c0.3,3,2.6,5.3,5.5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M224.3,186.5c2.9,0,5.3-2.3,5.5-5.3"/>
+			</g>
+			<g>
+				<line class="st4" x1="236.1" y1="181.2" x2="238.4" y2="166.8"/>
+			</g>
+			<g>
+				<line class="st4" x1="229.8" y1="181.2" x2="227.4" y2="166.8"/>
+			</g>
+			<g>
+				<path class="st4" d="M255.7,166.8c-0.3-3.2-3-5.6-6-5.3c-2.7,0.2-4.8,2.5-5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M253.4,181.2c0.3,3,2.6,5.3,5.5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M241.6,186.5c2.9,0,5.3-2.3,5.5-5.3"/>
+			</g>
+			<g>
+				<line class="st4" x1="253.4" y1="181.2" x2="255.7" y2="166.8"/>
+			</g>
+			<g>
+				<line class="st4" x1="247.1" y1="181.2" x2="244.7" y2="166.8"/>
+			</g>
+			<g>
+				<path class="st4" d="M376.8,166.8c-0.3-3.2-3-5.6-6-5.3c-2.7,0.2-4.8,2.5-5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M374.4,181.2c0.3,3,2.6,5.3,5.5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M362.7,186.5c2.9,0,5.3-2.3,5.5-5.3"/>
+			</g>
+			<g>
+				<line class="st4" x1="374.4" y1="181.2" x2="376.8" y2="166.8"/>
+			</g>
+			<g>
+				<line class="st4" x1="368.2" y1="181.2" x2="365.8" y2="166.8"/>
+			</g>
+			<g>
+				<path class="st4" d="M342.2,166.8c-0.3-3.2-3-5.6-6-5.3c-2.7,0.2-4.8,2.5-5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M339.8,181.2c0.3,3,2.6,5.3,5.5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M328.1,186.5c2.9,0,5.3-2.3,5.5-5.3"/>
+			</g>
+			<g>
+				<line class="st4" x1="339.8" y1="181.2" x2="342.2" y2="166.8"/>
+			</g>
+			<g>
+				<line class="st4" x1="333.6" y1="181.2" x2="331.2" y2="166.8"/>
+			</g>
+			<g>
+				<path class="st4" d="M359.5,166.8c-0.3-3.2-3-5.6-6-5.3c-2.7,0.2-4.8,2.5-5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M357.1,181.2c0.3,3,2.6,5.3,5.5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M345.4,186.5c2.9,0,5.3-2.3,5.5-5.3"/>
+			</g>
+			<g>
+				<line class="st4" x1="357.1" y1="181.2" x2="359.5" y2="166.8"/>
+			</g>
+			<g>
+				<line class="st4" x1="350.9" y1="181.2" x2="348.5" y2="166.8"/>
+			</g>
+			<g>
+				<path class="st4" d="M394.1,166.8c-0.3-3.2-3-5.6-6-5.3c-2.7,0.2-4.8,2.5-5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M391.7,181.2c0.3,3,2.6,5.3,5.5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M379.9,186.5c2.9,0,5.3-2.3,5.5-5.3"/>
+			</g>
+			<g>
+				<line class="st4" x1="391.7" y1="181.2" x2="394.1" y2="166.8"/>
+			</g>
+			<g>
+				<line class="st4" x1="385.5" y1="181.2" x2="383.1" y2="166.8"/>
+			</g>
+			<g>
+				<path class="st4" d="M411.4,166.8c-0.3-3.2-3-5.6-6-5.3c-2.7,0.2-4.8,2.5-5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M409,181.2c0.3,3,2.6,5.3,5.5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M397.2,186.5c2.9,0,5.3-2.3,5.5-5.3"/>
+			</g>
+			<g>
+				<line class="st4" x1="409" y1="181.2" x2="411.4" y2="166.8"/>
+			</g>
+			<g>
+				<line class="st4" x1="402.8" y1="181.2" x2="400.4" y2="166.8"/>
+			</g>
+			<g>
+				<path class="st4" d="M135,166.8c-0.3-3.2-3-5.6-6-5.3c-2.7,0.2-4.8,2.5-5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M132.7,181.2c0.3,3,2.6,5.3,5.5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M120.9,186.5c2.9,0,5.3-2.3,5.5-5.3"/>
+			</g>
+			<g>
+				<line class="st4" x1="132.7" y1="181.2" x2="135" y2="166.8"/>
+			</g>
+			<g>
+				<line class="st4" x1="126.4" y1="181.2" x2="124" y2="166.8"/>
+			</g>
+			<g>
+				<path class="st4" d="M428.7,166.8c-0.3-3.2-3-5.6-6-5.3c-2.7,0.2-4.8,2.5-5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M426.3,181.2c0.3,3,2.6,5.3,5.5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M414.5,186.5c2.9,0,5.3-2.3,5.5-5.3"/>
+			</g>
+			<g>
+				<line class="st4" x1="426.3" y1="181.2" x2="428.7" y2="166.8"/>
+			</g>
+			<g>
+				<line class="st4" x1="420" y1="181.2" x2="417.7" y2="166.8"/>
+			</g>
+			<g>
+				<path class="st4" d="M446,166.8c-0.3-3.2-3-5.6-6-5.3c-2.7,0.2-4.8,2.5-5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M443.6,181.2c0.3,3,2.6,5.3,5.5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M431.8,186.5c2.9,0,5.3-2.3,5.5-5.3"/>
+			</g>
+			<g>
+				<line class="st4" x1="443.6" y1="181.2" x2="446" y2="166.8"/>
+			</g>
+			<g>
+				<line class="st4" x1="437.3" y1="181.2" x2="435" y2="166.8"/>
+			</g>
+			<g>
+				<path class="st4" d="M463.3,166.8c-0.3-3.2-3-5.6-6-5.3c-2.7,0.2-4.8,2.5-5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M460.9,181.2c0.3,3,2.6,5.3,5.5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M449.1,186.5c2.9,0,5.3-2.3,5.5-5.3"/>
+			</g>
+			<g>
+				<line class="st4" x1="460.9" y1="181.2" x2="463.3" y2="166.8"/>
+			</g>
+			<g>
+				<line class="st4" x1="454.6" y1="181.2" x2="452.3" y2="166.8"/>
+			</g>
+			<g>
+				<path class="st4" d="M480.6,166.8c-0.3-3.2-3-5.6-6-5.3c-2.7,0.2-4.8,2.5-5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M478.2,181.2c0.3,3,2.6,5.3,5.5,5.3"/>
+			</g>
+			<g>
+				<path class="st4" d="M466.4,186.5c2.9,0,5.3-2.3,5.5-5.3"/>
+			</g>
+			<g>
+				<line class="st4" x1="478.2" y1="181.2" x2="480.6" y2="166.8"/>
+			</g>
+			<g>
+				<line class="st4" x1="471.9" y1="181.2" x2="469.6" y2="166.8"/>
+			</g>
+		</g>
+	</g>
+</g>
+<g>
+	<g>
+		<g>
+			<g id="LINE_75_">
+				<line class="st5" x1="28.5" y1="77.7" x2="67.7" y2="126.8"/>
+			</g>
+			<g id="LINE_74_">
+				<line class="st5" x1="28.5" y1="126.8" x2="67.7" y2="77.7"/>
+			</g>
+		</g>
+		<rect x="28.5" y="77.7" class="st6" width="39.2" height="49.2"/>
+	</g>
+	<g>
+		<g>
+			<g id="LINE_59_">
+				<line class="st5" x1="485.2" y1="77.7" x2="524.4" y2="126.8"/>
+			</g>
+			<g id="LINE_58_">
+				<line class="st5" x1="485.2" y1="126.8" x2="524.4" y2="77.7"/>
+			</g>
+		</g>
+		<rect x="485.2" y="77.7" class="st6" width="39.2" height="49.2"/>
+	</g>
+	<g>
+		<g>
+			<g id="LINE_60_">
+				<line class="st5" x1="28.6" y1="147.7" x2="67.7" y2="196.9"/>
+			</g>
+			<g id="LINE_57_">
+				<line class="st5" x1="28.6" y1="196.9" x2="67.7" y2="147.7"/>
+			</g>
+		</g>
+		<rect x="28.6" y="147.7" class="st6" width="39.2" height="49.2"/>
+	</g>
+	<g>
+		<g>
+			<g id="LINE_56_">
+				<line class="st5" x1="485.2" y1="147.7" x2="524.4" y2="196.9"/>
+			</g>
+			<g id="LINE_50_">
+				<line class="st5" x1="485.2" y1="196.9" x2="524.4" y2="147.7"/>
+			</g>
+		</g>
+		<rect x="485.2" y="147.7" class="st6" width="39.2" height="49.2"/>
+	</g>
+</g>
+<g>
+	<g id="HATCH">
+		<pattern  id="SVGID_3_" xlink:href="#diagonal_cross_hatch" patternTransform="matrix(1 0 0 1 16.7217 11.9955)">
+		</pattern>
+		<rect x="28.6" y="27.6" class="st7" width="495.9" height="21.9"/>
+	</g>
+	<g id="HATCH_1_">
+		<pattern  id="SVGID_4_" xlink:href="#diagonal_cross_hatch" patternTransform="matrix(1 0 0 1 16.7217 11.9955)">
+		</pattern>
+		<rect x="28.5" y="53.7" class="st8" width="495.9" height="21.9"/>
+	</g>
+	<g id="HATCH_2_">
+		<pattern  id="SVGID_5_" xlink:href="#diagonal_cross_hatch" patternTransform="matrix(1 0 0 1 16.7217 11.9955)">
+		</pattern>
+		<rect x="28.6" y="199" class="st9" width="495.9" height="21.9"/>
+	</g>
+	<g id="HATCH_3_">
+		<pattern  id="SVGID_6_" xlink:href="#diagonal_cross_hatch" patternTransform="matrix(1 0 0 1 16.7217 11.9955)">
+		</pattern>
+		<rect x="28.4" y="225.1" class="st10" width="495.9" height="21.9"/>
+	</g>
+</g>
+</svg>

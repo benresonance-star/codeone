@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 25.2.1, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 552.8 497.9" style="enable-background:new 0 0 552.8 497.9;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill:none;stroke:#231F20;stroke-miterlimit:10;}
+	.st1{fill:none;stroke:#231F20;stroke-width:0.75;stroke-miterlimit:10;}
+	.st2{fill:none;stroke:#231F20;stroke-width:0.75;stroke-miterlimit:10;stroke-dasharray:12.2015,6.1007;}
+	.st3{fill:#231F20;}
+	.st4{font-family:'ArialMT';}
+	.st5{font-size:12px;}
+	.st6{fill:none;stroke:#231F20;stroke-width:0.25;stroke-miterlimit:10;}
+</style>
+<g id="LINE_35">
+	<g>
+		<g id="LINE">
+			<g>
+				<line class="st0" x1="216" y1="441.9" x2="216" y2="107.1"/>
+			</g>
+		</g>
+		<g id="LINE_3_">
+			<g>
+				<line class="st0" x1="525.4" y1="441.9" x2="49.8" y2="441.9"/>
+			</g>
+		</g>
+		<g id="LINE_7_">
+			<g>
+				<line class="st0" x1="484.1" y1="441.9" x2="484.1" y2="107.1"/>
+			</g>
+		</g>
+		<polyline class="st0" points="469.6,282.7 469.6,121.6 230.5,121.6 230.5,282.7 		"/>
+		<polygon class="st0" points="192.3,107.1 507.8,107.1 350.1,28.3 		"/>
+		<g id="LINE_11_">
+			<g>
+				<line class="st0" x1="484.1" y1="282.7" x2="216" y2="282.7"/>
+			</g>
+		</g>
+		<polyline class="st0" points="230.5,441.9 230.5,297.2 469.6,297.2 469.6,441.9 		"/>
+		<g id="LINE_14_">
+			<g>
+				<line class="st0" x1="230.5" y1="311.8" x2="216" y2="311.8"/>
+			</g>
+		</g>
+		<g id="LINE_15_">
+			<g>
+				<line class="st0" x1="469.6" y1="311.8" x2="484.1" y2="311.8"/>
+			</g>
+		</g>
+	</g>
+</g>
+<g id="LINE_25_x5F_dashed">
+	<g>
+		<g id="LINE_16_">
+			<g id="LINE_13_">
+				<g>
+					<g>
+						<g>
+							<line class="st1" x1="525.4" y1="286.4" x2="519.4" y2="286.4"/>
+							<line class="st2" x1="513.3" y1="286.4" x2="58.8" y2="286.4"/>
+							<line class="st1" x1="55.8" y1="286.4" x2="49.8" y2="286.4"/>
+						</g>
+					</g>
+				</g>
+			</g>
+		</g>
+		<g id="LINE_12_">
+			<g id="LINE_10_">
+				<g>
+					<g>
+						<g>
+							<line class="st1" x1="525.4" y1="337" x2="519.4" y2="337"/>
+							<line class="st2" x1="513.3" y1="337" x2="58.8" y2="337"/>
+							<line class="st1" x1="55.8" y1="337" x2="49.8" y2="337"/>
+						</g>
+					</g>
+				</g>
+			</g>
+		</g>
+	</g>
+</g>
+<g id="TEXT_25">
+	<g>
+		<g id="MTEXT">
+			<g>
+				<text transform="matrix(1 0 0 1 297.5614 188.4895)" class="st3 st4 st5">Habitable floor area</text>
+			</g>
+		</g>
+		<g id="MTEXT_1_">
+			<g>
+				<text transform="matrix(1 0 0 1 285.5526 385.5926)" class="st3 st4 st5">Non-habitable floor area</text>
+			</g>
+		</g>
+		<g id="MTEXT_2_">
+			<g>
+				<text transform="matrix(1 0 0 1 297.2304 255.699)" class="st3 st4 st5">Habitable floor level</text>
+			</g>
+		</g>
+		<g id="MTEXT_3_">
+			<g>
+				<text transform="matrix(1 0 0 1 285.2216 468.5105)" class="st3 st4 st5">Non-habitable floor level</text>
+			</g>
+		</g>
+		<g id="MTEXT_4_">
+			<g>
+				<text transform="matrix(1 0 0 1 124.4469 246.2156)"><tspan x="0" y="0" class="st3 st4 st5">Flood</tspan><tspan x="0" y="14.4" class="st3 st4 st5">hazard level</tspan></text>
+			</g>
+		</g>
+		<g id="MTEXT_5_">
+			<g>
+				<text transform="matrix(1 0 0 1 124.5255 364.8416)"><tspan x="0" y="0" class="st3 st4 st5">Defined</tspan><tspan x="0" y="14.4" class="st3 st4 st5">flood level</tspan></text>
+			</g>
+		</g>
+		<g id="TEXT">
+			<g>
+				<text transform="matrix(1 0 0 1 28.6896 316.8875)" class="st3 st4 st5">Freeboard</text>
+			</g>
+		</g>
+		<g id="MTEXT_6_">
+			<g>
+				<text transform="matrix(1 0 0 1 31.7318 385.5916)"><tspan x="0" y="0" class="st3 st4 st5">Not more</tspan><tspan x="-3.7" y="14.4" class="st3 st4 st5">than 1.0 m</tspan></text>
+			</g>
+		</g>
+	</g>
+</g>
+<g id="LINE_18">
+</g>
+<g id="LINE_25">
+	<g>
+		<g>
+			<g>
+				<polyline class="st6" points="261.8,276.7 273.2,251.4 292.1,251.4 				"/>
+				<g>
+					<polygon class="st3" points="264.4,276.2 259.1,282.7 260.4,274.4 					"/>
+				</g>
+			</g>
+		</g>
+		<g id="LEADER_3_">
+			<g id="LEADER_2_">
+				<g>
+					<g>
+						<g>
+							<polyline class="st6" points="261.1,447.1 274.6,463.8 281.4,463.8 							"/>
+							<g>
+								<polygon class="st3" points="260.4,449.6 257,441.9 263.8,446.9 								"/>
+							</g>
+						</g>
+					</g>
+				</g>
+			</g>
+		</g>
+		<g>
+			<g>
+				<polyline class="st6" points="97.7,280.2 112.5,242.2 119.8,242.2 				"/>
+				<g>
+					<polygon class="st3" points="100.3,279.6 95.3,286.4 96.2,278 					"/>
+				</g>
+			</g>
+		</g>
+		<g>
+			<g>
+				<polyline class="st6" points="99.2,342.4 112.5,360.8 119.8,360.8 				"/>
+				<g>
+					<polygon class="st3" points="98.3,344.9 95.3,337 101.8,342.3 					"/>
+				</g>
+			</g>
+		</g>
+		<g id="LWPOLYLINE_6_">
+			<g id="LWPOLYLINE_8_">
+				<g>
+					<g>
+						<g>
+							<line class="st6" x1="56.1" y1="330.4" x2="56.1" y2="321.9"/>
+							<g>
+								<polygon class="st3" points="58.3,328.9 56.1,337 53.9,328.9 								"/>
+							</g>
+						</g>
+					</g>
+				</g>
+			</g>
+		</g>
+		<g id="LWPOLYLINE_5_">
+			<g id="LWPOLYLINE_7_">
+				<g>
+					<g>
+						<g>
+							<line class="st6" x1="56.1" y1="435.3" x2="56.1" y2="407"/>
+							<g>
+								<polygon class="st3" points="58.3,433.8 56.1,441.9 53.9,433.8 								"/>
+							</g>
+						</g>
+					</g>
+				</g>
+			</g>
+		</g>
+		<g id="LWPOLYLINE_4_">
+			<g id="LWPOLYLINE_3_">
+				<g>
+					<g>
+						<g>
+							<line class="st6" x1="56.1" y1="373.4" x2="56.1" y2="343.6"/>
+							<g>
+								<polygon class="st3" points="58.3,345.1 56.1,337 53.9,345.1 								"/>
+							</g>
+						</g>
+					</g>
+				</g>
+			</g>
+		</g>
+		<g id="LWPOLYLINE">
+			<g id="LWPOLYLINE_2_">
+				<g>
+					<g>
+						<g>
+							<line class="st6" x1="56.1" y1="293" x2="56.1" y2="301.9"/>
+							<g>
+								<polygon class="st3" points="53.9,294.5 56.1,286.4 58.3,294.5 								"/>
+							</g>
+						</g>
+					</g>
+				</g>
+			</g>
+		</g>
+	</g>
+</g>
+</svg>

@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><?Xpress productLine="ncc-clause"?><clause id="_c4144f40-3d50-4cab-b218-5c31c85e2a38" outputclass="ncc-clause"><meta><facet building="Class 3"/><facet building="Class 5"/><facet building="Class 6"/><facet building="Class 7a"/><facet building="Class 7b"/><facet building="Class 8"/><facet building="Class 9a"/><facet building="Class 9b"/><facet building="Class 9c"/><facet building="Class 10b"/><facet building="Class 10c"/></meta><sptc>S44C4</sptc><title id="_9383aa2a-f594-43d5-8440-6aa7a5fbd0ef">Thermal energy load limit</title><archive-num>New for 2022</archive-num><subclause id="_e19a5179-160f-468f-a474-36d72a1417ab" outputclass="subclause"><title id="_4245705a-16eb-40fc-b688-75c052768b06">SubClause</title><num>1</num><p>The <xref format="dita" href="/tmp/QppServer/Publishing/5e2c1f63-e589-4ce1-95e8-5c3e286a7aff/6221_0.5.0.xml#_c055bfd1-5325-475a-8897-841728f72222" id="_cfcb62d7-fb05-4cf1-8249-e652632b2395" referencetype="Text" scope="local" synctargettext="false" type="abcb-glossentry">thermal energy load</xref> limit of a space, measured in MJ/m<sup id="_18f09252-5c5d-4508-913e-9351e9d77be3">2</sup>.annum, is calculated in accordance with the following formula: </p><p><equation-inline height="45" heightdpi="96" id="_857d6922-5490-4bf6-a14c-2a578a5677e0" width="237" widthdpi="96"><mathML><!-- MathType@Translator@5@5@MathML2 (no namespace).tdl@MathML 2.0 (no namespace)@ --><math> <semantics>  <mrow>   <mi>T</mi><mi>L</mi><mi>L</mi><mo>=</mo><mfrac>    <mrow>     <mn>19.3</mn><mi>H</mi><mi>L</mi><mi>L</mi><mo>+</mo><mn>22.6</mn><mi>C</mi><mi>L</mi><mi>L</mi><mo>−</mo><mn>8.4</mn></mrow>    <mrow>     <msub>      <mi>T</mi>      <mi>r</mi>     </msub>     <mo>+</mo><mn>10.74</mn></mrow>   </mfrac>   <mo>−</mo><mn>15</mn></mrow>  <annotation encoding="MathType-MTEF">MathType@MTEF@5@5@+=  feaahqart1ev3aqatCvAUfeBSjuyZL2yd9gzLbvyNv2CaerbuLwBLn  hiov2DGi1BTfMBaeXatLxBI9gBaerbd9wDYLwzYbItLDharqqtubsr  4rNCHbGeaGqiVu0Je9sqqrpepC0xbbL8F4rqqrFfpeea0xe9Lq=Jc9  vqaqpepm0xbba9pwe9Q8fs0=yqaqpepae9pg0FirpepeKkFr0xfr=x  fr=xb9adbaqaaeGaciGaaiaabeqaamaabaabaaGcbaGaamivaiaadY  eacaWGmbGaeyypa0ZaaSaaaeaacaaIXaGaaGyoaiaac6cacaaIZaGa  amisaiaadYeacaWGmbGaey4kaSIaaGOmaiaaikdacaGGUaGaaGOnai  aadoeacaWGmbGaamitaiabgkHiTiaaiIdacaGGUaGaaGinaaqaaiaa  dsfadaWgaaWcbaGaamOCaaqabaGccqGHRaWkcaaIXaGaaGimaiaac6  cacaaI3aGaaGinaaaacqGHsislcaaIXaGaaGynaaaa@512B@  </annotation> </semantics></math><!-- MathType@End@5@5@ --></mathML><image content-type="gif">R0lGODlh7gAtAPAAAP///wAAACwAAAAA7gAtAAAC/4SPqcvtD6OctNqLs968+w+G4kiW5omm6sq2
+7gs7QRLUTW0j+LEb+KzrUYS+3M3IywF/NKKEKYudnMsF0EfL6hjXIe+L5Vqvwu7W0jUHpaj0+aYF
+y+NWMditUAPU+Pyln6XHBgIoGDa3R/dm96DnWBcnaNi4uDU5yFEIp2gmSQnxGAgI6YdRBXmJqdFZ
+xIW09/PqGfWp2Jp4yGg7NIurKsI3c0nGqRsU+5qLOHdqvJyErMVX+evRu+mrfO1MnU3XTLr7VImc
+Wl2xTcq6SPxsGKoLftg3Wustfp4RDIq4frd7DVwoTdoKTqjXDVg5YVSc8CIzrYiRMj0WwopWKk8s
+ifIVm2icWO7ixoft8NE6Bq9dunwsW1qTdRJXSZMua9o8SHPZyps8e8aEElPZM59Ei94TamunSKBG
+m7J5h22oOadUVVhMeFSo0icLu3r9Cjas2LFky5otiy5q0jejrlZ9ywJqOIP+4NodtBOoRbd3+76g
+mMyv4MGECxs+/IevF49jmCJFDDnSUBkw79WFFTlzOHkZOyNkl1Wz5qmhCRoTJjp1zsmmNz9WDZm0
+3FyTSpKG3TdV129YZ97Gbff27GyzQwLPLDzq56y/j1P9PVymWqzOc1dEze0iY4Nzq0cO7D28iebi
+y/8xj358+vXs27t/D999AQAh/wtNYXRoVHlwZTAwMf8FAQAHBERTTVQ3AAETV2luQWxsQmFzaWND
+b2RlUGFnZXMAEQVUaW1lcyBOZXcgUm9tYW4AEQNTeW1ib2wAEQVDb3VyaWVyIE5ldwARBE1UIEV4
+dHJhABIACCEvRY9EL0FQ9BAPR19BUPIfHkFQ9BUPQQD0RfQl9I9CX0EA9BAPQ19BAPSPRfQqX0j0
+j0EA9BAPQPSPQX9I9BAPQSpfRF9F9F9F9F9BDwwBAAEAAQICAgIAAgABAQEAAwABAAQAAAoBAAIA
+g1QAAgCDTAACAINMAAIEhj0APQMACwAAAQACAIgxAAIAiDkAAgCCLgACAIgzAAIAg0gAAgCDTAAC
+AIONTAACBIYrACsCAIgyAAIAiDIAAgCCLgACAIg2AAIAg0MAAgCDTAACAINMAAIEhhIiLQIAiDgA
+AgCCLgACAIg0AAABAAIAg1QAAwAbAAALAQACAINyAAABAQAKAgSGKwArAgCIMQACAIgwAAIAgi4A
+AgCINwACAIg0AAAAAgSGEiItAgCIMQACAIg1AAAAACH/C01hdGhUeXBlMDAz/zw/eG1sIHZlcnNp
+b249IjEuMCI/PjwhLS0gTWF0aFR5cGVAVHJhbnNsYXRvckA1QDVATWF0aE1MMiAoQ2xpcGJvYXJk
+KS50ZGxATWF0aE1MIDIuMCAoQ2xpcGJvYXJkKUAgLS0+PG1hdGggeG1sbnM9J2h0dHA6Ly93d3cu
+dzMub3JnLzE5OTgvTWF0aC9NYXRoTUwnPjxtcm93PjxtaT5UPC9taT48bWk+TDwvbWk+PG1pPkw8
+L21pPjxtbz49PC9tbz48bWZyYWM+PG1yb3c+PG1uPjE5LjM8L21uPjxtaT5IPC9taT48bWk+TDwv
+bWk+PG1pPkw8L21pPjxtb+g+KzwvbW8+PG1uPjIyLjY8L21uPjxtaT5DPC9taT48bWk+TDwvbWk+
+PG1pPkw8L21pPjxtbz4mI3gyMjEyOzwvbW8+PG1uPjguNDwvbW4+PC9tcm93Pjxtcm93Pjxtc3Vi
+PjxtaT5UPC9taT48bWk+cjwvbWk+PC9tc3ViPjxtbz4rPC9tbz48bW4+MTAuNzQ8L21uPjwvbXJv
+dz48L21mcmFjPjxtbz4mI3gyMjEyOzwvbW8+PG1uPjE1PC9tbj48L21yb3c+PC9tYXRoPjwhLS0g
+TWF0aFR5cGVARW5kQDVANUAgLS0+ACH/C01hdGhUeXBlMDAyBhQAAAAAAAA7</image></equation-inline></p></subclause><subclause id="_ce55cc6d-f9a5-42db-98fb-2b3d30961b14" outputclass="subclause"><title id="_9920eb7b-57dc-4d62-8765-fb00e7e6fa47">SubClause</title><num>2</num><p>In the formula at (1)—</p><ol outputclass="alpha"><li id="_bd2a2867-f857-48d9-bec5-14f3fa12c071"><equation-inline height="19" heightdpi="96" id="_9bc11eb9-7774-4c50-9d78-61a3e8880707" width="31" widthdpi="96"><mathML><!-- MathType@Translator@5@5@MathML2 (no namespace).tdl@MathML 2.0 (no namespace)@ --><math> <semantics>  <mrow>   <mi>T</mi><mi>L</mi><mi>L</mi></mrow>  <annotation encoding="MathType-MTEF">MathType@MTEF@5@5@+=  feaahqart1ev3aqatCvAUfeBSjuyZL2yd9gzLbvyNv2CaerbuLwBLn  hiov2DGi1BTfMBaeXatLxBI9gBaerbd9wDYLwzYbItLDharqqtubsr  4rNCHbGeaGqiVu0Je9sqqrpepC0xbbL8F4rqqrFfpeea0xe9Lq=Jc9  vqaqpepm0xbba9pwe9Q8fs0=yqaqpepae9pg0FirpepeKkFr0xfr=x  fr=xb9adbaqaaeGaciGaaiaabeqaamaabaabaaGcbaGaamivaiaadY  eacaWGmbaaaa@386F@  </annotation> </semantics></math><!-- MathType@End@5@5@ --></mathML><image content-type="gif">R0lGODlhHgARAPAAAP///wAAACwAAAAAHgARAAACN4SPqcvtD6MJtFZgU1bh9AkuH4d846hBaEiq
+7eusGCPDbOriNg2fpWgz6TyXieVyLEqWzKbzUQAAIf8LTWF0aFR5cGUwMDHTBQEABwREU01UNwAB
+E1dpbkFsbEJhc2ljQ29kZVBhZ2VzABEFVGltZXMgTmV3IFJvbWFuABEDU3ltYm9sABEFQ291cmll
+ciBOZXcAEQRNVCBFeHRyYQASAAghL0WPRC9BUPQQD0dfQVDyHx5BUPQVD0EA9EX0JfSPQl9BAPQQ
+D0NfQQD0j0X0Kl9I9I9BAPQQD0D0j0F/SPQQD0EqX0RfRfRfRfRfQQ8MAQABAAECAgICAAIAAQEB
+AAMAAQAEAAAKAQACAINUAAIAg0wAAgCDTAAAAAAh/wtNYXRoVHlwZTAwM+I8P3htbCB2ZXJzaW9u
+PSIxLjAiPz48IS0tIE1hdGhUeXBlQFRyYW5zbGF0b3JANUA1QE1hdGhNTDIgKENsaXBib2FyZCku
+dGRsQE1hdGhNTCAyLjAgKENsaXBib2FyZClAIC0tPjxtYXRoIHhtbG5zPSdodHRwOi8vd3d3Lncz
+Lm9yZy8xOTk4L01hdGgvTWF0aE1MJz48bXJvdz48bWk+VDwvbWk+PG1pPkw8L21pPjxtaT5MPC9t
+aT48L21yb3c+PC9tYXRoPjwhLS0gTWF0aFR5cGVARW5kQDVANUAgLS0+ACH/C01hdGhUeXBlMDAy
+BgIAAAAAAAA7</image></equation-inline> = the <xref format="dita" href="/tmp/QppServer/Publishing/5e2c1f63-e589-4ce1-95e8-5c3e286a7aff/6221_0.5.0.xml#_c055bfd1-5325-475a-8897-841728f72222" id="_82377f18-b851-488a-925a-08d326e66251" referencetype="Text" scope="local" synctargettext="false" type="abcb-glossentry">thermal energy load</xref> limit; and</li><li id="_aa4b2667-1cf1-4114-89df-0aa07228a9a6"><equation-inline height="19" heightdpi="96" id="_2ae8fda7-a548-4a17-ac04-a5b19047be47" width="35" widthdpi="96"><mathML><!-- MathType@Translator@5@5@MathML2 (no namespace).tdl@MathML 2.0 (no namespace)@ --><math> <semantics>  <mrow>   <mi>H</mi><mi>L</mi><mi>L</mi></mrow>  <annotation encoding="MathType-MTEF">MathType@MTEF@5@5@+=  feaahqart1ev3aqatCvAUfeBSjuyZL2yd9gzLbvyNv2CaerbuLwBLn  hiov2DGi1BTfMBaeXatLxBI9gBaerbd9wDYLwzYbItLDharqqtubsr  4rNCHbGeaGqiVu0Je9sqqrpepC0xbbL8F4rqqrFfpeea0xe9Lq=Jc9  vqaqpepm0xbba9pwe9Q8fs0=yqaqpepae9pg0FirpepeKkFr0xfr=x  fr=xb9adbaqaaeGaciGaaiaabeqaamaabaabaaGcbaGaamisaiaadY  eacaWGmbaaaa@3863@  </annotation> </semantics></math><!-- MathType@End@5@5@ --></mathML><image content-type="gif">R0lGODlhIgARAPAAAP///wAAACwAAAAAIgARAAACQISPqcvtD6M8oVILKr6bhfRRXhSKplI2aYas
+p7OmrjGjmtaOT5wvNQh89XZB2lDmK7J6PNDmlrnhpLiJ9YrNZgsAIf8LTWF0aFR5cGUwMDHTBQEA
+BwREU01UNwABE1dpbkFsbEJhc2ljQ29kZVBhZ2VzABEFVGltZXMgTmV3IFJvbWFuABEDU3ltYm9s
+ABEFQ291cmllciBOZXcAEQRNVCBFeHRyYQASAAghL0WPRC9BUPQQD0dfQVDyHx5BUPQVD0EA9EX0
+JfSPQl9BAPQQD0NfQQD0j0X0Kl9I9I9BAPQQD0D0j0F/SPQQD0EqX0RfRfRfRfRfQQ8MAQABAAEC
+AgICAAIAAQEBAAMAAQAEAAAKAQACAINIAAIAg0wAAgCDTAAAAAAh/wtNYXRoVHlwZTAwM+I8P3ht
+bCB2ZXJzaW9uPSIxLjAiPz48IS0tIE1hdGhUeXBlQFRyYW5zbGF0b3JANUA1QE1hdGhNTDIgKENs
+aXBib2FyZCkudGRsQE1hdGhNTCAyLjAgKENsaXBib2FyZClAIC0tPjxtYXRoIHhtbG5zPSdodHRw
+Oi8vd3d3LnczLm9yZy8xOTk4L01hdGgvTWF0aE1MJz48bXJvdz48bWk+SDwvbWk+PG1pPkw8L21p
+PjxtaT5MPC9taT48L21yb3c+PC9tYXRoPjwhLS0gTWF0aFR5cGVARW5kQDVANUAgLS0+ACH/C01h
+dGhUeXBlMDAyBgIAAAAAAAA7</image></equation-inline> = the <xref format="dita" href="/tmp/QppServer/Publishing/5e2c1f63-e589-4ce1-95e8-5c3e286a7aff/1335_0.4.0.xml#_4dc3aa38-1ac4-4ad8-92f1-c4c52e332554" id="_eccb36a8-4133-4a62-ada4-97ec1d8df5e3" referencetype="Text" scope="local" synctargettext="false" type="abcb-glossentry">heating load</xref> limit; and</li><li id="_98df186a-2779-4090-b644-974a0493be94"><equation-inline height="19" heightdpi="96" id="_bba9ccfe-d3c7-4711-99e7-2c87b5fecb8b" width="33" widthdpi="96"><mathML><!-- MathType@Translator@5@5@MathML2 (no namespace).tdl@MathML 2.0 (no namespace)@ --><math> <semantics>  <mrow>   <mi>C</mi><mi>L</mi><mi>L</mi></mrow>  <annotation encoding="MathType-MTEF">MathType@MTEF@5@5@+=  feaahqart1ev3aqatCvAUfeBSjuyZL2yd9gzLbvyNv2CaerbuLwBLn  hiov2DGi1BTfMBaeXatLxBI9gBaerbd9wDYLwzYbItLDharqqtubsr  4rNCHbGeaGqiVu0Je9sqqrpepC0xbbL8F4rqqrFfpeea0xe9Lq=Jc9  vqaqpepm0xbba9pwe9Q8fs0=yqaqpepae9pg0FirpepeKkFr0xfr=x  fr=xb9adbaqaaeGaciGaaiaabeqaamaabaabaaGcbaGaam4qaiaadY  eacaWGmbaaaa@385E@  </annotation> </semantics></math><!-- MathType@End@5@5@ --></mathML><image content-type="gif">R0lGODlhIQASAPAAAP///wAAACwAAAAAIQASAAACPISPqcvtD6Oc9IRrgsXoascBXrd8jWmRCsqw
+opq4MSTLcFvST63PafZ74YJCYPG4Gm08GKayAo1Kp1RoAQAh/wtNYXRoVHlwZTAwMdMFAQAHBERT
+TVQ3AAETV2luQWxsQmFzaWNDb2RlUGFnZXMAEQVUaW1lcyBOZXcgUm9tYW4AEQNTeW1ib2wAEQVD
+b3VyaWVyIE5ldwARBE1UIEV4dHJhABIACCEvRY9EL0FQ9BAPR19BUPIfHkFQ9BUPQQD0RfQl9I9C
+X0EA9BAPQ19BAPSPRfQqX0j0j0EA9BAPQPSPQX9I9BAPQSpfRF9F9F9F9F9BDwwBAAEAAQICAgIA
+AgABAQEAAwABAAQAAAoBAAIAg0MAAgCDTAACAINMAAAAACH/C01hdGhUeXBlMDAz4jw/eG1sIHZl
+cnNpb249IjEuMCI/PjwhLS0gTWF0aFR5cGVAVHJhbnNsYXRvckA1QDVATWF0aE1MMiAoQ2xpcGJv
+YXJkKS50ZGxATWF0aE1MIDIuMCAoQ2xpcGJvYXJkKUAgLS0+PG1hdGggeG1sbnM9J2h0dHA6Ly93
+d3cudzMub3JnLzE5OTgvTWF0aC9NYXRoTUwnPjxtcm93PjxtaT5DPC9taT48bWk+TDwvbWk+PG1p
+Pkw8L21pPjwvbXJvdz48L21hdGg+PCEtLSBNYXRoVHlwZUBFbmRANUA1QCAtLT4AIf8LTWF0aFR5
+cGUwMDIGBAAAAAAAADs=</image></equation-inline> = the <xref format="dita" href="/tmp/QppServer/Publishing/5e2c1f63-e589-4ce1-95e8-5c3e286a7aff/1231_0.6.0.xml#_472a0fb8-883e-4d81-8175-ccc758fa911f" id="_eca64300-0c8c-4e72-9669-51f657215455" referencetype="Text" scope="local" synctargettext="false" type="abcb-glossentry">cooling load</xref> limit; and</li><li id="_74a04e36-b51c-4e36-bb2f-d88da6407edd"><equation-inline height="24" heightdpi="96" id="_d2541872-0bba-4a18-a42e-723ea9a85b67" width="16" widthdpi="96"><mathML><!-- MathType@Translator@5@5@MathML2 (no namespace).tdl@MathML 2.0 (no namespace)@ --><math> <semantics>  <mrow>   <msub>    <mi>T</mi>    <mi>r</mi>   </msub>   </mrow>  <annotation encoding="MathType-MTEF">MathType@MTEF@5@5@+=  feaahqart1ev3aqatCvAUfeBSjuyZL2yd9gzLbvyNv2CaerbuLwBLn  hiov2DGi1BTfMBaeXatLxBI9gBaerbd9wDYLwzYbItLDharqqtubsr  4rNCHbGeaGqiVu0Je9sqqrpepC0xbbL8F4rqqrFfpeea0xe9Lq=Jc9  vqaqpepm0xbba9pwe9Q8fs0=yqaqpepae9pg0FirpepeKkFr0xfr=x  fr=xb9adbaqaaeGaciGaaiaabeqaamaabaabaaGcbaGaamivamaaBa  aaleaacaWGYbaabeaaaaa@37F0@  </annotation> </semantics></math><!-- MathType@End@5@5@ --></mathML><image content-type="gif">R0lGODlhEAAYAPAAAP///wAAACwAAAAAEAAYAAACJoSPqcvtD1OYlK5wsNGIA+1d0TZ+Y+igjSpG
+1YaxkiydJV3mOlQAACH/C01hdGhUeXBlMDAx2gUBAAcERFNNVDcAARNXaW5BbGxCYXNpY0NvZGVQ
+YWdlcwARBVRpbWVzIE5ldyBSb21hbgARA1N5bWJvbAARBUNvdXJpZXIgTmV3ABEETVQgRXh0cmEA
+EgAIIS9Fj0QvQVD0EA9HX0FQ8h8eQVD0FQ9BAPRF9CX0j0JfQQD0EA9DX0EA9I9F9CpfSPSPQQD0
+EA9A9I9Bf0j0EA9BKl9EX0X0X0X0X0EPDAEAAQABAgICAgACAAEBAQADAAEABAAACgEAAgCDVAAD
+ABsAAAsBAAIAg3IAAAEBAAAAACH/C01hdGhUeXBlMDAz5Tw/eG1sIHZlcnNpb249IjEuMCI/Pjwh
+LS0gTWF0aFR5cGVAVHJhbnNsYXRvckA1QDVATWF0aE1MMiAoQ2xpcGJvYXJkKS50ZGxATWF0aE1M
+IDIuMCAoQ2xpcGJvYXJkKUAgLS0+PG1hdGggeG1sbnM9J2h0dHA6Ly93d3cudzMub3JnLzE5OTgv
+TWF0aC9NYXRoTUwnPjxtcm93Pjxtc3ViPjxtaT5UPC9taT48bWk+cjwvbWk+PC9tc3ViPjwvbXJv
+dz48L21hdGg+PCEtLSBNYXRoVHlwZUBFbmRANUA1QCAtLT4AIf8LTWF0aFR5cGUwMDIGCAAAAAAA
+ADs=</image></equation-inline> = the annual average <xref format="dita" href="/tmp/QppServer/Publishing/5e2c1f63-e589-4ce1-95e8-5c3e286a7aff/6230_0.5.0.xml#_862e013f-fbc9-4e65-a6ad-087b28a4a9cd" id="_3fe8bdad-2d15-47d3-9849-440fe0c4fac9" referencetype="Text" scope="local" synctargettext="false" type="abcb-glossentry">daily </xref><xref format="dita" href="/tmp/QppServer/Publishing/5e2c1f63-e589-4ce1-95e8-5c3e286a7aff/6230_0.5.0.xml#_862e013f-fbc9-4e65-a6ad-087b28a4a9cd" id="_26680ed6-0f87-443a-9b3a-bae006838217" referencetype="Text" scope="local" synctargettext="false" type="abcb-glossentry">outdoor temperature range</xref>.</li></ol></subclause></clause>

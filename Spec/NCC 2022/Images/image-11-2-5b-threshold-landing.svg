@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 25.2.1, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 552.8 231.2" style="enable-background:new 0 0 552.8 231.2;" xml:space="preserve">
+<style type="text/css">
+	.st0{display:none;}
+	.st1{font-family:'ArialMT';}
+	.st2{font-size:12px;}
+	.st3{font-family:'Arial-ItalicMT';}
+	.st4{fill:none;stroke:#000000;stroke-miterlimit:10;}
+	.st5{fill:none;stroke:#000000;stroke-width:0.25;stroke-miterlimit:10;}
+</style>
+<g id="tRACE" class="st0">
+</g>
+<g id="Layer_1">
+	<text transform="matrix(1 0 0 1 28.3464 80.8278)"><tspan x="0" y="0" class="st1 st2">Doorway can </tspan><tspan x="0" y="14.4" class="st1 st2">be located </tspan><tspan x="0" y="28.8" class="st1 st2">at any point</tspan></text>
+	<g>
+		<text transform="matrix(1 0 0 1 92.3464 198.822)"><tspan x="0" y="0" class="st3 st2">Landing</tspan><tspan x="42.7" y="0" class="st1 st2"> not </tspan><tspan x="66.1" y="0" class="st3 st2">required</tspan></text>
+		<text transform="matrix(1 0 0 1 354.3464 198.8221)" class="st3 st2">Landing required</text>
+	</g>
+	<g>
+		<line class="st4" x1="102.7" y1="28.1" x2="102.7" y2="121.9"/>
+		<polyline class="st4" points="69,121.9 124.3,121.9 124.3,138.6 156.3,138.6 156.3,154.6 188.3,154.6 188.3,171.9 244.3,171.9 		
+			"/>
+		<polyline class="st4" points="266.3,111.3 363.7,111.3 363.7,129.9 397.3,129.9 397.3,146.9 432.3,146.9 432.3,165.3 467,165.3 
+			467,184.6 524.4,184.6 		"/>
+		<line class="st4" x1="276.4" y1="28.1" x2="276.4" y2="111.3"/>
+	</g>
+	<g>
+		<text transform="matrix(1 0 0 1 397.3464 92.8284)"><tspan x="0" y="0" class="st1 st2">More than 3 </tspan><tspan x="67.4" y="0" class="st3 st2">risers</tspan><tspan x="96.7" y="0" class="st1 st2"> or </tspan><tspan x="0" y="14.4" class="st1 st2">more than 570 mm</tspan></text>
+		<text transform="matrix(1 0 0 1 131.6798 101.8279)"><tspan x="0" y="0" class="st1 st2">Max. 3 </tspan><tspan x="39.3" y="0" class="st3 st2">risers</tspan><tspan x="68.7" y="0" class="st1 st2"> or </tspan><tspan x="0" y="14.4" class="st1 st2">max. 570 mm</tspan></text>
+	</g>
+	<g>
+		<text transform="matrix(1 0 0 1 45.6797 40.4945)" class="st1 st2">Doorway</text>
+		<text transform="matrix(1 0 0 1 283.0131 40.4943)" class="st1 st2">Doorway</text>
+	</g>
+	<g>
+		<text transform="matrix(1 0 0 1 298.6797 77.8278)" class="st3 st2">Landing</text>
+		<text transform="matrix(1 0 0 1 288.6797 96.8278)" class="st1 st2">750 mm min.</text>
+	</g>
+	<g>
+		<g>
+			<g>
+				<g>
+					<line class="st5" x1="221" y1="126.6" x2="221" y2="165.3"/>
+					<g>
+						<polygon points="218.8,128.1 221,119.9 223.2,128.1 						"/>
+					</g>
+					<g>
+						<polygon points="218.8,163.8 221,171.9 223.2,163.8 						"/>
+					</g>
+				</g>
+			</g>
+			<g>
+				<g>
+					<line class="st5" x1="499.7" y1="178" x2="499.7" y2="117.9"/>
+					<g>
+						<polygon points="501.8,176.5 499.7,184.6 497.5,176.5 						"/>
+					</g>
+					<g>
+						<polygon points="501.8,119.4 499.7,111.3 497.5,119.4 						"/>
+					</g>
+				</g>
+			</g>
+		</g>
+		<g>
+			<g>
+				<line class="st5" x1="283" y1="83.8" x2="357" y2="83.8"/>
+				<g>
+					<polygon points="284.5,86 276.4,83.8 284.5,81.6 					"/>
+				</g>
+				<g>
+					<polygon points="355.5,86 363.7,83.8 355.5,81.6 					"/>
+				</g>
+			</g>
+		</g>
+	</g>
+	<g>
+		<line class="st5" x1="131.7" y1="119.9" x2="230.3" y2="119.9"/>
+		<polyline class="st5" points="209,113 244.3,113 221,147.9 		"/>
+		<line class="st5" x1="397.3" y1="111.3" x2="507" y2="111.3"/>
+		<polyline class="st5" points="502,104.3 517.7,104.3 517.7,135.3 499.7,147.9 		"/>
+		<line class="st5" x1="363.7" y1="77.8" x2="363.7" y2="101.8"/>
+	</g>
+</g>
+</svg>

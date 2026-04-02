@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><table-reference author="Kieran O'Donnell" dateTime="2021-06-10T17:05:08" graph="None" id="_8e234e2a-d550-4019-a5d0-f8dd7fc09f72" type="insert"><num>S44C2</num><title id="_56616c2e-d9e6-4cfd-bbff-7d36c5ef75e9">Area adjustment factors for the heating load limit</title><table id="_d580e2be-5005-4970-bc08-a04ac16a437c" keycol="1"><tgroup cols="2"><colspec colname="001" colnum="1" colwidth="216.00*"/><colspec colname="002" colnum="2" colwidth="216.00*"/><thead><row><entry>Total area of <xref format="dita" href="/tmp/QppServer/Publishing/5e2c1f63-e589-4ce1-95e8-5c3e286a7aff/1326_0.4.0.xml#_b8eec66f-9c05-425d-8474-e6a2dfc2c0f4" id="_622847ac-0b1c-437a-b188-4b50e2ee70a1" referencetype="Text" scope="local" synctargettext="false" type="abcb-glossentry">habitable rooms</xref> (A<sub id="_ca5d4bd1-b9e8-43ee-8c65-e3703c7ad4a3">H</sub>)</entry><entry>Area adjustment factor (F<sub id="_dd7edd27-7c51-446e-867b-135fd0567f3c">H</sub>)</entry></row></thead><tbody><row><entry>≤ 50 m<sup id="_3d989db6-dc83-4d2c-98af-04749ce79a6a">2</sup></entry><entry>1.37</entry></row><row><entry>&gt; 50 m<sup id="_75e4dbfb-44c0-43ed-9f89-bc9dd23efa4e">2</sup> to ≤ 350 m<sup id="_7bf909d3-3a77-4d2a-881a-db75d51cc5ee">2</sup></entry><entry><equation-inline alignEquation="none" height="27" heightdpi="96" id="_70fcf2d3-a68c-4bdf-8849-04cb7bc9620a" width="256" widthdpi="96"><mathML><math><semantics><mrow><mo stretchy="false">(</mo><mn>5.11</mn><mo>×</mo><mn>1</mn><msup><mn>0</mn><mrow><mo>−</mo><mn>6</mn></mrow></msup><mo stretchy="false">)</mo><msub><mi>A</mi><mi>H</mi></msub><msup><mrow/><mn>2</mn></msup><mo>−</mo><mo stretchy="false">(</mo><mn>3</mn><mo>.</mo><mn>8</mn><mn>2</mn><mo>×</mo><msup><mrow><mn>10</mn></mrow><mrow><mo>−</mo><mn>3</mn></mrow></msup><mo stretchy="false">)</mo><msub><mi>A</mi><mi>H</mi></msub><mo>+</mo><mn>1.55</mn></mrow><annotation encoding="MathType-MTEF">MathType@MTEF@5@5@+=  feaahqart1ev3aqatCvAUfeBSjuyZL2yd9gzLbvyNv2CaerbuLwBLn  hiov2DGi1BTfMBaeXatLxBI9gBaerbd9wDYLwzYbItLDharqqtubsr  4rNCHbGeaGqiVu0Je9sqqrpepC0xbbL8F4rqqrFfpeea0xe9Lq=Jc9  vqaqpepm0xbba9pwe9Q8fs0=yqaqpepae9pg0FirpepeKkFr0xfr=x  fr=xb9adbaqaaeGaciGaaiaabeqaamaabaabaaGcbaGaaiikaiaaiw  dacaGGUaGaaGymaiaaigdaiiaacqWFxdaTcqWFXaqmcqWFWaamdaah  aaWcbeqaaiab=jHiTiab=zda2aaakiab=LcaPiaadgeadaWgaaWcba  GaamisaaqabaGcdaahaaWcbeqaaiab=jdaYaaakiab=jHiTiab=Hca  Oiab=ndaZiab=5caUiab=Hda4iab=jdaYiab=Dna0kaaigdacaaIWa  WaaWbaaSqabeaacqGHsislcaaIZaaaaOGaaiykaiaadgeadaWgaaWc  baGaamisaaqabaGccqGHRaWkcaaIXaGaaiOlaiaaiwdacaaI1aaaaa@5449@  </annotation></semantics></math></mathML><image content-type="gif">R0lGODlhAQEZAPAAAP///wAAACwAAAAAAQEZAAAC/4SPqcvtD6OctNqLs968+w+G4kiW5omm6sq2
+7ssEMkzXyPzhdhrsPtsDBYM/ErG4Icp0iuPB+YAuY1MDdHFNZCFDprYKWG4b0rFu/Mw5xDewNr32
+uuNOpVU8vEXRaLIV/pam1Pck9xfGBshHyOWl1xT1GAk5cVRHeRkTtoZx5alnWREKiCUJyUgaWErp
+d+eoarppOpp6x3pKNhfx2ZR3K5tKC9yWWYp6uNrLlPhbG4usCFu8u3oswYv1OowsNUvBa73Vh/3s
+DO3c0x38XS1SJu6YlZ48fAwu2joJe17Ov40ey54ybXTw9HvVZd9Bb5UGEsLDzF+zf+LylZsnTSEn
+hqJCLEIT9oYcSH0f8WniQk/iP4Cqpk1DyXGKrmse65kDpq5kQ4YytVWEqVDexn0uW5o8R8vawl5w
+hL3MFC5gtJMpq67E6aaOHIJftEZ11QWHnQyWshILOzOX1qOJ2Iyl2lVR1rRXkQxtRJem3aN78rZQ
++kOgyp17qemt+wKwDcGI2RUmqU/x48mF0nGlDGSGX8ycO3v+DDq06NGkS5s+jTp16gIAIf8LTWF0
+aFR5cGUwMDH/BQEABwREU01UNwABE1dpbkFsbEJhc2ljQ29kZVBhZ2VzABEFVGltZXMgTmV3IFJv
+bWFuABEDU3ltYm9sABEFQ291cmllciBOZXcAEQRNVCBFeHRyYQASAAghL0WPRC9BUPQQD0dfQVDy
+Hx5BUPQVD0EA9EX0JfSPQl9BAPQQD0NfQQD0j0X0Kl9I9I9BAPQQD0D0j0F/SPQQD0EqX0RfRfRf
+RfRfQQ8MAQABAAECAgICAAIAAQEBAAMAAQAEAAAKAQACAIIoAAIAiDUAAgCCLgACAIgxAAIAiDEA
+CAIAAgR/1wC0AgR/MQAxAgR/MAAwAwAcAAALAQEBAAIEfxIivi0CBH82ADYAAAoCBH8pACkCAINB
+AAMAGwAACwEAAgCDSAAAAQEACgMAHAAACwEBAQACBH8yADIAAAoCBH8SIi0CBH8oACgCBH8zADMC
+BH8uAC4CBH84ADgCBH8yADICBH/XALQCAIgxAAIAiDAAAwAcAAALAQEBAAIEhhIiLQIAiDMAAAAK
+AgCCKQACAINBAAMAGwAACwEAAgCDSAAAAQEACgIEhisAKwIAiDEAAgCCLgACAIg1AAIAiDUAAAAA
+If8LTWF0aFR5cGUwMDP/PD94bWwgdmVyc2lvbj0iMS4wIj8+PCEtLSBNYXRoVHlwZUBUcmFuc2xh
+dG9yQDVANUBNYXRoTUwyIChDbGlwYm9hcmQpLnRkbEBNYXRoTUwgMi4wIChDbGlwYm9hcmQpQCAt
+LT48bWF0aCB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMTk5OC9NYXRoL01hdGhNTCc+PG1yb3c+
+PG1vIHN0cmV0Y2h5PSdmYWxzZSc+KDwvbW8+PG1uPjUuMTE8L21uPjxtbz4mI3gwMEQ3OzwvbW8+
+PG1uPjE8L21uPjxtc3VwPjxtbj4wPC9tbj48bXJvdz48bW8+JiN4MjIx/zI7PC9tbz48bW4+Njwv
+bW4+PC9tcm93PjwvbXN1cD48bW8gc3RyZXRjaHk9J2ZhbHNlJz4pPC9tbz48bXN1Yj48bWk+QTwv
+bWk+PG1pPkg8L21pPjwvbXN1Yj48bXN1cD48bXJvdz48L21yb3c+PG1uPjI8L21uPjwvbXN1cD48
+bW8+JiN4MjIxMjs8L21vPjxtbyBzdHJldGNoeT0nZmFsc2UnPig8L21vPjxtbj4zPC9tbj48bW8+
+LjwvbW8+PG1uPjg8L21uPjxtbj4yPC9tbj48bW8+JiN4MDBENzs8L21vPjxtc3VwPjxtcm93Pjxt
+bj4xMDwvbW4+PC9tcq1vdz48bXJvdz48bW8+JiN4MjIxMjs8L21vPjxtbj4zPC9tbj48L21yb3c+
+PC9tc3VwPjxtbyBzdHJldGNoeT0nZmFsc2UnPik8L21vPjxtc3ViPjxtaT5BPC9taT48bWk+SDwv
+bWk+PC9tc3ViPjxtbz4rPC9tbz48bW4+MS41NTwvbW4+PC9tcm93PjwvbWF0aD48IS0tIE1hdGhU
+eXBlQEVuZEA1QDVAIC0tPgAh/wtNYXRoVHlwZTAwMgYIAAAAAAAAOw==</image></equation-inline></entry></row><row><entry>&gt; 350 m<sup id="_ae2e1a89-fb0c-4dca-8b16-195068aee156">2</sup></entry><entry>0.84</entry></row></tbody></tgroup></table></table-reference>

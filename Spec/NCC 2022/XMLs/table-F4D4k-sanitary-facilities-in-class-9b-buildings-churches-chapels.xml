@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><table-reference xmlns:xt="urn:xpressauthor:trackchanges" graph="None" id="_83986f7f-937e-42c2-bc89-fb35de2cd9bd"><num>F4D4k</num><title id="_25f715ff-1daa-4c2a-9a2a-66444e5e9a65">Sanitary facilities in Class 9b buildings – churches, chapels or the like</title><table id="_1cfda0a7-a618-457c-bea8-410099b1acb3" keycol="1"><tgroup cols="4"><colspec colname="001" colnum="1" colwidth="145.55*"/><colspec colname="002" colnum="2" colwidth="95.25*"/><colspec colname="003" colnum="3" colwidth="95.15*"/><colspec colname="004" colnum="4" colwidth="95.05*"/><thead><row><entry>User group</entry><entry>Facility type</entry><entry>Design occupancy</entry><entry>Number</entry></row></thead><tbody><row><entry morerows="5">Male patrons</entry><entry morerows="1">Closet pans
+
+</entry><entry>1 - 300</entry><entry>1</entry></row><row><entry>&gt;300</entry><entry>Add 1 per 500</entry></row><row><entry morerows="1">Urinals
+
+</entry><entry>1 - 200</entry><entry>1</entry></row><row><entry>&gt;200</entry><entry>Add 1 per 200</entry></row><row><entry morerows="1">Washbasins
+
+</entry><entry>1 - 250</entry><entry>1</entry></row><row><entry>&gt;250</entry><entry>Add 1 per 250</entry></row><row><entry morerows="3">Female patrons</entry><entry morerows="1">Closet pans
+
+</entry><entry>1 - 150</entry><entry>1</entry></row><row><entry>&gt;150</entry><entry>Add 1 per 150</entry></row><row><entry morerows="1">Washbasins
+
+</entry><entry>1 - 250</entry><entry>1</entry></row><row><entry>&gt;250</entry><entry>Add 1 per 250</entry></row></tbody></tgroup></table></table-reference>

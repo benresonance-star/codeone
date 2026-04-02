@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 25.2.1, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 552.8 465.5" style="enable-background:new 0 0 552.8 465.5;" xml:space="preserve">
+<style type="text/css">
+	.st0{display:none;}
+	.st1{font-family:'Arial-ItalicMT';}
+	.st2{font-size:12px;}
+	.st3{font-family:'ArialMT';}
+	.st4{fill:none;stroke:#000000;stroke-width:0.25;stroke-miterlimit:10;}
+	.st5{fill:none;stroke:#000000;stroke-miterlimit:10;}
+	.st6{fill:none;stroke:#000000;stroke-miterlimit:10;stroke-dasharray:12.3487,12.3487;}
+	.st7{fill:none;stroke:#000000;stroke-width:1.5;stroke-miterlimit:10;}
+</style>
+<g id="TRACE" class="st0">
+</g>
+<g id="Layer_1">
+	<text transform="matrix(1 0 0 1 368.0295 296.1919)"><tspan x="0" y="0" class="st1 st2">Going</tspan><tspan x="32" y="0" class="st3 st2"> for slope </tspan><tspan x="0" y="14.4" class="st3 st2">relationship measured </tspan><tspan x="0" y="28.8" class="st3 st2">at this point</tspan></text>
+	<g>
+		<text transform="matrix(1 0 0 1 67.8221 408.1919)" class="st3 st2">Equal</text>
+		<text transform="matrix(1 0 0 1 173.8221 408.1915)" class="st3 st2">Equal</text>
+	</g>
+	<g>
+		<text transform="matrix(0 -1 1 0 500.4138 168.0097)" class="st3 st2">Not more than</text>
+		<text transform="matrix(0 -1 1 0 524.4138 154)" class="st3 st2">1 m wide</text>
+	</g>
+	<g>
+		<g>
+			<polyline class="st4" points="364,292.2 345,292.2 257,177.3 			"/>
+			<g>
+				<polygon points="259.7,177.1 253,172 256.2,179.8 				"/>
+			</g>
+		</g>
+	</g>
+	<g>
+		<line class="st4" x1="518" y1="220.1" x2="425" y2="220.1"/>
+		<line class="st4" x1="518" y1="28.3" x2="425" y2="28.3"/>
+		<line class="st4" x1="28.3" y1="396.1" x2="28.3" y2="437.1"/>
+		<line class="st4" x1="135" y1="396.1" x2="135" y2="437.1"/>
+		<line class="st4" x1="239" y1="396.1" x2="239" y2="437.1"/>
+	</g>
+	<g>
+		<g>
+			<g>
+				<line class="st4" x1="35" y1="426.1" x2="128.4" y2="426.1"/>
+				<g>
+					<polygon points="36.5,428.3 28.3,426.1 36.5,423.9 					"/>
+				</g>
+				<g>
+					<polygon points="126.9,428.3 135,426.1 126.9,423.9 					"/>
+				</g>
+			</g>
+		</g>
+		<g>
+			<g>
+				<line class="st4" x1="232.4" y1="426.1" x2="142.6" y2="426.1"/>
+				<g>
+					<polygon points="230.9,423.9 239,426.1 230.9,428.3 					"/>
+				</g>
+				<g>
+					<polygon points="144.1,423.9 136,426.1 144.1,428.3 					"/>
+				</g>
+			</g>
+		</g>
+		<g>
+			<g>
+				<line class="st4" x1="508" y1="35" x2="508" y2="213.5"/>
+				<g>
+					<polygon points="505.8,36.5 508,28.3 510.2,36.5 					"/>
+				</g>
+				<g>
+					<polygon points="505.8,212 508,220.1 510.2,212 					"/>
+				</g>
+			</g>
+		</g>
+	</g>
+	<g>
+		<g>
+			<path class="st5" d="M135.7,381.2c0-2,0-4,0.1-6"/>
+			<path class="st6" d="M136.4,362.9c9.8-129.7,123.3-232.8,264.1-238.4"/>
+			<path class="st5" d="M406.7,124.3c2,0,4-0.1,6-0.1"/>
+		</g>
+	</g>
+	<g>
+		<path class="st5" d="M412.7,29.3v191.8c-95.9,0-173.6,71.1-173.6,160.1H29.3"/>
+		<line class="st5" x1="328" y1="38.3" x2="371" y2="225.1"/>
+		<line class="st5" x1="237" y1="67.8" x2="330.1" y2="240.3"/>
+		<line class="st5" x1="151.1" y1="124.2" x2="289.5" y2="268.2"/>
+		<line class="st5" x1="82.4" y1="202.4" x2="262.5" y2="300.6"/>
+		<line class="st5" x1="41.8" y1="291.7" x2="244.7" y2="340.6"/>
+	</g>
+	<path class="st7" d="M29.3,381.2c0-195.4,172.7-351.9,383.3-351.9"/>
+</g>
+</svg>

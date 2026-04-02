@@ -1,0 +1,305 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Drawing_layer" data-name="Drawing layer" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 552.76 850.39">
+  <defs>
+    <style>
+      .cls-1 {
+        stroke: #231f20;
+        stroke-miterlimit: 10;
+      }
+
+      .cls-1, .cls-2, .cls-3 {
+        fill: none;
+      }
+
+      .cls-1, .cls-3 {
+        stroke-width: .25px;
+      }
+
+      .cls-4, .cls-5 {
+        stroke-width: 0px;
+      }
+
+      .cls-6 {
+        font-family: MyriadPro-Regular, 'Myriad Pro';
+      }
+
+      .cls-6, .cls-7, .cls-8 {
+        font-size: 12px;
+      }
+
+      .cls-6, .cls-7, .cls-8, .cls-5 {
+        fill: #231f20;
+      }
+
+      .cls-7 {
+        letter-spacing: -.02em;
+      }
+
+      .cls-7, .cls-8 {
+        font-family: ArialMT, Arial;
+      }
+
+      .cls-2, .cls-3 {
+        stroke: #000;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+    </style>
+  </defs>
+  <g id="LINE">
+    <g>
+      <polyline class="cls-3" points="141.63 162.37 141.63 310.13 141.63 420.27"/>
+      <polygon class="cls-4" points="139.45 163.85 141.63 155.72 143.81 163.85 139.45 163.85"/>
+      <polygon class="cls-4" points="139.45 418.79 141.63 426.92 143.81 418.79 139.45 418.79"/>
+    </g>
+  </g>
+  <g id="LINE-2" data-name="LINE">
+    <g>
+      <polyline class="cls-3" points="141.63 464.09 141.63 571.13 141.63 650.47"/>
+      <polygon class="cls-4" points="139.45 465.58 141.63 457.45 143.81 465.58 139.45 465.58"/>
+      <polygon class="cls-4" points="139.45 648.98 141.63 657.12 143.81 648.98 139.45 648.98"/>
+    </g>
+  </g>
+  <g id="LINE-3" data-name="LINE">
+    <line class="cls-3" x1="336.9" y1="426.92" x2="127.14" y2="426.92"/>
+  </g>
+  <g id="LINE-4" data-name="LINE">
+    <line class="cls-3" x1="269.72" y1="112.53" x2="269.72" y2="34.55"/>
+  </g>
+  <g id="LINE-5" data-name="LINE">
+    <line class="cls-3" x1="354.59" y1="184.75" x2="354.59" y2="34.55"/>
+  </g>
+  <g id="LINE-6" data-name="LINE">
+    <line class="cls-3" x1="201.8" y1="472.36" x2="202" y2="583.18"/>
+  </g>
+  <g id="LINE-7" data-name="LINE">
+    <g>
+      <line class="cls-3" x1="208.65" y1="583.18" x2="347.1" y2="583.18"/>
+      <polygon class="cls-4" points="210.13 585.36 202 583.18 210.13 581 210.13 585.36"/>
+      <polygon class="cls-4" points="345.61 585.36 353.74 583.18 345.61 581 345.61 585.36"/>
+    </g>
+  </g>
+  <g id="LINE-8" data-name="LINE">
+    <line class="cls-3" x1="188.47" y1="457.45" x2="127.14" y2="457.45"/>
+  </g>
+  <g id="LINE-9" data-name="LINE">
+    <line class="cls-3" x1="328.36" y1="657.12" x2="127.14" y2="657.12"/>
+  </g>
+  <g id="LINE-10" data-name="LINE">
+    <g>
+      <line class="cls-1" x1="276.36" y1="78.52" x2="347.94" y2="78.52"/>
+      <polygon class="cls-5" points="277.85 80.7 269.72 78.52 277.85 76.34 277.85 80.7"/>
+      <polygon class="cls-5" points="346.45 80.7 354.59 78.52 346.45 76.34 346.45 80.7"/>
+    </g>
+  </g>
+  <g id="LINE-11" data-name="LINE">
+    <line class="cls-3" x1="261.41" y1="155.72" x2="127.14" y2="155.72"/>
+  </g>
+  <g id="LINE-12" data-name="LINE">
+    <line class="cls-3" x1="330.63" y1="189.94" x2="254.95" y2="189.86"/>
+  </g>
+  <g id="LINE-13" data-name="LINE">
+    <g>
+      <line class="cls-1" x1="254.95" y1="162.37" x2="254.95" y2="183.21"/>
+      <polygon class="cls-5" points="252.77 163.85 254.95 155.72 257.13 163.85 252.77 163.85"/>
+      <polygon class="cls-5" points="252.77 181.73 254.95 189.86 257.13 181.73 252.77 181.73"/>
+    </g>
+  </g>
+  <g id="LINE-14" data-name="LINE">
+    <g>
+      <line class="cls-3" x1="295.37" y1="464.09" x2="295.37" y2="484.64"/>
+      <polygon class="cls-4" points="293.19 465.58 295.37 457.45 297.55 465.58 293.19 465.58"/>
+      <polygon class="cls-4" points="293.19 483.15 295.37 491.28 297.55 483.15 293.19 483.15"/>
+    </g>
+  </g>
+  <g id="LINE-15" data-name="LINE">
+    <line class="cls-3" x1="330.63" y1="491.28" x2="295.37" y2="491.28"/>
+  </g>
+  <g>
+    <g id="POLYLINE">
+      <rect class="cls-2" x="351.54" y="189.94" width="6.77" height="5.08"/>
+    </g>
+    <g id="POLYLINE-2" data-name="POLYLINE">
+      <rect class="cls-2" x="351.54" y="421.84" width="6.77" height="5.08"/>
+    </g>
+    <g id="POLYLINE-3" data-name="POLYLINE">
+      <rect class="cls-2" x="351.54" y="491.28" width="6.77" height="5.08"/>
+    </g>
+    <g id="POLYLINE-4" data-name="POLYLINE">
+      <rect class="cls-2" x="351.54" y="652.04" width="6.77" height="5.08"/>
+    </g>
+  </g>
+  <g id="MTEXT">
+    <text class="cls-8" transform="translate(127.31 119.62)"><tspan x="0" y="0">Shading projection</tspan></text>
+  </g>
+  <g id="MTEXT-2" data-name="MTEXT">
+    <text class="cls-8" transform="translate(227.54 387.66)"><tspan x="0" y="0">Shading projection</tspan></text>
+  </g>
+  <g id="LINE-16" data-name="LINE">
+    <g id="LINE-17" data-name="LINE">
+      <g>
+        <line class="cls-1" x1="306.09" y1="148.29" x2="233.5" y2="120.24"/>
+        <polygon class="cls-5" points="305.49 145.72 312.29 150.68 303.92 149.78 305.49 145.72"/>
+      </g>
+    </g>
+  </g>
+  <g id="LINE-18" data-name="LINE">
+    <g id="LINE-19" data-name="LINE">
+      <g>
+        <line class="cls-1" x1="288.86" y1="443.04" x2="288.85" y2="395.51"/>
+        <polygon class="cls-5" points="291.04 441.56 288.86 449.69 286.68 441.56 291.04 441.56"/>
+      </g>
+    </g>
+  </g>
+  <g>
+    <g id="CIRCLE">
+      <path class="cls-2" d="m200.31,318.6c0-1.87,1.52-3.38,3.38-3.38s3.38,1.51,3.38,3.38-1.52,3.38-3.38,3.38-3.38-1.51-3.38-3.38h0Z"/>
+    </g>
+    <g id="LINE-20" data-name="LINE">
+      <line class="cls-2" x1="205.39" y1="321.53" x2="205.39" y2="437.14"/>
+    </g>
+    <g id="LINE-21" data-name="LINE">
+      <line class="cls-2" x1="202" y1="321.53" x2="202" y2="437.14"/>
+    </g>
+  </g>
+  <g>
+    <g id="LINE-22" data-name="LINE">
+      <line class="cls-2" x1="353.74" y1="195.02" x2="353.74" y2="421.84"/>
+    </g>
+    <g id="LINE-23" data-name="LINE">
+      <line class="cls-2" x1="356.1" y1="195.02" x2="356.1" y2="421.84"/>
+    </g>
+  </g>
+  <g>
+    <g id="LINE-24" data-name="LINE">
+      <line class="cls-2" x1="353.74" y1="496.36" x2="353.74" y2="652.04"/>
+    </g>
+    <g id="LINE-25" data-name="LINE">
+      <line class="cls-2" x1="356.1" y1="496.36" x2="356.1" y2="652.04"/>
+    </g>
+  </g>
+  <g id="MTEXT-3" data-name="MTEXT">
+    <text class="cls-7" transform="translate(305.84 44.06)"><tspan x="0" y="0">P</tspan></text>
+  </g>
+  <g id="MTEXT-4" data-name="MTEXT">
+    <text class="cls-8" transform="translate(275.38 59.2)"><tspan x="0" y="0">(upper storey</tspan><tspan x="14.34" y="14.4">glazing)</tspan></text>
+  </g>
+  <g id="MTEXT-5" data-name="MTEXT">
+    <text class="cls-7" transform="translate(263.4 536.55)"><tspan x="0" y="0">P</tspan></text>
+  </g>
+  <g id="MTEXT-6" data-name="MTEXT">
+    <text class="cls-8" transform="translate(100.68 291.32)"><tspan x="0" y="0">H</tspan></text>
+  </g>
+  <g id="MTEXT-7" data-name="MTEXT">
+    <text class="cls-8" transform="translate(99.77 565.85)"><tspan x="0" y="0">H</tspan></text>
+  </g>
+  <g id="MTEXT-8" data-name="MTEXT">
+    <text class="cls-8"><tspan x="178.52" y="183.43">(upper storey</tspan><tspan x="207.19" y="197.83">glazing)</tspan></text>
+  </g>
+  <g id="MTEXT-9" data-name="MTEXT">
+    <text class="cls-8"><tspan x="66.32" y="306.18">(upper storey</tspan><tspan x="94.99" y="320.58">glazing)</tspan></text>
+  </g>
+  <g id="MTEXT-10" data-name="MTEXT">
+    <text class="cls-8"><tspan x="68.33" y="580.24">(lower storey</tspan><tspan x="94.99" y="594.64">glazing)</tspan></text>
+  </g>
+  <g id="MTEXT-11" data-name="MTEXT">
+    <text class="cls-8"><tspan x="211.36" y="551.88">(lower storey glazing)</tspan></text>
+  </g>
+  <g>
+    <g id="LINE-26" data-name="LINE">
+      <line class="cls-2" x1="341.9" y1="437.14" x2="341.9" y2="433.66"/>
+    </g>
+    <g>
+      <g id="LINE-27" data-name="LINE">
+        <line class="cls-2" x1="341.9" y1="189.94" x2="367.27" y2="189.94"/>
+      </g>
+      <g>
+        <g id="POLYLINE-5" data-name="POLYLINE">
+          <polyline class="cls-2" points="341.9 165.95 287.44 165.95 287.44 155.72 269.72 155.72 269.72 122.77 486.24 121.56"/>
+        </g>
+        <g>
+          <g id="LINE-28" data-name="LINE">
+            <line class="cls-2" x1="341.9" y1="491.28" x2="341.9" y2="457.45"/>
+          </g>
+          <g id="LINE-29" data-name="LINE">
+            <line class="cls-2" x1="367.27" y1="491.28" x2="367.27" y2="657.12"/>
+          </g>
+          <g>
+            <g id="LINE-30" data-name="LINE">
+              <line class="cls-2" x1="367.27" y1="820.43" x2="367.27" y2="782.28"/>
+            </g>
+            <g id="LINE-31" data-name="LINE">
+              <line class="cls-2" x1="367.27" y1="761.98" x2="367.27" y2="657.12"/>
+            </g>
+            <g id="POLYLINE-6" data-name="POLYLINE">
+              <polyline class="cls-2" points="341.9 820.43 341.9 674.84 336.24 665.71 351.2 657.12"/>
+            </g>
+            <g id="LINE-32" data-name="LINE">
+              <line class="cls-2" x1="367.27" y1="761.98" x2="487.61" y2="761.98"/>
+            </g>
+            <g id="LINE-33" data-name="LINE">
+              <line class="cls-2" x1="367.27" y1="782.28" x2="487.61" y2="782.28"/>
+            </g>
+            <g id="LINE-34" data-name="LINE">
+              <line class="cls-2" x1="115.81" y1="820.45" x2="487.61" y2="820.45"/>
+            </g>
+          </g>
+          <g>
+            <g id="LINE-35" data-name="LINE">
+              <line class="cls-2" x1="367.27" y1="132.61" x2="487.61" y2="132.61"/>
+            </g>
+            <g id="LINE-36" data-name="LINE">
+              <line class="cls-2" x1="341.9" y1="433.66" x2="351.2" y2="426.92"/>
+            </g>
+            <g>
+              <g id="LINE-37" data-name="LINE">
+                <line class="cls-2" x1="341.9" y1="491.28" x2="367.27" y2="491.28"/>
+              </g>
+              <g id="LINE-38" data-name="LINE">
+                <line class="cls-2" x1="351.2" y1="657.12" x2="367.27" y2="657.12"/>
+              </g>
+            </g>
+            <g id="LINE-39" data-name="LINE">
+              <line class="cls-2" x1="341.9" y1="189.94" x2="341.9" y2="165.95"/>
+            </g>
+            <g id="LINE-40" data-name="LINE">
+              <line class="cls-2" x1="367.27" y1="189.94" x2="367.27" y2="132.61"/>
+            </g>
+            <g id="LINE-41" data-name="LINE">
+              <line class="cls-2" x1="367.27" y1="437.14" x2="367.27" y2="426.92"/>
+            </g>
+            <g id="LINE-42" data-name="LINE">
+              <line class="cls-2" x1="367.27" y1="491.28" x2="367.27" y2="457.45"/>
+            </g>
+            <g id="LINE-43" data-name="LINE">
+              <line class="cls-2" x1="341.9" y1="189.94" x2="341.9" y2="433.66"/>
+            </g>
+            <g id="LINE-44" data-name="LINE">
+              <line class="cls-2" x1="367.27" y1="189.94" x2="367.27" y2="426.92"/>
+            </g>
+            <g id="LINE-45" data-name="LINE">
+              <line class="cls-2" x1="341.9" y1="491.28" x2="341.9" y2="662.46"/>
+            </g>
+            <g id="LINE-46" data-name="LINE">
+              <line class="cls-2" x1="351.2" y1="426.92" x2="367.27" y2="426.92"/>
+            </g>
+            <g id="LINE-47" data-name="LINE">
+              <line class="cls-2" x1="367.27" y1="437.14" x2="487.61" y2="437.14"/>
+            </g>
+            <g id="LINE-48" data-name="LINE">
+              <line class="cls-2" x1="367.27" y1="457.45" x2="487.61" y2="457.45"/>
+            </g>
+            <g id="POLYLINE-7" data-name="POLYLINE">
+              <polyline class="cls-2" points="341.9 437.14 202 437.14 202 457.45 341.9 457.45"/>
+            </g>
+          </g>
+        </g>
+      </g>
+    </g>
+  </g>
+  <text class="cls-6" transform="translate(213.96 169.03)"><tspan x="0" y="0">G</tspan></text>
+  <g id="MTEXT-12" data-name="MTEXT">
+    <text class="cls-8"><tspan x="223.66" y="487.53">(lower storey</tspan><tspan x="250.32" y="501.93">glazing)</tspan></text>
+  </g>
+  <text class="cls-6" transform="translate(258.08 473.13)"><tspan x="0" y="0">G</tspan></text>
+</svg>

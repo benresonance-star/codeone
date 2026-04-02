@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 26.5.0, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" id="_x30_" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 552.76 564.35" style="enable-background:new 0 0 552.76 564.35;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill:none;stroke:#231F20;stroke-width:2.5;stroke-miterlimit:10;}
+	.st1{fill:none;stroke:#231F20;stroke-miterlimit:10;}
+	.st2{fill:#231F20;}
+	.st3{font-family:'ArialMT';}
+	.st4{font-size:12px;}
+	.st5{fill:none;stroke:#231F20;stroke-width:0.25;stroke-miterlimit:10;}
+	.st6{fill:none;stroke:#231F20;stroke-width:0.75;stroke-miterlimit:10;}
+	.st7{fill:none;stroke:#231F20;stroke-width:0.75;stroke-miterlimit:10;stroke-dasharray:11.8284,5.9142;}
+	.st8{fill:none;stroke:#231F20;stroke-width:0.75;stroke-miterlimit:10;stroke-dasharray:12.0272,6.0136;}
+</style>
+<g id="LINE">
+	<g>
+		<line class="st0" x1="397.62" y1="339.84" x2="524.44" y2="339.84"/>
+	</g>
+</g>
+<g id="LINE_1_">
+	<line class="st0" x1="131.63" y1="114.24" x2="183.5" y2="114.24"/>
+</g>
+<g id="LINE_2_">
+	<line class="st0" x1="131.63" y1="152.02" x2="183.5" y2="152.02"/>
+</g>
+<g>
+	<g id="POLYLINE">
+		<g>
+			<polyline class="st1" points="467.91,339.84 467.91,96.29 448.81,96.29 448.81,339.84 			"/>
+		</g>
+	</g>
+	<g id="POLYLINE_1_">
+		<g>
+			<rect x="80.65" y="90.21" class="st1" width="50.97" height="395.98"/>
+		</g>
+	</g>
+	<g id="POLYLINE_2_">
+		<g>
+			<polyline class="st1" points="131.63,97.81 179.45,97.81 179.45,172.65 131.63,172.65 			"/>
+		</g>
+	</g>
+</g>
+<g id="MTEXT">
+	<g>
+		<text transform="matrix(1 0 0 1 414.4492 366.8506)" class="st2 st3 st4">Load eccentricity</text>
+	</g>
+</g>
+<g id="MTEXT_1_">
+	<g>
+		<text transform="matrix(1 0 0 1 94.8835 40.7178)" class="st2 st3 st4">e = D/2 + 100 mm</text>
+	</g>
+</g>
+<g id="MTEXT_2_">
+	<g>
+		<text transform="matrix(1 0 0 1 472.5523 53.9153)" class="st2 st3 st4">e</text>
+	</g>
+</g>
+<g id="MTEXT_5_">
+	<g>
+		<text transform="matrix(1 0 0 1 102.0523 525.8186)" class="st2 st3 st4">D</text>
+	</g>
+</g>
+<g id="LINE_7_">
+	<g id="LINE_14_">
+		<g>
+			<g>
+				<g>
+					<line class="st5" x1="495.73" y1="110.5" x2="495.73" y2="53.92"/>
+					<g>
+						<polygon class="st2" points="497.91,109.01 495.73,117.14 493.55,109.01 						"/>
+					</g>
+				</g>
+			</g>
+		</g>
+	</g>
+</g>
+<g id="LINE_11_">
+	<g id="LINE_22_">
+		<g>
+			<g>
+				<g>
+					<line class="st5" x1="74.01" y1="522.92" x2="28.35" y2="522.92"/>
+					<g>
+						<polygon class="st2" points="72.52,520.74 80.65,522.92 72.52,525.1 						"/>
+					</g>
+				</g>
+			</g>
+		</g>
+	</g>
+</g>
+<g id="LINE_12_">
+	<g id="LINE_17_">
+		<g>
+			<g>
+				<g>
+					<line class="st5" x1="138.27" y1="522.92" x2="183.93" y2="522.92"/>
+					<g>
+						<polygon class="st2" points="139.76,525.1 131.63,522.92 139.76,520.74 						"/>
+					</g>
+				</g>
+			</g>
+		</g>
+	</g>
+</g>
+<g id="LINE_13_">
+	<g>
+		<g>
+			<line class="st5" x1="102.12" y1="58.23" x2="56.45" y2="58.23"/>
+			<g>
+				<polygon class="st2" points="100.63,56.05 108.76,58.23 100.63,60.41 				"/>
+			</g>
+		</g>
+	</g>
+</g>
+<g id="LINE_8_">
+	<g>
+		<g>
+			<line class="st5" x1="205.61" y1="58.23" x2="159.94" y2="58.23"/>
+			<g>
+				<polygon class="st2" points="161.43,56.05 153.3,58.23 161.43,60.41 				"/>
+			</g>
+		</g>
+	</g>
+</g>
+<g id="LINE_3_">
+	<g id="LINE_21_">
+		<g>
+			<g>
+				<g>
+					<line class="st6" x1="108.76" y1="46.39" x2="108.76" y2="52.39"/>
+					<line class="st7" x1="108.76" y1="58.31" x2="108.76" y2="410.2"/>
+					<line class="st6" x1="108.76" y1="413.16" x2="108.76" y2="419.16"/>
+				</g>
+			</g>
+		</g>
+	</g>
+</g>
+<g id="LINE_4_">
+	<g id="LINE_20_">
+		<g>
+			<g>
+				<g>
+					<line class="st6" x1="154.26" y1="46.39" x2="154.26" y2="52.39"/>
+					<line class="st8" x1="154.26" y1="58.41" x2="154.26" y2="163.64"/>
+					<line class="st6" x1="154.26" y1="166.65" x2="154.26" y2="172.65"/>
+				</g>
+			</g>
+		</g>
+	</g>
+</g>
+<g id="CIRCLE">
+	<g>
+		<path class="st2" d="M455.52,63.63c0-1.57,1.27-2.83,2.83-2.83c1.57,0,2.83,1.27,2.83,2.83c0,1.57-1.27,2.83-2.83,2.83
+			C456.79,66.46,455.52,65.19,455.52,63.63L455.52,63.63z"/>
+	</g>
+</g>
+<g id="CIRCLE_1_">
+	<g>
+		<path class="st2" d="M492.9,63.63c0-1.57,1.27-2.83,2.83-2.83c1.57,0,2.83,1.27,2.83,2.83c0,1.57-1.27,2.83-2.83,2.83
+			C494.16,66.46,492.9,65.19,492.9,63.63L492.9,63.63z"/>
+	</g>
+</g>
+<g id="LINE_5_">
+	<g>
+		<line class="st5" x1="433" y1="63.19" x2="517.52" y2="63.19"/>
+	</g>
+</g>
+<g id="LINE_6_">
+	<g>
+		<line class="st5" x1="458.36" y1="96.29" x2="458.36" y2="53.92"/>
+	</g>
+</g>
+<g id="LINE_9_">
+	<g>
+		<line class="st5" x1="80.65" y1="503.64" x2="80.65" y2="536"/>
+	</g>
+</g>
+<g id="LINE_10_">
+	<g>
+		<line class="st5" x1="131.63" y1="503.64" x2="131.63" y2="536"/>
+	</g>
+</g>
+<g id="LINE_16_">
+	<line class="st5" x1="153.3" y1="58.23" x2="108.76" y2="58.23"/>
+</g>
+</svg>
