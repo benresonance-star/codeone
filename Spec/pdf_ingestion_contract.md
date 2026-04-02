@@ -1,6 +1,6 @@
 # PDF Ingestion Validation Contract
 ## NCC PDF Ingestion Constraint Manual
-### Version 1.1.0
+### Version 1.2.0
 
 ---
 
@@ -35,6 +35,9 @@ The PDF must therefore be suitable for:
 
 If PDF validation fails, the system must stop before semantic compilation.
 
+PDF extraction may be strategy-driven rather than globally uniform.
+The ingestion system may select different extractor modes for different NCC document classes or section families when that improves structural fidelity without changing the validation contract itself.
+
 ---
 
 # Status model
@@ -68,6 +71,31 @@ The executable contract defines these thresholds and assumptions:
 - maximum unresolved alignments allowed with warnings: `5`
 - maximum low-confidence alignments allowed with warnings: `5`
 - minimum overall quality score: `0.95`
+
+Operational assumptions:
+- extractor selection may be routed by document strategy
+- Docling text-first mode remains the default baseline unless a strategy explicitly selects a stronger mode
+- table-heavy PDFs may enable Docling table-structure mode when benchmark evidence shows materially better table recovery
+- extractor-mode changes must not weaken blocking rules for structure, alignment, metadata, or quality
+
+---
+
+# Strategy-driven extraction
+
+Validation is contract-driven, but extraction is allowed to be strategy-aware.
+
+This means the system may:
+- keep a conservative default extraction mode for general documents
+- enable a table-aware extraction mode for known table-heavy PDFs
+- preserve the same downstream validation rules regardless of which extractor mode was selected
+
+Current expected behavior:
+- general text-centric NCC sections may use Docling text-first mode
+- glossary and definitions sections may use glossary-oriented extraction and repair logic
+- known table-heavy clause-parity sections, such as Section J energy-efficiency material, may use Docling table-structure mode
+
+The contract does not require one extractor mode for all PDFs.
+It requires that the chosen mode produce structurally usable, traceable, and alignable output.
 
 ---
 
@@ -107,6 +135,8 @@ Extracted tables must preserve enough structure for downstream use:
 - row presence
 - usable header information where expected
 - stable table identity
+
+The extraction system may change runtime mode to improve table fidelity, but the output still counts as invalid if rows are empty, headers are unusable where required, or table structure cannot support downstream parity and review.
 
 Outcome:
 - block progression if extracted tables are structurally unusable
@@ -159,6 +189,12 @@ The PDF validation engine must emit a structured validation result that includes
 
 The output should use the repo schema at `Spec/validation_result.schema.json`.
 Where XML relationships are surfaced, `node_id` should be treated as the normalized XML-side identifier. Legacy `xml_node` naming may be accepted for compatibility where explicitly allowed by the schema.
+
+Companion ingestion metadata may additionally surface:
+- selected document strategy
+- extractor strategy
+- extractor options such as Docling runtime mode
+- runtime notes explaining whether text-first or table-aware extraction was used
 
 ---
 

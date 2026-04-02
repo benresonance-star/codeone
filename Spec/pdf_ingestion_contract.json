@@ -1,14 +1,15 @@
 {
   "contract_id": "pdf_ingestion_v1",
-  "contract_version": "1.1.0",
-  "description": "Deterministic validation contract for NCC PDF ingestion and XML-linked validation.",
+  "contract_version": "1.2.0",
+  "description": "Deterministic validation contract for NCC PDF ingestion and XML-linked validation with strategy-driven extraction.",
   "representation_model": {
     "primary_representation": "pdf",
     "paired_representation": "xml",
     "relationship": "same_ncc_content_different_form",
     "pdf_role": "rendered_spatial_authority",
     "xml_role": "structural_authority",
-    "alignment_dependency": "PDF-to-XML alignment can only support semantic progression when the paired XML source has passed its gate and alignment evidence remains within configured thresholds."
+    "alignment_dependency": "PDF-to-XML alignment can only support semantic progression when the paired XML source has passed its gate and alignment evidence remains within configured thresholds.",
+    "strategy_routing": "Extraction may be routed by document strategy so that different NCC section families can use different extractor modes while remaining bound to the same validation contract."
   },
   "thresholds": {
     "min_text_based_ratio": 0.99,
@@ -21,6 +22,13 @@
     "max_unresolved_alignments_for_warning": 5,
     "max_low_confidence_alignments_for_warning": 5,
     "min_quality_score": 0.95
+  },
+  "operational_assumptions": {
+    "strategy_driven_extraction": true,
+    "default_docling_mode": "text",
+    "table_heavy_docling_mode": "tables",
+    "mode_selection_rule": "Known table-heavy PDFs may enable Docling table structure when benchmark evidence shows materially better table recovery.",
+    "contract_invariance": "Changing extractor mode must not relax structure, alignment, metadata, or quality requirements."
   },
   "status_model": {
     "PASS": "All blocking rules pass and no warning outcomes remain.",
@@ -56,7 +64,7 @@
     },
     {
       "rule_id": "C4_TABLE_STRUCTURE",
-      "description": "Extracted PDF tables must preserve row structure and usable header information where present.",
+      "description": "Extracted PDF tables must preserve row structure and usable header information where present, regardless of which extractor mode produced them.",
       "severity": "blocking",
       "pass_when": "tables.invalid_count <= thresholds.max_invalid_tables AND tables.empty_row_sets == 0 AND tables.missing_headers_where_expected == 0",
       "block_when": "tables.invalid_count > thresholds.max_invalid_tables OR tables.empty_row_sets > 0 OR tables.missing_headers_where_expected > 0",
@@ -87,5 +95,15 @@
       "block_when": "confidence.overall < thresholds.min_quality_score",
       "error_code": "EXECUTION_BLOCKED"
     }
-  ]
+  ],
+  "companion_strategy_metadata": {
+    "description": "Strategy metadata may be emitted alongside the validated result to explain which extractor configuration was selected.",
+    "fields": [
+      "document_strategy",
+      "extractor_strategy",
+      "extractor_options",
+      "runtime_mode",
+      "runtime_notes"
+    ]
+  }
 }
