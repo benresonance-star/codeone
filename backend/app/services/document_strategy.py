@@ -52,6 +52,12 @@ class DocumentStrategyRouter:
         extractor_strategy = requested_extractor_strategy or defaults["extractor_strategy"]
         if extractor_strategy not in {"pdfplumber", "docling"}:
             raise ValueError(f"Unknown extractor strategy: {extractor_strategy}")
+        extractor_options = self._extractor_options(
+            extractor_strategy=extractor_strategy,
+            document_class=document_class,
+            pdf_name=pdf_name,
+            xml_name=xml_name,
+        )
 
         notes = [
             f"classified_as:{document_class}",
@@ -59,6 +65,8 @@ class DocumentStrategyRouter:
             f"evaluation_profile:{evaluation_profile.profile_id}",
             f"extractor_strategy:{extractor_strategy}",
         ]
+        if extractor_strategy == "docling":
+            notes.append(f"docling_mode:{extractor_options.get('docling_mode', 'text')}")
         if extraction_profile.glossary_first:
             notes.append("glossary_first")
         if evaluation_profile.grouped_targets:
@@ -70,6 +78,7 @@ class DocumentStrategyRouter:
             evaluation_profile=evaluation_profile,
             extractor_strategy=extractor_strategy,
             review_policy=extraction_profile.review_policy,
+            extractor_options=extractor_options,
             notes=notes,
         )
 
@@ -84,3 +93,33 @@ class DocumentStrategyRouter:
         if any(token in normalized for token in ("contents", "cover", "preface", "front matter", "about this")):
             return "front_matter_non_parity"
         return "clause_parity"
+
+    def _extractor_options(
+        self,
+        *,
+        extractor_strategy: str,
+        document_class: str,
+        pdf_name: str,
+        xml_name: str,
+    ) -> dict[str, str]:
+        if extractor_strategy != "docling":
+            return {}
+        if self._should_enable_docling_tables(document_class=document_class, pdf_name=pdf_name, xml_name=xml_name):
+            return {"docling_mode": "tables"}
+        return {"docling_mode": "text"}
+
+    def _should_enable_docling_tables(self, *, document_class: str, pdf_name: str, xml_name: str) -> bool:
+        if document_class != "clause_parity":
+            return False
+        combined = f"{pdf_name} {xml_name}".lower()
+        normalized = re.sub(r"[^a-z0-9]+", " ", combined)
+        return any(
+            phrase in normalized
+            for phrase in (
+                "energy efficiency",
+                "section j",
+                "part j2",
+                "part j3",
+                "parts j2 and j3",
+            )
+        )

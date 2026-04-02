@@ -930,6 +930,7 @@ class IngestionService:
         return {
             "document_class": strategy.document_class,
             "extractor_strategy": strategy.extractor_strategy,
+            "extractor_options": strategy.extractor_options,
             "runtime_strategy": extracted.strategy_name,
             "runtime_mode": extracted.runtime_mode,
             "extraction_profile": strategy.extraction_profile.profile_id,

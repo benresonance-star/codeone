@@ -40,6 +40,7 @@ class DocumentStrategyDecision:
     evaluation_profile: EvaluationProfile
     extractor_strategy: str
     review_policy: ReviewPolicy
+    extractor_options: dict[str, Any] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
 
 

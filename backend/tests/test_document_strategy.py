@@ -18,6 +18,7 @@ class DocumentStrategyRouterTests(unittest.TestCase):
         self.assertEqual(decision.document_class, "governance_interpretation")
         self.assertEqual(decision.extractor_strategy, "docling")
         self.assertEqual(decision.extraction_profile.profile_id, "governance_interpretation")
+        self.assertEqual(decision.extractor_options["docling_mode"], "text")
 
     def test_router_allows_explicit_profile_override(self) -> None:
         decision = DocumentStrategyRouter().route(
@@ -33,6 +34,16 @@ class DocumentStrategyRouterTests(unittest.TestCase):
         self.assertEqual(decision.extractor_strategy, "pdfplumber")
         self.assertEqual(decision.extraction_profile.profile_id, "baseline_clause_parity")
         self.assertEqual(decision.evaluation_profile.profile_id, "baseline_clause_parity")
+
+    def test_router_enables_docling_tables_for_energy_efficiency_parts(self) -> None:
+        decision = DocumentStrategyRouter().route(
+            pdf_name="NCC 2022 - Vol 1 - Parts J2 and J3 - Energy Efficiency.pdf",
+            xml_name="ncc-volume-1-section-j.xml",
+        )
+
+        self.assertEqual(decision.document_class, "clause_parity")
+        self.assertEqual(decision.extractor_strategy, "docling")
+        self.assertEqual(decision.extractor_options["docling_mode"], "tables")
 
 
 class ParityScaffoldTests(unittest.TestCase):
@@ -105,6 +116,14 @@ class DoclingExtractorTests(unittest.TestCase):
     def setUp(self) -> None:
         self.extractor = DoclingExtractor()
 
+    def _decision(self, **overrides: object) -> SimpleNamespace:
+        defaults = {
+            "document_class": "clause_parity",
+            "extractor_options": {},
+        }
+        defaults.update(overrides)
+        return SimpleNamespace(**defaults)
+
     def test_label_mapping_matches_structured_block_expectations(self) -> None:
         self.assertEqual(self.extractor._map_block_type("section_header"), "heading")
         self.assertEqual(self.extractor._map_block_type("list_item"), "list_item")
@@ -138,6 +157,251 @@ class DoclingExtractorTests(unittest.TestCase):
 
         self.assertEqual(rows, [["Header", "Value"], ["A", "1"]])
         self.assertTrue(self.extractor._headers_present(rows))
+
+    def test_rows_from_table_cells_reconstructs_grid(self) -> None:
+        data = SimpleNamespace(
+            num_rows=3,
+            num_cols=2,
+            table_cells=[
+                SimpleNamespace(
+                    text="Abbreviation",
+                    start_row_offset_idx=0,
+                    end_row_offset_idx=1,
+                    start_col_offset_idx=0,
+                    end_col_offset_idx=1,
+                    column_header=True,
+                    row_header=False,
+                ),
+                SimpleNamespace(
+                    text="Definitions",
+                    start_row_offset_idx=0,
+                    end_row_offset_idx=1,
+                    start_col_offset_idx=1,
+                    end_col_offset_idx=2,
+                    column_header=True,
+                    row_header=False,
+                ),
+                SimpleNamespace(
+                    text="ABCB",
+                    start_row_offset_idx=1,
+                    end_row_offset_idx=2,
+                    start_col_offset_idx=0,
+                    end_col_offset_idx=1,
+                    column_header=False,
+                    row_header=False,
+                ),
+                SimpleNamespace(
+                    text="Australian Building Codes Board",
+                    start_row_offset_idx=1,
+                    end_row_offset_idx=2,
+                    start_col_offset_idx=1,
+                    end_col_offset_idx=2,
+                    column_header=False,
+                    row_header=False,
+                ),
+                SimpleNamespace(
+                    text="AC",
+                    start_row_offset_idx=2,
+                    end_row_offset_idx=3,
+                    start_col_offset_idx=0,
+                    end_col_offset_idx=1,
+                    column_header=False,
+                    row_header=False,
+                ),
+                SimpleNamespace(
+                    text="Alternating Current",
+                    start_row_offset_idx=2,
+                    end_row_offset_idx=3,
+                    start_col_offset_idx=1,
+                    end_col_offset_idx=2,
+                    column_header=False,
+                    row_header=False,
+                ),
+            ],
+        )
+
+        rows, meta = self.extractor._rows_from_table_cells(data)
+
+        self.assertEqual(
+            rows,
+            [
+                ["Abbreviation", "Definitions"],
+                ["ABCB", "Australian Building Codes Board"],
+                ["AC", "Alternating Current"],
+            ],
+        )
+        self.assertEqual(meta["header_row_count"], 1)
+        self.assertEqual(meta["source_cell_count"], 6)
+
+    def test_normalize_header_rows_merges_multirow_header(self) -> None:
+        rows, meta = self.extractor._normalize_header_rows(
+            [
+                ["Schedule 1", "Definitions"],
+                ["Abbreviations", "Glossary"],
+                ["ABCB", "Australian Building Codes Board"],
+            ],
+            {"header_row_count": 2},
+        )
+
+        self.assertEqual(meta["header_row_count"], 1)
+        self.assertEqual(rows[0], ["Schedule 1 Abbreviations", "Definitions Glossary"])
+        self.assertEqual(rows[1], ["ABCB", "Australian Building Codes Board"])
+
+    def test_glossary_repair_merges_continuation_rows(self) -> None:
+        rows, meta = self.extractor._repair_glossary_rows(
+            [
+                ["Abbreviation", "Definitions"],
+                ["ABCB", "Australian Building Codes Board"],
+                ["", "and related guidance"],
+            ],
+            {"header_row_count": 1, "normalization_strategy": "table_cells_grid"},
+        )
+
+        self.assertTrue(meta["repaired"])
+        self.assertEqual(rows[1], ["ABCB", "Australian Building Codes Board and related guidance"])
+
+    def test_glossary_single_cell_repair_splits_abbreviation_table(self) -> None:
+        rows, meta = self.extractor._repair_glossary_rows(
+            [[
+                "Abbreviation Definitions ABCB Australian Building Codes Board AC Alternating Current"
+            ]],
+            {"header_row_count": 0, "normalization_strategy": "dataframe_or_text_fallback"},
+        )
+
+        self.assertTrue(meta["repaired"])
+        self.assertEqual(rows[0], ["Abbreviation", "Definitions"])
+        self.assertEqual(rows[1], ["ABCB", "Australian Building Codes Board"])
+        self.assertEqual(rows[2], ["AC", "Alternating Current"])
+
+    def test_table_rows_falls_back_to_text_when_no_dataframe_or_cells(self) -> None:
+        class PlainTextItem:
+            text = "A\nB"
+
+        rows = self.extractor._table_rows(PlainTextItem(), document=object())
+
+        self.assertEqual(rows, [["A"], ["B"]])
+
+    def test_empty_wrapper_table_is_detected(self) -> None:
+        data = SimpleNamespace(
+            num_rows=1,
+            num_cols=1,
+            table_cells=[
+                SimpleNamespace(
+                    text="",
+                    start_row_offset_idx=0,
+                    end_row_offset_idx=1,
+                    start_col_offset_idx=0,
+                    end_col_offset_idx=1,
+                )
+            ],
+        )
+
+        self.assertTrue(self.extractor._is_empty_wrapper_table(data, []))
+
+    def test_empty_wrapper_table_ignores_fallback_rows(self) -> None:
+        data = SimpleNamespace(
+            num_rows=1,
+            num_cols=1,
+            table_cells=[
+                SimpleNamespace(
+                    text="",
+                    start_row_offset_idx=0,
+                    end_row_offset_idx=1,
+                    start_col_offset_idx=0,
+                    end_col_offset_idx=1,
+                )
+            ],
+        )
+
+        self.assertTrue(
+            self.extractor._is_empty_wrapper_table(
+                data,
+                [["## Schedule 1 Definitions Abbreviations Symbols Glossary"]],
+            )
+        )
+
+    def test_contextual_glossary_rows_rebuild_wrapper_table(self) -> None:
+        strategy = DocumentStrategyRouter().route(
+            pdf_name="schedule-1-definitions.pdf",
+            xml_name="schedule-1-definitions.xml",
+        )
+        items = [
+            (SimpleNamespace(label="table", text=""), 1),
+            (SimpleNamespace(label="section_header", text="Abbreviations"), 1),
+            (SimpleNamespace(label="text", text="Abbreviation"), 3),
+            (SimpleNamespace(label="text", text="Definitions"), 3),
+            (SimpleNamespace(label="text", text="ABCB"), 3),
+            (SimpleNamespace(label="text", text="Australian Building Codes Board"), 3),
+            (SimpleNamespace(label="text", text="AC"), 3),
+            (SimpleNamespace(label="text", text="Alternating Current"), 3),
+            (SimpleNamespace(label="table", text=""), 1),
+        ]
+
+        rows = self.extractor._contextual_table_rows(items, 0, strategy)
+
+        self.assertEqual(
+            rows,
+            [
+                ["Abbreviation", "Definitions"],
+                ["ABCB", "Australian Building Codes Board"],
+                ["AC", "Alternating Current"],
+            ],
+        )
+
+    def test_contextual_glossary_rows_skip_schedule_title_wrapper(self) -> None:
+        strategy = DocumentStrategyRouter().route(
+            pdf_name="schedule-1-definitions.pdf",
+            xml_name="schedule-1-definitions.xml",
+        )
+        items = [
+            (SimpleNamespace(label="table", text=""), 1),
+            (SimpleNamespace(label="section_header", text="Schedule 1"), 1),
+            (SimpleNamespace(label="text", text="Definitions"), 3),
+            (SimpleNamespace(label="text", text="Abbreviations Symbols"), 3),
+            (SimpleNamespace(label="text", text="Glossary"), 3),
+            (SimpleNamespace(label="section_header", text="Abbreviations"), 1),
+            (SimpleNamespace(label="table", text=""), 1),
+        ]
+
+        rows = self.extractor._contextual_table_rows(items, 0, strategy)
+
+        self.assertEqual(rows, [])
+
+    def test_collect_tables_skips_empty_tables(self) -> None:
+        strategy = DocumentStrategyRouter().route(
+            pdf_name="NCC 2022 - Vol 1 - Parts J2 and J3 - Energy Efficiency.pdf",
+            xml_name="benchmark.xml",
+            requested_document_class="clause_parity",
+            requested_extraction_profile="baseline_clause_parity",
+            requested_evaluation_profile="baseline_clause_parity",
+            requested_extractor_strategy="docling",
+        )
+        empty_table = SimpleNamespace(
+            label="table",
+            text="",
+            data=SimpleNamespace(num_rows=0, num_cols=0, table_cells=[]),
+            prov=[],
+        )
+        document = SimpleNamespace(iterate_items=lambda: [(empty_table, 1)])
+        result = SimpleNamespace(document=document)
+
+        tables = self.extractor._collect_tables(result, strategy)
+
+        self.assertEqual(tables, [])
+
+    def test_runtime_flags_honor_strategy_requested_tables_mode(self) -> None:
+        decision = self._decision(extractor_options={"docling_mode": "tables"})
+
+        flags = self.extractor._runtime_flags(decision)
+
+        self.assertEqual(flags, (False, True, True))
+
+    def test_runtime_flags_default_to_text_mode_when_requested(self) -> None:
+        decision = self._decision(extractor_options={"docling_mode": "text"})
+
+        flags = self.extractor._runtime_flags(decision)
+
+        self.assertEqual(flags, (False, False, True))
 
 
 if __name__ == "__main__":
