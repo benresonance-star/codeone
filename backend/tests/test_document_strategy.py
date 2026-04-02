@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
 
 from app.services.document_strategy import DocumentStrategyRouter
 from app.services.ingestion import IngestionService, PdfFragment, XmlNode
+from app.services.extractors.docling_stub import DoclingExtractor
 
 
 class DocumentStrategyRouterTests(unittest.TestCase):
@@ -97,6 +99,45 @@ class ParityScaffoldTests(unittest.TestCase):
                 alignment_avg=0.97,
             )
         )
+
+
+class DoclingExtractorTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.extractor = DoclingExtractor()
+
+    def test_label_mapping_matches_structured_block_expectations(self) -> None:
+        self.assertEqual(self.extractor._map_block_type("section_header"), "heading")
+        self.assertEqual(self.extractor._map_block_type("list_item"), "list_item")
+        self.assertEqual(self.extractor._map_block_type("text"), "paragraph")
+
+    def test_bbox_extraction_uses_docling_provenance(self) -> None:
+        provenance = SimpleNamespace(
+            page_no=2,
+            bbox=SimpleNamespace(l=10.126, t=20.25, r=30.375, b=40.499),
+        )
+
+        bbox = self.extractor._bbox_from_provenance(provenance)
+
+        self.assertEqual(bbox, [10.13, 20.25, 30.38, 40.5])
+
+    def test_table_rows_use_dataframe_when_available(self) -> None:
+        class FakeDataFrame:
+            def __init__(self) -> None:
+                self.values = SimpleNamespace(tolist=lambda: [["Header", "Value"], ["A", "1"], ["", ""]])
+
+            def fillna(self, value: str) -> "FakeDataFrame":
+                return self
+
+        class FakeItem:
+            text = ""
+
+            def export_to_dataframe(self, doc=None) -> FakeDataFrame:  # noqa: ANN001
+                return FakeDataFrame()
+
+        rows = self.extractor._table_rows(FakeItem(), document=object())
+
+        self.assertEqual(rows, [["Header", "Value"], ["A", "1"]])
+        self.assertTrue(self.extractor._headers_present(rows))
 
 
 if __name__ == "__main__":

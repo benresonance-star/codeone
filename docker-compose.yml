@@ -8,6 +8,9 @@ services:
     environment:
       POSTGRES_URL: postgresql://postgres:postgres@postgres:5432/ncc
       REDIS_URL: redis://redis:6379/0
+      DOCLING_ENABLE_OCR: "false"
+      DOCLING_ENABLE_TABLE_STRUCTURE: "false"
+      DOCLING_FORCE_BACKEND_TEXT: "true"
     volumes:
       - runtime-data:/app/runtime-data
     depends_on:

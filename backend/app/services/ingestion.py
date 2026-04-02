@@ -16,7 +16,7 @@ from app.models.document_strategy import (
     StructuredBlock,
 )
 from app.services.document_strategy import DocumentStrategyRouter
-from app.services.extractors import DoclingStubExtractor, PdfPlumberExtractor
+from app.services.extractors import DoclingExtractor, PdfPlumberExtractor
 
 
 def utc_now_iso() -> str:
@@ -65,7 +65,7 @@ class IngestionService:
         self.router = DocumentStrategyRouter()
         self.extractors = {
             "pdfplumber": PdfPlumberExtractor(),
-            "docling": DoclingStubExtractor(),
+            "docling": DoclingExtractor(),
         }
 
     def process(
