@@ -1502,6 +1502,9 @@ class IngestionService:
                 reverse=True,
             )
             selected.extend(ranked[:REVIEW_WORKSPACE_MAX_ALIGNMENTS_PER_NODE])
+        row_selected = [alignment for alignment in selected if self._is_row_node_id(str(alignment.get("node_id") or ""))]
+        if row_selected:
+            return row_selected
         return selected
 
     def _build_canonical_snippets(
@@ -1616,12 +1619,15 @@ class IngestionService:
 
     def _node_specificity_score(self, node: XmlNode) -> float:
         score = 0.0
-        if "__row_" in node.node_id or "/row[" in node.path:
+        if self._is_row_node_id(node.node_id) or "/row[" in node.path:
             score += 2.0
         if "/tbody/" in node.path or "/thead/" in node.path:
             score += 0.5
         score += min(node.path.count("/"), 10) / 10
         return round(score, 3)
+
+    def _is_row_node_id(self, node_id: str) -> bool:
+        return "__row_" in node_id
 
     def _review_group_priority(
         self,

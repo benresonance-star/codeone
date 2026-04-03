@@ -390,7 +390,7 @@ class ParityScaffoldTests(unittest.TestCase):
 
         self.assertEqual(workspace["mode"], "focused")
         self.assertEqual(workspace["alignments"][0]["node_id"], "table_root__row_1")
-        self.assertEqual([node.node_id for node in workspace["xml_nodes"]], ["table_root", "table_root__row_1", "table_root__row_2"])
+        self.assertEqual([node.node_id for node in workspace["xml_nodes"]], ["table_root__row_1", "table_root__row_2"])
 
 
 class DoclingExtractorTests(unittest.TestCase):
