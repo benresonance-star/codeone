@@ -13,7 +13,11 @@
   "thresholds": {
     "expected_root_elements": [
       "ncc",
-      "NCC"
+      "NCC",
+      "part",
+      "clause",
+      "table-reference",
+      "image-reference"
     ],
     "section_or_part_context_required_when_applicable": true,
     "max_empty_required_nodes_for_review": 2,

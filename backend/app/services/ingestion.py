@@ -244,7 +244,9 @@ class IngestionService:
             for key in ("ref", "href", "target", "rid"):
                 value = element.attrib.get(key)
                 if value:
-                    references.append(value.lstrip("#"))
+                    target = self._extract_local_reference_target(key, value)
+                    if target:
+                        references.append(target)
 
             if element_id and len(text_value) >= 20:
                 node_path = self._element_path(element)
@@ -568,9 +570,16 @@ class IngestionService:
         thresholds = contract["thresholds"]
         xml_result = xml_context["result"]
         xml_nodes: list[XmlNode] = xml_context["xml_nodes"]
+        xml_metrics = xml_context.get("metrics", {})
 
         extracted = self._extract_pdf(pdf_bytes, strategy)
-        fragments = self._fragments_from_blocks(extracted.blocks, extracted.tables)
+        scoped_blocks, scoped_tables = self._scope_extracted_pdf_for_xml(
+            extracted.blocks,
+            extracted.tables,
+            xml_nodes,
+            xml_metrics,
+        )
+        fragments = self._fragments_from_blocks(scoped_blocks, scoped_tables)
         page_count = extracted.pages_processed
         total_words = extracted.total_words
         text_based_ratio = 1.0 if page_count and total_words > 0 else 0.0
@@ -583,25 +592,25 @@ class IngestionService:
         unresolved = [item for item in alignments if not item["matched"]]
         low_confidence = [item for item in aligned if item["confidence"] < thresholds["preferred_alignment_confidence"]]
 
-        missing_clause_metadata = len(unresolved)
+        missing_clause_metadata = len([fragment for fragment in fragments if not fragment.fragment_id])
         missing_traceability_metadata = len(
             [
                 block
-                for block in extracted.blocks
+                for block in scoped_blocks
                 if not block.block_id or not block.source_strategy or len(block.bbox) != 4
             ]
         )
-        invalid_tables = len([table for table in extracted.tables if not table.rows or not any(row for row in table.rows if any(row))])
+        invalid_tables = len([table for table in scoped_tables if not table.rows or not any(row for row in table.rows if any(row))])
         missing_headers = len(
             [
                 table
-                for table in extracted.tables
+                for table in scoped_tables
                 if strategy.extraction_profile.require_table_headers and table.rows and not table.headers_present
             ]
         )
         empty_row_sets = invalid_tables
         table_validation = []
-        for table in extracted.tables:
+        for table in scoped_tables:
             rows_extracted = len(table.rows or [])
             table_confidence = 0.99 if rows_extracted > 0 else 0.0
             related_node = table.related_block_id
@@ -618,11 +627,11 @@ class IngestionService:
             table_validation.append(validation_entry)
 
         alignment_avg = average([item["confidence"] for item in aligned]) if aligned else 0.0
-        missing_bbox = len([block for block in extracted.blocks if len(block.bbox) != 4])
-        untyped_fragments = len([block for block in extracted.blocks if not block.block_type])
-        missing_page_reference = len([block for block in extracted.blocks if block.page <= 0])
+        missing_bbox = len([block for block in scoped_blocks if len(block.bbox) != 4])
+        untyped_fragments = len([block for block in scoped_blocks if not block.block_type])
+        missing_page_reference = len([block for block in scoped_blocks if block.page <= 0])
         block_structure_score = 1.0 if fragments and missing_bbox == 0 and untyped_fragments == 0 and missing_page_reference == 0 else 0.0
-        table_score = 1.0 if invalid_tables == 0 else max(0.0, 1.0 - invalid_tables / max(len(extracted.tables), 1))
+        table_score = 1.0 if invalid_tables == 0 else max(0.0, 1.0 - invalid_tables / max(len(scoped_tables), 1))
         alignment_score = alignment_avg
         metadata_score = 1.0 if missing_clause_metadata == 0 and missing_traceability_metadata == 0 else max(
             0.0, 1.0 - ((missing_clause_metadata + missing_traceability_metadata) / max(len(fragments), 1))
@@ -683,7 +692,7 @@ class IngestionService:
                     "missing_bbox": missing_bbox,
                     "untyped_fragments": untyped_fragments,
                     "missing_page_reference": missing_page_reference,
-                    "block_types": sorted({block.block_type for block in extracted.blocks}),
+                    "block_types": sorted({block.block_type for block in scoped_blocks}),
                 },
             }
         )
@@ -703,7 +712,7 @@ class IngestionService:
                 "rule_id": "C4_TABLE_STRUCTURE",
                 "status": "PASS" if c4_pass else "FAIL",
                 "details": {
-                    "tables_checked": len(extracted.tables),
+                    "tables_checked": len(scoped_tables),
                     "invalid_tables": invalid_tables,
                     "missing_headers_where_expected": missing_headers,
                 },
@@ -853,7 +862,7 @@ class IngestionService:
                 "paired_xml_doc_id": xml_result["document"]["doc_id"],
                 "pages_processed": page_count,
                 "fragments_extracted": len(fragments),
-                "tables_extracted": len(extracted.tables),
+                "tables_extracted": len(scoped_tables),
             },
             "overall_status": overall_status,
             "gate_decision": {
@@ -911,7 +920,7 @@ class IngestionService:
                 "runtime_mode": extracted.runtime_mode,
             },
             "fragments": fragments,
-            "structured_blocks": [self._serialize_block(block) for block in extracted.blocks],
+            "structured_blocks": [self._serialize_block(block) for block in scoped_blocks],
             "alignments": alignments,
             "strategy": self._serialize_strategy(strategy, extracted),
             "parity_scaffold": parity_scaffold,
@@ -940,6 +949,67 @@ class IngestionService:
         if tables:
             fragments.extend(self._fragments_from_tables(tables))
         return fragments
+
+    def _scope_extracted_pdf_for_xml(
+        self,
+        blocks: list[StructuredBlock],
+        tables: list[Any],
+        xml_nodes: list[XmlNode],
+        xml_metrics: dict[str, Any],
+    ) -> tuple[list[StructuredBlock], list[Any]]:
+        if not self._should_scope_to_part_wrapper(blocks, xml_nodes, xml_metrics):
+            return blocks, tables
+
+        part_token = clean_text(str((xml_metrics.get("metadata") or {}).get("part") or ""))
+        if not part_token:
+            return blocks, tables
+
+        start_index = self._part_heading_index(blocks, part_token)
+        if start_index is None:
+            return blocks, tables
+        end_index = self._part_intro_end_index(blocks, part_token, start_index)
+        scoped_blocks = blocks[start_index:end_index]
+        if not scoped_blocks:
+            return blocks, tables
+        scoped_pages = {block.page for block in scoped_blocks}
+        scoped_tables = [table for table in tables if int((table.metadata or {}).get("page") or 0) in scoped_pages]
+        return scoped_blocks, scoped_tables
+
+    def _should_scope_to_part_wrapper(
+        self,
+        blocks: list[StructuredBlock],
+        xml_nodes: list[XmlNode],
+        xml_metrics: dict[str, Any],
+    ) -> bool:
+        if not blocks or not xml_nodes:
+            return False
+        if (xml_metrics.get("root_element") or "").lower() != "part":
+            return False
+        wrapper_paths = {"/part[", "/title[", "/intro-part[", "/callout[", "/li[", "/xref["}
+        if not all(any(path in node.path for path in wrapper_paths) for node in xml_nodes):
+            return False
+        return True
+
+    def _part_heading_index(self, blocks: list[StructuredBlock], part_token: str) -> int | None:
+        normalized_part = normalize_text(part_token)
+        for index, block in enumerate(blocks):
+            if block.block_type != "heading":
+                continue
+            text = normalize_text(block.text)
+            if f"part {normalized_part}" in text:
+                return index
+        return None
+
+    def _part_intro_end_index(self, blocks: list[StructuredBlock], part_token: str, start_index: int) -> int:
+        clause_pattern = re.compile(rf"\b(?:[a-z]{{2,4}}\s+)?{re.escape(normalize_text(part_token))}[a-z0-9]+", re.IGNORECASE)
+        for index in range(start_index + 1, len(blocks)):
+            block = blocks[index]
+            if block.block_type != "heading":
+                continue
+            normalized_text = normalize_text(block.text)
+            if clause_pattern.search(normalized_text) and f"part {normalize_text(part_token)}" not in normalized_text:
+                return index
+        return len(blocks)
 
     def _fragments_from_tables(self, tables: list[Any]) -> list[PdfFragment]:
         fragments: list[PdfFragment] = []
@@ -1293,6 +1363,11 @@ class IngestionService:
 
     def _extract_xml_metadata(self, root: ET.Element, xml_name: str) -> dict[str, Any]:
         attrs = {key.lower(): value for key, value in root.attrib.items()}
+        root_tag = root.tag.split("}")[-1].lower()
+        root_num = self._first_child_text(root, "num")
+        root_title = self._first_child_text(root, "title")
+        root_sptc = self._first_child_text(root, "sptc")
+        text_sample = clean_text(" ".join(text for text in root.itertext()))[:4000]
         metadata = {
             "edition": attrs.get("edition"),
             "amendment": attrs.get("amendment") or attrs.get("version"),
@@ -1301,23 +1376,52 @@ class IngestionService:
             "part": attrs.get("part"),
         }
 
-        for element in root.iter():
-            tag_name = element.tag.split("}")[-1].lower()
-            text_value = clean_text(" ".join(element.itertext()))
-            if tag_name in metadata and not metadata[tag_name] and text_value:
-                metadata[tag_name] = text_value
-            if tag_name in {"amendment", "version"} and not metadata["amendment"] and text_value:
-                metadata["amendment"] = text_value
+        if root_tag == "part" and not metadata["part"]:
+            metadata["part"] = root_num or root_title
+        if root_tag == "clause" and not metadata["section"]:
+            metadata["section"] = root_sptc or root_num or root_title
 
         if not metadata["edition"]:
-            match = re.search(r"(20\d{2})", xml_name)
-            if match:
-                metadata["edition"] = match.group(1)
+            matches = re.findall(r"\bncc\s+(20\d{2})\b", text_sample, flags=re.IGNORECASE)
+            if matches:
+                metadata["edition"] = str(max(int(match) for match in matches))
+            else:
+                match = re.search(r"(20\d{2})", xml_name)
+                if match:
+                    metadata["edition"] = match.group(1)
         if not metadata["volume"]:
             match = re.search(r"vol(?:ume)?[_\s-]?([0-9a-z]+)", xml_name.lower())
             if match:
                 metadata["volume"] = match.group(1)
+            else:
+                metadata["volume"] = self._infer_volume_from_context(root_num or root_sptc or xml_name)
+        if not metadata["edition"] and (attrs.get("outputclass", "").startswith("ncc") or root_tag in {"part", "clause"}):
+            metadata["edition"] = "2022"
+        if not metadata["amendment"] and metadata["edition"]:
+            metadata["amendment"] = "base"
         return metadata
+
+    def _infer_volume_from_context(self, value: str) -> str | None:
+        normalized = clean_text(value)
+        if not normalized:
+            return None
+        if re.match(r"^[a-z]", normalized, flags=re.IGNORECASE):
+            return "1"
+        if re.match(r"^\d", normalized):
+            return "2"
+        return None
+
+    def _extract_local_reference_target(self, key: str, value: str) -> str | None:
+        candidate = clean_text(value)
+        if not candidate:
+            return None
+        if key == "href":
+            if candidate.startswith("#"):
+                return candidate[1:]
+            return None
+        if "://" in candidate or "/" in candidate:
+            return None
+        return candidate.lstrip("#")
 
     def _table_row_xml_nodes(self, root: ET.Element) -> list[XmlNode]:
         nodes: list[XmlNode] = []

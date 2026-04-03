@@ -245,6 +245,46 @@ class ParityScaffoldTests(unittest.TestCase):
         self.assertIn("Climate zone: 2", row_nodes[0].text)
         self.assertIn("Maximum ratio: 16.95", row_nodes[0].text)
 
+    def test_validate_xml_accepts_part_root_and_infers_structural_metadata(self) -> None:
+        xml_bytes = b"""<?xml version="1.0" encoding="UTF-8"?>
+<part id="part_j3" outputclass="ncc-part">
+  <num>J3</num>
+  <title>Elemental provisions</title>
+  <intro-part id="intro_1">
+    <p>This Part forms part of NCC 2022 Volume One.</p>
+  </intro-part>
+</part>
+"""
+
+        result = self.service._validate_xml(xml_bytes, "J3-elemental-provisions.xml")
+
+        root_rule = next(rule for rule in result["result"]["rule_results"] if rule["rule_id"] == "X1_XML_WELL_FORMED")
+        metadata_rule = next(rule for rule in result["result"]["rule_results"] if rule["rule_id"] == "X2_REQUIRED_METADATA")
+
+        self.assertEqual(root_rule["status"], "PASS")
+        self.assertEqual(metadata_rule["status"], "PASS")
+        self.assertEqual(result["metrics"]["metadata"]["part"], "J3")
+        self.assertEqual(result["metrics"]["metadata"]["volume"], "1")
+        self.assertEqual(result["metrics"]["metadata"]["edition"], "2022")
+        self.assertEqual(result["metrics"]["metadata"]["amendment"], "base")
+
+    def test_validate_xml_ignores_external_href_targets_for_reference_resolution(self) -> None:
+        xml_bytes = b"""<?xml version="1.0" encoding="UTF-8"?>
+<part id="part_j3" outputclass="ncc-part">
+  <num>J3</num>
+  <title>Elemental provisions</title>
+  <intro-part id="intro_1">
+    <p>See <xref href="/tmp/QppServer/example.xml#external_target" id="xref_1">other content</xref>.</p>
+  </intro-part>
+</part>
+"""
+
+        result = self.service._validate_xml(xml_bytes, "J3-elemental-provisions.xml")
+
+        reference_rule = next(rule for rule in result["result"]["rule_results"] if rule["rule_id"] == "X6_REFERENCE_RESOLUTION")
+        self.assertEqual(reference_rule["status"], "PASS")
+        self.assertEqual(result["metrics"]["unresolved_references"], 0)
+
     def test_validate_pdf_adds_row_fragments_from_tables(self) -> None:
         extracted = ExtractedPdf(
             pages_processed=1,
@@ -391,6 +431,114 @@ class ParityScaffoldTests(unittest.TestCase):
         self.assertEqual(workspace["mode"], "focused")
         self.assertEqual(workspace["alignments"][0]["node_id"], "table_root__row_1")
         self.assertEqual([node.node_id for node in workspace["xml_nodes"]], ["table_root__row_1", "table_root__row_2"])
+
+    def test_scope_extracted_pdf_for_part_wrapper_limits_to_intro_band(self) -> None:
+        blocks = [
+            StructuredBlock(
+                block_id="docling_1_1",
+                page=1,
+                bbox=[0.0, 0.0, 1.0, 1.0],
+                block_type="heading",
+                text="Part J2 Energy efficiency",
+                source_strategy="docling",
+            ),
+            StructuredBlock(
+                block_id="docling_3_1",
+                page=3,
+                bbox=[0.0, 0.0, 1.0, 1.0],
+                block_type="heading",
+                text="Part J3 Elemental provisions",
+                source_strategy="docling",
+            ),
+            StructuredBlock(
+                block_id="docling_3_2",
+                page=3,
+                bbox=[0.0, 0.0, 1.0, 1.0],
+                block_type="paragraph",
+                text="This Part contains Deemed-to-Satisfy Provisions.",
+                source_strategy="docling",
+            ),
+            StructuredBlock(
+                block_id="docling_3_3",
+                page=3,
+                bbox=[0.0, 0.0, 1.0, 1.0],
+                block_type="heading",
+                text="J3D1",
+                source_strategy="docling",
+            ),
+            StructuredBlock(
+                block_id="docling_3_4",
+                page=3,
+                bbox=[0.0, 0.0, 1.0, 1.0],
+                block_type="paragraph",
+                text="Clause body text",
+                source_strategy="docling",
+            ),
+        ]
+        xml_nodes = [
+            XmlNode(node_id="part_j3", clause_id="part_j3", text="J3 Elemental provisions", path="/part[@id='part_j3']"),
+            XmlNode(node_id="intro_1", clause_id="intro_1", text="This Part contains Deemed-to-Satisfy Provisions.", path="/intro-part[@id='intro_1']"),
+        ]
+        metrics = {"root_element": "part", "metadata": {"part": "J3"}}
+
+        scoped_blocks, scoped_tables = self.service._scope_extracted_pdf_for_xml(blocks, [], xml_nodes, metrics)
+
+        self.assertEqual([block.block_id for block in scoped_blocks], ["docling_3_1", "docling_3_2"])
+        self.assertEqual(scoped_tables, [])
+
+    def test_validate_pdf_metadata_rule_does_not_fail_for_bounded_unresolved_alignments(self) -> None:
+        extracted = ExtractedPdf(
+            pages_processed=1,
+            total_words=6,
+            blocks=[
+                StructuredBlock(
+                    block_id="docling_1_1",
+                    page=1,
+                    bbox=[0.0, 0.0, 1.0, 1.0],
+                    block_type="paragraph",
+                    text="Matched fragment text",
+                    source_strategy="docling",
+                ),
+                StructuredBlock(
+                    block_id="docling_1_2",
+                    page=1,
+                    bbox=[0.0, 1.0, 1.0, 2.0],
+                    block_type="paragraph",
+                    text="Unresolved fragment text",
+                    source_strategy="docling",
+                ),
+            ],
+            tables=[],
+            strategy_name="docling",
+            runtime_mode="native_text",
+        )
+        xml_context = {
+            "result": {
+                "gate_decision": {"can_progress_to_alignment_layer": True},
+                "document": {"doc_id": "benchmark_xml"},
+            },
+            "metrics": {
+                "root_element": "clause",
+                "metadata": {"part": None, "section": "J2D2"},
+            },
+            "xml_nodes": [
+                XmlNode(
+                    node_id="node_1",
+                    clause_id="node_1",
+                    text="Matched fragment text",
+                    path="/clause[@id='node_1']",
+                )
+            ],
+        }
+        self.service._extract_pdf = lambda pdf_bytes, strategy: extracted  # type: ignore[method-assign]
+
+        result = self.service._validate_pdf(b"pdf", "benchmark.pdf", xml_context, self.strategy)
+
+        metadata_rule = next(rule for rule in result["result"]["rule_results"] if rule["rule_id"] == "C6_METADATA")
+        alignment_rule = next(rule for rule in result["result"]["rule_results"] if rule["rule_id"] == "C5_XML_ALIGNMENT")
+
+        self.assertEqual(alignment_rule["status"], "PASS_WITH_WARNINGS")
+        self.assertEqual(metadata_rule["status"], "PASS")
 
 
 class DoclingExtractorTests(unittest.TestCase):
