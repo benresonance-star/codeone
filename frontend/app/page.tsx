@@ -313,6 +313,34 @@ export default function HomePage() {
     return window.localStorage.getItem(LAST_RUN_STORAGE_KEY);
   }
 
+  function clearWorkspaceForAffectedRuns(runIds: string[], message: string): void {
+    const affectedRunIds = new Set(runIds.filter(Boolean));
+    if (affectedRunIds.size === 0) {
+      return;
+    }
+
+    const activeRunId = response?.summary.ingestion_run_id ?? null;
+    const storedRunId = readStoredLastRunId();
+    const shouldClearActiveWorkspace = Boolean(activeRunId && affectedRunIds.has(activeRunId));
+    const shouldClearStoredRun = Boolean(storedRunId && affectedRunIds.has(storedRunId));
+
+    if (!shouldClearActiveWorkspace && !shouldClearStoredRun) {
+      return;
+    }
+
+    if (shouldClearStoredRun) {
+      clearStoredLastRunId();
+    }
+
+    if (shouldClearActiveWorkspace) {
+      setResponse(null);
+      setPdfFile(null);
+      setXmlFile(null);
+      setWorkspaceRestoreMessage(message);
+      setRestoreStatus("stale");
+    }
+  }
+
   async function invalidateRun(runId: string) {
     setActionError(null);
     try {
@@ -323,6 +351,11 @@ export default function HomePage() {
         const payload = await result.json().catch(() => ({}));
         throw new Error(payload.detail ?? "Failed to invalidate run.");
       }
+      const payload = (await result.json()) as { ingestion_run_id?: string | null };
+      clearWorkspaceForAffectedRuns(
+        payload.ingestion_run_id ? [payload.ingestion_run_id] : [runId],
+        "The current review workspace was cleared because this run was invalidated."
+      );
       await refreshRuns();
     } catch (invalidateError) {
       setActionError(invalidateError instanceof Error ? invalidateError.message : "Unknown error");
@@ -425,6 +458,12 @@ export default function HomePage() {
 
       setPurgePreview(payload);
       setPurgeDialog(null);
+      clearWorkspaceForAffectedRuns(
+        payload.run_ids,
+        purgeDialog.targetType === "family"
+          ? "The current review workspace was cleared because this document family was purged."
+          : "The current review workspace was cleared because this run was purged."
+      );
       await refreshRuns();
     } catch (purgeError) {
       setActionError(purgeError instanceof Error ? purgeError.message : "Unknown error");

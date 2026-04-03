@@ -247,6 +247,16 @@ input[type="file"] {
   color: var(--text);
 }
 
+select {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(153, 174, 197, 0.18);
+  background: rgba(8, 12, 19, 0.92);
+  color: var(--text);
+  font-family: var(--font-body);
+}
+
 button {
   appearance: none;
   border: 1px solid transparent;
@@ -517,6 +527,56 @@ button:disabled {
   margin-bottom: 0;
 }
 
+.comparison-section {
+  display: grid;
+  gap: 18px;
+}
+
+.comparison-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+}
+
+.comparison-field-list {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.comparison-field-row {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(153, 174, 197, 0.08);
+}
+
+.comparison-field-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.comparison-field-row strong {
+  color: var(--accent-cool);
+  font-size: 0.82rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.comparison-field-row span {
+  color: var(--text);
+}
+
+.comparison-evidence-text {
+  min-height: 96px;
+}
+
+.comparison-empty-state {
+  min-height: 96px;
+  display: grid;
+  align-items: center;
+}
+
 .candidate-sidebar,
 .candidate-main,
 .approved-grid,
@@ -524,6 +584,31 @@ button:disabled {
 .rule-grid {
   display: grid;
   gap: 12px;
+}
+
+.candidate-sidebar-controls,
+.candidate-pagination {
+  gap: 12px;
+}
+
+.candidate-sidebar-header p,
+.candidate-sort-note {
+  margin-bottom: 0;
+}
+
+.candidate-sort-row {
+  display: grid;
+  gap: 8px;
+}
+
+.candidate-pagination {
+  margin-top: 4px;
+}
+
+.candidate-pagination-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .candidate-list-item {

@@ -52,8 +52,14 @@ type ReviewUnit = {
   candidate_id: string;
   title: string;
   candidate_type: string;
+  xml_structural_class?: string;
+  pdf_evidence_class?: string;
+  candidate_semantic_class?: string;
+  review_issue_class?: string;
+  review_source_emphasis?: string;
   confidence: number;
   base_status: ReviewStatus | string;
+  needs_human_review?: boolean;
   matched: boolean;
   page?: number | null;
   fragment_id: string;
@@ -65,6 +71,9 @@ type ReviewUnit = {
   issues: string[];
   xml_only_terms: string[];
   pdf_only_terms: string[];
+  raw_xml_only_terms?: string[];
+  raw_pdf_only_terms?: string[];
+  ignored_structural_terms?: string[];
 };
 
 type ReviewDecision = {
@@ -76,8 +85,14 @@ type CandidateRecord = {
   id: string;
   title: string;
   candidateType: string;
+  xmlStructuralClass: string;
+  pdfEvidenceClass: string;
+  candidateSemanticClass: string;
+  reviewIssueClass: string;
+  reviewSourceEmphasis: string;
   confidence: number;
   baseStatus: ReviewStatus;
+  needsHumanReview: boolean;
   matched: boolean;
   page: number | null;
   fragmentId: string;
@@ -89,6 +104,9 @@ type CandidateRecord = {
   issues: string[];
   xmlOnlyTerms: string[];
   pdfOnlyTerms: string[];
+  rawXmlOnlyTerms: string[];
+  rawPdfOnlyTerms: string[];
+  ignoredStructuralTerms: string[];
 };
 
 type CandidateWithDisplayStatus = CandidateRecord & {
@@ -133,6 +151,9 @@ type IngestionResponseLike = {
     review_units?: ReviewUnit[];
     alignment_total?: number;
     alignment_displayed?: number;
+    candidate_total?: number;
+    candidate_surfaced?: number;
+    candidate_needs_review?: number;
   };
 };
 
@@ -144,6 +165,7 @@ type CandidateReviewWorkspaceProps = {
 };
 
 type FilterKey = "review" | "all" | "approved" | "rejected";
+type SortKey = "priority" | "confidence_desc" | "confidence_asc" | "issue_class" | "source_emphasis";
 
 const FILTER_LABELS: Record<FilterKey, string> = {
   review: "Review Queue",
@@ -151,6 +173,152 @@ const FILTER_LABELS: Record<FilterKey, string> = {
   approved: "Approved",
   rejected: "Rejected",
 };
+
+const SORT_LABELS: Record<SortKey, string> = {
+  priority: "Priority",
+  confidence_desc: "Confidence (high to low)",
+  confidence_asc: "Confidence (low to high)",
+  issue_class: "Mismatch / Error Type",
+  source_emphasis: "PDF / XML Source",
+};
+
+const CANDIDATE_PAGE_SIZE = 8;
+
+function deriveReviewIssueClass(
+  alignment: AlignmentRecord,
+  xmlOnlyTerms: string[],
+  pdfOnlyTerms: string[],
+  linkedIssue: boolean
+): string {
+  if (!alignment.matched || !alignment.node_id) {
+    return "unmatched";
+  }
+  if (linkedIssue) {
+    return "validation";
+  }
+  if (alignment.confidence < 0.9) {
+    return "low_confidence";
+  }
+  if (xmlOnlyTerms.length > 0 && pdfOnlyTerms.length > 0) {
+    return "mixed_mismatch";
+  }
+  if (xmlOnlyTerms.length > 0) {
+    return "xml_mismatch";
+  }
+  if (pdfOnlyTerms.length > 0) {
+    return "pdf_mismatch";
+  }
+  return "clean_match";
+}
+
+function deriveReviewSourceEmphasis(xmlOnlyTerms: string[], pdfOnlyTerms: string[]): string {
+  if (xmlOnlyTerms.length > 0 && pdfOnlyTerms.length > 0) {
+    return "mixed";
+  }
+  if (xmlOnlyTerms.length > 0) {
+    return "xml";
+  }
+  if (pdfOnlyTerms.length > 0) {
+    return "pdf";
+  }
+  return "balanced";
+}
+
+function issueClassPriority(value: string): number {
+  switch (value) {
+    case "unmatched":
+      return 0;
+    case "validation":
+      return 1;
+    case "low_confidence":
+      return 2;
+    case "mixed_mismatch":
+      return 3;
+    case "xml_mismatch":
+      return 4;
+    case "pdf_mismatch":
+      return 5;
+    default:
+      return 6;
+  }
+}
+
+function sourceEmphasisPriority(value: string): number {
+  switch (value) {
+    case "mixed":
+      return 0;
+    case "xml":
+      return 1;
+    case "pdf":
+      return 2;
+    default:
+      return 3;
+  }
+}
+
+function statusPriority(value: ReviewStatus): number {
+  switch (value) {
+    case "review required":
+      return 0;
+    case "mismatch":
+      return 1;
+    case "ambiguous":
+      return 2;
+    case "paused":
+      return 3;
+    case "match":
+      return 4;
+    case "approved":
+      return 5;
+    case "rejected":
+      return 6;
+    default:
+      return 7;
+  }
+}
+
+function sortCandidates(candidates: CandidateWithDisplayStatus[], sortKey: SortKey): CandidateWithDisplayStatus[] {
+  const sorted = [...candidates];
+  sorted.sort((left, right) => {
+    if (sortKey === "confidence_desc") {
+      return (
+        right.confidence - left.confidence ||
+        statusPriority(left.displayStatus) - statusPriority(right.displayStatus) ||
+        left.title.localeCompare(right.title)
+      );
+    }
+    if (sortKey === "confidence_asc") {
+      return (
+        left.confidence - right.confidence ||
+        statusPriority(left.displayStatus) - statusPriority(right.displayStatus) ||
+        left.title.localeCompare(right.title)
+      );
+    }
+    if (sortKey === "issue_class") {
+      return (
+        issueClassPriority(left.reviewIssueClass) - issueClassPriority(right.reviewIssueClass) ||
+        statusPriority(left.displayStatus) - statusPriority(right.displayStatus) ||
+        left.confidence - right.confidence ||
+        left.title.localeCompare(right.title)
+      );
+    }
+    if (sortKey === "source_emphasis") {
+      return (
+        sourceEmphasisPriority(left.reviewSourceEmphasis) - sourceEmphasisPriority(right.reviewSourceEmphasis) ||
+        statusPriority(left.displayStatus) - statusPriority(right.displayStatus) ||
+        left.confidence - right.confidence ||
+        left.title.localeCompare(right.title)
+      );
+    }
+    return (
+      statusPriority(left.displayStatus) - statusPriority(right.displayStatus) ||
+      issueClassPriority(left.reviewIssueClass) - issueClassPriority(right.reviewIssueClass) ||
+      left.confidence - right.confidence ||
+      left.title.localeCompare(right.title)
+    );
+  });
+  return sorted;
+}
 
 function cleanText(value: string | null | undefined): string {
   return (value ?? "").replace(/\s+/g, " ").trim();
@@ -191,6 +359,15 @@ function detectCandidateType(xmlPath: string, xmlText: string): string {
   const normalizedPath = xmlPath.toLowerCase();
   const normalizedText = xmlText.toLowerCase();
 
+  if (normalizedPath.includes("/title")) {
+    return "title";
+  }
+  if (normalizedPath.includes("/num")) {
+    return "context_key";
+  }
+  if (normalizedPath.includes("/note") || normalizedPath.includes("/intro-part") || normalizedPath.includes("/subtitle")) {
+    return "note";
+  }
   if (normalizedPath.includes("table")) {
     return "table";
   }
@@ -356,10 +533,16 @@ function buildCandidateJson(candidate: CandidateWithDisplayStatus): Record<strin
     candidateId: candidate.id,
     title: candidate.title,
     candidateType: candidate.candidateType,
+    xmlStructuralClass: candidate.xmlStructuralClass,
+    pdfEvidenceClass: candidate.pdfEvidenceClass,
+    candidateSemanticClass: candidate.candidateSemanticClass,
+    reviewIssueClass: candidate.reviewIssueClass,
+    reviewSourceEmphasis: candidate.reviewSourceEmphasis,
     fragmentId: candidate.fragmentId,
     nodeId: candidate.nodeId,
     baseStatus: candidate.baseStatus,
     displayStatus: candidate.displayStatus,
+    needsHumanReview: candidate.needsHumanReview,
     matched: candidate.matched,
     confidence: candidate.confidence,
     page: candidate.page,
@@ -367,6 +550,9 @@ function buildCandidateJson(candidate: CandidateWithDisplayStatus): Record<strin
     xmlPath: candidate.xmlPath,
     xmlOnlyTerms: candidate.xmlOnlyTerms,
     pdfOnlyTerms: candidate.pdfOnlyTerms,
+    rawXmlOnlyTerms: candidate.rawXmlOnlyTerms,
+    rawPdfOnlyTerms: candidate.rawPdfOnlyTerms,
+    ignoredStructuralTerms: candidate.ignoredStructuralTerms,
     issues: candidate.issues,
   };
 }
@@ -401,8 +587,14 @@ function mapReviewUnitToCandidate(unit: ReviewUnit): CandidateRecord {
     id: unit.candidate_id,
     title: unit.title,
     candidateType: unit.candidate_type,
+    xmlStructuralClass: unit.xml_structural_class ?? unit.candidate_type,
+    pdfEvidenceClass: unit.pdf_evidence_class ?? "unknown",
+    candidateSemanticClass: unit.candidate_semantic_class ?? unit.candidate_type,
+    reviewIssueClass: unit.review_issue_class ?? "clean_match",
+    reviewSourceEmphasis: unit.review_source_emphasis ?? "balanced",
     confidence: unit.confidence,
     baseStatus: normalizeReviewStatus(unit.base_status),
+    needsHumanReview: unit.needs_human_review ?? false,
     matched: unit.matched,
     page: unit.page ?? null,
     fragmentId: unit.fragment_id,
@@ -414,6 +606,9 @@ function mapReviewUnitToCandidate(unit: ReviewUnit): CandidateRecord {
     issues: unit.issues ?? [],
     xmlOnlyTerms: unit.xml_only_terms ?? [],
     pdfOnlyTerms: unit.pdf_only_terms ?? [],
+    rawXmlOnlyTerms: unit.raw_xml_only_terms ?? unit.xml_only_terms ?? [],
+    rawPdfOnlyTerms: unit.raw_pdf_only_terms ?? unit.pdf_only_terms ?? [],
+    ignoredStructuralTerms: unit.ignored_structural_terms ?? [],
   };
 }
 
@@ -481,13 +676,22 @@ function buildLegacyCandidates(response: IngestionResponseLike): CandidateRecord
     const approved = Boolean(alignment.node_id && approvedPairs.has(`${fragment.fragment_id}:${alignment.node_id}`));
     const issues = buildEvidenceAlerts(alignment, xmlOnlyTerms, pdfOnlyTerms, hasLinkedIssue);
     const baseStatus = deriveBaseStatus(alignment, issues, approved);
+    const candidateType = detectCandidateType(node?.path ?? "", xmlText);
+    const reviewIssueClass = deriveReviewIssueClass(alignment, xmlOnlyTerms, pdfOnlyTerms, hasLinkedIssue);
+    const reviewSourceEmphasis = deriveReviewSourceEmphasis(xmlOnlyTerms, pdfOnlyTerms);
 
     candidates.push({
       id: `candidate:${fragment.fragment_id}`,
       title: formatTitle(xmlText, pdfText, fragment.fragment_id),
-      candidateType: detectCandidateType(node?.path ?? "", xmlText),
+      candidateType,
+      xmlStructuralClass: candidateType,
+      pdfEvidenceClass: "unknown",
+      candidateSemanticClass: candidateType,
+      reviewIssueClass,
+      reviewSourceEmphasis,
       confidence: alignment.confidence,
       baseStatus,
+      needsHumanReview: ["review required", "mismatch", "paused", "ambiguous"].includes(baseStatus),
       matched: alignment.matched,
       page: alignment.page ?? fragment.page ?? null,
       fragmentId: fragment.fragment_id,
@@ -499,6 +703,9 @@ function buildLegacyCandidates(response: IngestionResponseLike): CandidateRecord
       issues,
       xmlOnlyTerms,
       pdfOnlyTerms,
+      rawXmlOnlyTerms: xmlOnlyTerms,
+      rawPdfOnlyTerms: pdfOnlyTerms,
+      ignoredStructuralTerms: [],
     });
 
     return candidates;
@@ -520,6 +727,8 @@ export function CandidateReviewWorkspace({
   onRelinkPdf,
 }: CandidateReviewWorkspaceProps) {
   const [filter, setFilter] = useState<FilterKey>("review");
+  const [sortKey, setSortKey] = useState<SortKey>("priority");
+  const [currentPage, setCurrentPage] = useState(1);
   const [statusOverrides, setStatusOverrides] = useState<Record<string, ReviewStatus>>({});
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -533,6 +742,9 @@ export function CandidateReviewWorkspace({
   const workspaceReason = response.review_workspace?.reason ?? null;
   const alignmentDisplayed = response.review_workspace?.alignment_displayed ?? 0;
   const alignmentTotal = response.review_workspace?.alignment_total ?? 0;
+  const candidateCreated = response.review_workspace?.candidate_total ?? alignmentTotal;
+  const candidateSurfaced = response.review_workspace?.candidate_surfaced ?? alignmentDisplayed;
+  const candidateNeedsReview = response.review_workspace?.candidate_needs_review ?? 0;
 
   useEffect(() => {
     if (pdfFile) {
@@ -587,6 +799,8 @@ export function CandidateReviewWorkspace({
   }, [apiBaseUrl, runId]);
 
   const candidates = useMemo(() => buildCandidates(response), [response]);
+  const candidateCreatedCount = candidateCreated || candidates.length;
+  const candidateSurfacedCount = candidateSurfaced || candidates.length;
   const candidatesWithStatus = useMemo<CandidateWithDisplayStatus[]>(
     () =>
       candidates.map((candidate) => ({
@@ -611,18 +825,40 @@ export function CandidateReviewWorkspace({
     }
   }, [candidatesWithStatus, filter]);
 
+  const sortedCandidates = useMemo(() => sortCandidates(filteredCandidates, sortKey), [filteredCandidates, sortKey]);
+  const totalPages = Math.max(1, Math.ceil(sortedCandidates.length / CANDIDATE_PAGE_SIZE));
+  const currentPageSafe = Math.min(currentPage, totalPages);
+  const paginatedCandidates = useMemo(
+    () =>
+      sortedCandidates.slice(
+        (currentPageSafe - 1) * CANDIDATE_PAGE_SIZE,
+        currentPageSafe * CANDIDATE_PAGE_SIZE
+      ),
+    [currentPageSafe, sortedCandidates]
+  );
+
   useEffect(() => {
-    if (!filteredCandidates.length) {
+    setCurrentPage(1);
+  }, [filter, sortKey]);
+
+  useEffect(() => {
+    if (!paginatedCandidates.length) {
       setSelectedCandidateId(null);
       return;
     }
-    if (!selectedCandidateId || !filteredCandidates.some((candidate) => candidate.id === selectedCandidateId)) {
-      setSelectedCandidateId(filteredCandidates[0].id);
+    if (!selectedCandidateId || !paginatedCandidates.some((candidate) => candidate.id === selectedCandidateId)) {
+      setSelectedCandidateId(paginatedCandidates[0].id);
     }
-  }, [filteredCandidates, selectedCandidateId]);
+  }, [paginatedCandidates, selectedCandidateId]);
+
+  useEffect(() => {
+    if (currentPage !== currentPageSafe) {
+      setCurrentPage(currentPageSafe);
+    }
+  }, [currentPage, currentPageSafe]);
 
   const selectedCandidate =
-    filteredCandidates.find((candidate) => candidate.id === selectedCandidateId) ?? filteredCandidates[0] ?? null;
+    paginatedCandidates.find((candidate) => candidate.id === selectedCandidateId) ?? paginatedCandidates[0] ?? null;
 
   const workspaceSnippets = useMemo(
     () => response.review_workspace?.canonical_snippets ?? response.lineage?.canonical_snippets ?? [],
@@ -659,6 +895,11 @@ export function CandidateReviewWorkspace({
       return [];
     }
     return [
+      { label: "Semantic class", value: selectedCandidate.candidateSemanticClass },
+      { label: "XML structural class", value: selectedCandidate.xmlStructuralClass },
+      { label: "PDF evidence class", value: selectedCandidate.pdfEvidenceClass },
+      { label: "Issue class", value: selectedCandidate.reviewIssueClass.replace(/_/g, " ") },
+      { label: "Source emphasis", value: selectedCandidate.reviewSourceEmphasis },
       { label: "Link status", value: selectedCandidate.nodeId ? "Linked to XML node" : "No XML node linked" },
       {
         label: "Approval state",
@@ -680,6 +921,7 @@ export function CandidateReviewWorkspace({
     return [
       { label: "XML path", value: selectedCandidate.xmlPath },
       { label: "Missing in PDF", value: formatList(selectedCandidate.xmlOnlyTerms) },
+      { label: "Raw XML-only terms", value: formatList(selectedCandidate.rawXmlOnlyTerms) },
       { label: "XML text length", value: String(cleanText(selectedCandidate.xmlText).length) },
     ];
   }, [selectedCandidate]);
@@ -692,6 +934,7 @@ export function CandidateReviewWorkspace({
       { label: "Fragment id", value: selectedCandidate.fragmentId },
       { label: "Page", value: selectedCandidate.page ? String(selectedCandidate.page) : "n/a" },
       { label: "Missing in XML", value: formatList(selectedCandidate.pdfOnlyTerms) },
+      { label: "Raw PDF-only terms", value: formatList(selectedCandidate.rawPdfOnlyTerms) },
       { label: "PDF text length", value: String(cleanText(selectedCandidate.pdfText).length) },
     ];
   }, [selectedCandidate]);
@@ -716,6 +959,7 @@ export function CandidateReviewWorkspace({
       { label: "Blocked by validation issue", value: selectedCandidate.issues.some((issue) => issue.includes("Validation warnings or errors")) ? "Yes" : "No" },
       { label: "Missing in XML", value: formatList(selectedCandidate.pdfOnlyTerms) },
       { label: "Missing in PDF", value: formatList(selectedCandidate.xmlOnlyTerms) },
+      { label: "Ignored structural terms", value: formatList(selectedCandidate.ignoredStructuralTerms) },
       { label: "Issue summary", value: selectedCandidate.issues[0] ?? "No review issues flagged" },
     ];
   }, [selectedCandidate]);
@@ -724,9 +968,9 @@ export function CandidateReviewWorkspace({
     if (!selectedCandidate) {
       return null;
     }
-    const index = filteredCandidates.findIndex((candidate) => candidate.id === selectedCandidate.id);
+    const index = sortedCandidates.findIndex((candidate) => candidate.id === selectedCandidate.id);
     return index >= 0 ? index + 1 : null;
-  }, [filteredCandidates, selectedCandidate]);
+  }, [selectedCandidate, sortedCandidates]);
 
   const counts = useMemo(
     () => ({
@@ -740,6 +984,8 @@ export function CandidateReviewWorkspace({
     }),
     [candidatesWithStatus]
   );
+
+  const needsHumanReviewCount = counts.review;
 
   const candidatePageSummary = useMemo(
     () => summarizePages(candidates.map((candidate) => candidate.page)),
@@ -756,7 +1002,7 @@ export function CandidateReviewWorkspace({
     return `The current candidate set spans ${candidatePageSummary.toLowerCase()}.`;
   }, [candidatePageSummary, candidates]);
 
-  const hasScopedSubset = alignmentTotal > alignmentDisplayed && alignmentDisplayed > 0;
+  const hasScopedSubset = candidateCreatedCount > candidateSurfacedCount && candidateSurfacedCount > 0;
 
   async function updateStatus(nextStatus: ReviewStatus) {
     if (!selectedCandidate) {
@@ -838,14 +1084,19 @@ export function CandidateReviewWorkspace({
           <span>{formatWorkspaceLabel(workspaceMode)}</span>
         </div>
         <div className="summary-card">
-          <strong>Queue Scope</strong>
-          <span>
-            {alignmentDisplayed} of {alignmentTotal || candidates.length}
-          </span>
+          <strong>Candidates Created</strong>
+          <span>{candidateCreatedCount}</span>
+          <span className="summary-subtext">Validation pass total</span>
         </div>
         <div className="summary-card">
-          <strong>Review Queue</strong>
-          <span>{counts.review}</span>
+          <strong>Candidates Surfaced</strong>
+          <span>{candidateSurfacedCount}</span>
+          <span className="summary-subtext">Current workspace population</span>
+        </div>
+        <div className="summary-card">
+          <strong>Needs Human Review</strong>
+          <span>{needsHumanReviewCount}</span>
+          <span className="summary-subtext">Subset needing operator attention</span>
         </div>
         <div className="summary-card">
           <strong>Matched</strong>
@@ -881,22 +1132,29 @@ export function CandidateReviewWorkspace({
           <strong>Current review scope</strong>: {scopeSummary}
         </p>
         <p>
-          <strong>Outcome guide</strong>: Review Queue means the candidate still needs attention. Matched means it
-          aligned cleanly but is not yet in the approved snippet set. Approved means it is already in the
-          approved snippet path.
+          <strong>Outcome guide</strong>: Surfaced candidates are the items included in this workspace. Review Queue
+          is only the subset still needing human attention. Matched means a candidate aligned cleanly, even if it
+          still appears in the surfaced workspace for visibility.
         </p>
         {hasScopedSubset ? (
           <p className="muted">
-            This workspace is showing {alignmentDisplayed} reviewable candidates out of {alignmentTotal} total
-            alignments, so you are looking at a narrowed review slice rather than every extracted fragment.
+            This workspace is showing {candidateSurfacedCount} surfaced candidates out of {candidateCreatedCount} created by
+            validation, so you are looking at a narrowed review slice rather than every extracted fragment.
           </p>
         ) : null}
+        <p className="muted">
+          Confidence `1.0` candidates can still appear here when they are surfaced for comparison or traceability,
+          but they should not count toward `Needs Human Review` unless another issue forces review.
+        </p>
         {!counts.approved ? (
           <p className="muted">
             No approved candidates are visible in this run yet. A candidate can still be a clean match without
             appearing in the approved-snippet section.
           </p>
         ) : null}
+        <p className="muted">
+          The left panel is filterable, sortable, and paginated so larger surfaced candidate sets stay manageable.
+        </p>
       </div>
 
       <div className="filter-row" role="toolbar" aria-label="Candidate filters">
@@ -915,8 +1173,33 @@ export function CandidateReviewWorkspace({
 
       <div className="workspace-layout">
         <aside className="candidate-sidebar">
-          {filteredCandidates.length ? (
-            filteredCandidates.map((candidate) => (
+          <div className="panel-muted candidate-sidebar-controls">
+            <div className="candidate-sidebar-header">
+              <div>
+                <strong>{FILTER_LABELS[filter]}</strong>
+                <p className="muted">
+                  {sortedCandidates.length} candidates in this view, page {currentPageSafe} of {totalPages}.
+                </p>
+              </div>
+            </div>
+            <div className="candidate-sort-row">
+              <label htmlFor="candidate-sort">Sort surfaced candidates</label>
+              <select
+                id="candidate-sort"
+                value={sortKey}
+                onChange={(event) => setSortKey(event.target.value as SortKey)}
+              >
+                {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
+                  <option key={key} value={key}>
+                    {SORT_LABELS[key]}
+                  </option>
+                ))}
+              </select>
+              <p className="muted candidate-sort-note">Active sort: {SORT_LABELS[sortKey]}.</p>
+            </div>
+          </div>
+          {paginatedCandidates.length ? (
+            paginatedCandidates.map((candidate) => (
               <button
                 key={candidate.id}
                 type="button"
@@ -932,12 +1215,39 @@ export function CandidateReviewWorkspace({
                   <span>{candidate.candidateType}</span>
                   <span>Page {candidate.page ?? "n/a"}</span>
                   <span>Confidence {candidate.confidence.toFixed(3)}</span>
+                  <span>{candidate.reviewIssueClass.replace(/_/g, " ")}</span>
+                  <span>{candidate.reviewSourceEmphasis}</span>
                 </div>
               </button>
             ))
           ) : (
             <div className="empty-state">No candidates in this view yet.</div>
           )}
+          {sortedCandidates.length > CANDIDATE_PAGE_SIZE ? (
+            <div className="panel-muted candidate-pagination">
+              <span>
+                Page {currentPageSafe} of {totalPages}
+              </span>
+              <div className="candidate-pagination-actions">
+                <button
+                  type="button"
+                  className="button-secondary"
+                  disabled={currentPageSafe <= 1}
+                  onClick={() => setCurrentPage((current) => Math.max(1, current - 1))}
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  className="button-secondary"
+                  disabled={currentPageSafe >= totalPages}
+                  onClick={() => setCurrentPage((current) => Math.min(totalPages, current + 1))}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          ) : null}
         </aside>
 
         <div className="candidate-main">
@@ -952,7 +1262,7 @@ export function CandidateReviewWorkspace({
                       {selectedCandidate.nodeId ?? "unlinked"}
                     </p>
                     <p className="muted">
-                      Queue item {selectedQueueIndex ?? "n/a"} of {filteredCandidates.length} in{" "}
+                      Queue item {selectedQueueIndex ?? "n/a"} of {sortedCandidates.length} in{" "}
                       {FILTER_LABELS[filter]}.
                     </p>
                     <p className="muted">{describeCandidateStatus(selectedCandidate)}</p>

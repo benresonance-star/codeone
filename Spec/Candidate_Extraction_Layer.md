@@ -63,7 +63,13 @@ All snippets must originate from validated candidate objects.
 
 {
   "candidate_id": "string",
-  "candidate_type": "rule | table | definition | reference | context_key | ignore | ambiguous",
+  "candidate_type": "candidate_semantic_class (compatibility alias)",
+
+  "classification": {
+    "xml_structural_class": "rule | title | table | definition | reference | note | context_key | ambiguous",
+    "pdf_evidence_class": "paragraph | heading | list_item | table_row | table_cell | unknown",
+    "candidate_semantic_class": "rule | title | table | definition | reference | note | context_key | ambiguous"
+  },
 
   "source": {
     "xml_node_id": "string",
@@ -96,26 +102,49 @@ All snippets must originate from validated candidate objects.
 
 ---
 
-# 6. CANDIDATE TYPES
+# 6. THREE-SCHEMA MODEL
+
+Candidate extraction must reconcile three different but linked schemas:
+
+- XML structural schema:
+  the XML element name, path, ancestry, and normalized node identity
+- PDF evidence schema:
+  the rendered PDF evidence class, page provenance, bounding box, and fragment identity
+- Candidate semantic schema:
+  the system's proposed semantic interpretation for downstream validation and graph use
+
+The candidate semantic schema must not be treated as a direct copy of either XML or PDF.
+It is a reconciled layer.
+
+Current rule:
+- XML structural class is primary for semantic typing when a valid XML node is linked
+- PDF evidence class remains first-class and must be retained for review, debugging, and future graph queries
+- workflow state such as `draft`, `validated`, `rejected`, or `promoted` is separate from semantic class and must not be overloaded into `candidate_type`
+
+---
+
+# 7. CANDIDATE TYPES
 
 - rule
+- title
 - table
 - definition
 - reference
+- note
 - context_key
 - ignore
 - ambiguous
 
 ---
 
-# 7. CANDIDATE LIFECYCLE
+# 8. CANDIDATE LIFECYCLE
 
 draft → validated → promoted  
        ↘ rejected  
 
 ---
 
-# 8. CANDIDATE VALIDATION
+# 9. CANDIDATE VALIDATION
 
 All candidates must be validated before promotion.
 
@@ -128,7 +157,7 @@ Validation must check:
 
 ---
 
-# 9. PROMOTION RULES
+# 10. PROMOTION RULES
 
 A candidate may only be promoted if:
 - validation_state = pass  
@@ -138,11 +167,12 @@ A candidate may only be promoted if:
 
 ---
 
-# 10. AGENT CONSTRAINTS
+# 11. AGENT CONSTRAINTS
 
 Agents MUST:
 - produce candidates before snippets  
 - assign candidate types  
+- preserve XML structural class and PDF evidence class alongside the candidate semantic class  
 - include source references  
 - include confidence values  
 - treat candidate validation as a hard gate before promotion  
@@ -153,10 +183,11 @@ Agents MUST NOT:
 
 ---
 
-# 11. UI REQUIREMENTS
+# 12. UI REQUIREMENTS
 
 UI must allow:
 - view candidate with XML + PDF  
+- inspect XML structural class, PDF evidence class, and candidate semantic class side by side  
 - promote  
 - reject  
 - split  
@@ -165,15 +196,35 @@ UI must allow:
 
 ---
 
-# 12. STORAGE
+# 13. STORAGE
 
 - candidates  
 - candidate_validation_results  
 - candidate_relations  
+- classification facets for XML, PDF, and candidate semantic layers  
 
 ---
 
-# 13. TRACEABILITY
+# 14. GRAPH-READY FACETS
+
+Candidate storage and review payloads should preserve graph-ready facets including:
+
+- candidate_id
+- candidate_semantic_class
+- xml_structural_class
+- pdf_evidence_class
+- document_family_id
+- ingestion_run_id
+- xml_node_id
+- pdf_fragment_id
+- alignment_confidence
+- validation_state
+- review_decision_status
+- depends_on
+
+---
+
+# 15. TRACEABILITY
 
 PDF ↔ XML → Candidate → Snippet → Evaluation → Output
 
@@ -184,6 +235,6 @@ Schema compatibility note:
 
 ---
 
-# 14. FINAL RULE
+# 16. FINAL RULE
 
 The Candidate Extraction Layer is mandatory and non-bypassable.

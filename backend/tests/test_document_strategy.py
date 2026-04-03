@@ -252,10 +252,19 @@ class ParityScaffoldTests(unittest.TestCase):
         )
 
         self.assertEqual(len(workspace["review_units"]), 1)
+        self.assertEqual(workspace["candidate_total"], 1)
+        self.assertEqual(workspace["candidate_surfaced"], 1)
+        self.assertEqual(workspace["candidate_needs_review"], 1)
         review_unit = workspace["review_units"][0]
         self.assertEqual(review_unit["candidate_id"], "candidate:frag_1")
         self.assertEqual(review_unit["candidate_type"], "definition")
+        self.assertEqual(review_unit["xml_structural_class"], "definition")
+        self.assertEqual(review_unit["pdf_evidence_class"], "unknown")
+        self.assertEqual(review_unit["candidate_semantic_class"], "definition")
         self.assertEqual(review_unit["base_status"], "mismatch")
+        self.assertTrue(review_unit["needs_human_review"])
+        self.assertEqual(review_unit["review_issue_class"], "xml_mismatch")
+        self.assertEqual(review_unit["review_source_emphasis"], "xml")
         self.assertEqual(review_unit["fragment_id"], "frag_1")
         self.assertEqual(review_unit["node_id"], "node_a")
         self.assertIn("XML-only terms", review_unit["issues"][0])
@@ -300,6 +309,70 @@ class ParityScaffoldTests(unittest.TestCase):
         )
 
         self.assertEqual(workspace["review_units"][0]["candidate_type"], "table")
+        self.assertEqual(workspace["review_units"][0]["pdf_evidence_class"], "table_row")
+
+    def test_review_workspace_classifies_title_nodes_and_ignores_structural_title_tokens(self) -> None:
+        xml_nodes = [
+            XmlNode(
+                node_id="title_j3",
+                clause_id="title_j3",
+                text="Elemental provisions",
+                path="/part[@id='part_j3']/title[1]",
+            )
+        ]
+        fragments = [
+            PdfFragment(
+                fragment_id="docling_3_1",
+                page=3,
+                text="Part J3 Elemental provisions",
+                bbox=[0.0, 0.0, 1.0, 1.0],
+            )
+        ]
+        alignments = [
+            {
+                "fragment_id": "docling_3_1",
+                "node_id": "title_j3",
+                "confidence": 0.96,
+                "matched": True,
+                "page": 3,
+                "bbox": [0.0, 0.0, 1.0, 1.0],
+            }
+        ]
+        structured_blocks = [
+            {
+                "block_id": "docling_3_1",
+                "page": 3,
+                "bbox": [0.0, 0.0, 1.0, 1.0],
+                "block_type": "heading",
+                "text": "Part J3 Elemental provisions",
+                "source_strategy": "docling",
+            }
+        ]
+
+        workspace = self.service._build_review_workspace(
+            pdf_name="NCC 2022 - Vol 1 - Parts J2 and J3 - Energy Efficiency.pdf",
+            xml_name="J3-elemental-provisions.xml",
+            xml_nodes=xml_nodes,
+            fragments=fragments,
+            structured_blocks=structured_blocks,
+            alignments=alignments,
+            canonical_snippets=[],
+            xml_validation={"warnings": [], "errors": []},
+            pdf_validation={"warnings": [], "errors": []},
+        )
+
+        review_unit = workspace["review_units"][0]
+        self.assertEqual(review_unit["candidate_type"], "title")
+        self.assertEqual(review_unit["xml_structural_class"], "title")
+        self.assertEqual(review_unit["pdf_evidence_class"], "heading")
+        self.assertEqual(review_unit["candidate_semantic_class"], "title")
+        self.assertEqual(review_unit["raw_pdf_only_terms"], ["j3", "part"])
+        self.assertEqual(review_unit["pdf_only_terms"], [])
+        self.assertEqual(review_unit["ignored_structural_terms"], ["j3", "part"])
+        self.assertEqual(review_unit["base_status"], "match")
+        self.assertFalse(review_unit["needs_human_review"])
+        self.assertEqual(review_unit["review_issue_class"], "clean_match")
+        self.assertEqual(review_unit["review_source_emphasis"], "balanced")
 
     def test_validate_xml_adds_synthesized_table_row_nodes(self) -> None:
         xml_bytes = b"""<?xml version="1.0" encoding="UTF-8"?>

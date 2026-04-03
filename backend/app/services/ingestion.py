@@ -112,6 +112,7 @@ class IngestionService:
             xml_name=xml_name,
             xml_nodes=xml_context["xml_nodes"],
             fragments=pdf_context["fragments"],
+            structured_blocks=pdf_context["structured_blocks"],
             alignments=pdf_context["alignments"],
             canonical_snippets=canonical_snippets,
             xml_validation=xml_context["result"],
@@ -1536,6 +1537,7 @@ class IngestionService:
         xml_name: str,
         xml_nodes: list[XmlNode],
         fragments: list[PdfFragment],
+        structured_blocks: list[dict[str, Any]] | None = None,
         alignments: list[dict[str, Any]],
         canonical_snippets: list[dict[str, Any]],
         xml_validation: dict[str, Any],
@@ -1559,6 +1561,20 @@ class IngestionService:
             for snippet in canonical_snippets
             if snippet.get("fragment_id") in review_fragment_ids
         ]
+        review_units = self._build_review_units(
+            xml_nodes=review_xml_nodes,
+            fragments=review_fragments,
+            structured_blocks=structured_blocks,
+            alignments=review_alignments,
+            canonical_snippets=review_snippets,
+            xml_validation=xml_validation,
+            pdf_validation=pdf_validation,
+        )
+        candidate_total = len(alignments)
+        candidate_surfaced = len(review_units)
+        candidate_needs_review = len(
+            [unit for unit in review_units if unit.get("needs_human_review")]
+        )
 
         return {
             "mode": workspace_mode,
@@ -1567,16 +1583,12 @@ class IngestionService:
             "pdf_fragments": review_fragments,
             "alignments": review_alignments,
             "canonical_snippets": review_snippets,
-            "review_units": self._build_review_units(
-                xml_nodes=review_xml_nodes,
-                fragments=review_fragments,
-                alignments=review_alignments,
-                canonical_snippets=review_snippets,
-                xml_validation=xml_validation,
-                pdf_validation=pdf_validation,
-            ),
+            "review_units": review_units,
             "alignment_total": len(alignments),
             "alignment_displayed": len(review_alignments),
+            "candidate_total": candidate_total,
+            "candidate_surfaced": candidate_surfaced,
+            "candidate_needs_review": candidate_needs_review,
         }
 
     def _should_focus_review_workspace(
@@ -1631,6 +1643,7 @@ class IngestionService:
         *,
         xml_nodes: list[XmlNode],
         fragments: list[PdfFragment],
+        structured_blocks: list[dict[str, Any]] | None,
         alignments: list[dict[str, Any]],
         canonical_snippets: list[dict[str, Any]],
         xml_validation: dict[str, Any],
@@ -1638,6 +1651,11 @@ class IngestionService:
     ) -> list[dict[str, Any]]:
         xml_by_id = {node.node_id: node for node in xml_nodes}
         fragment_by_id = {fragment.fragment_id: fragment for fragment in fragments}
+        block_by_id = {
+            str(block.get("block_id")): block
+            for block in (structured_blocks or [])
+            if isinstance(block, dict) and block.get("block_id")
+        }
         approved_pairs = {
             (str(snippet.get("fragment_id")), str(snippet.get("clause_id")))
             for snippet in canonical_snippets
@@ -1656,7 +1674,19 @@ class IngestionService:
             node = xml_by_id.get(node_id) if node_id else None
             xml_text = node.text if node else ""
             pdf_text = fragment.text
-            xml_only_terms, pdf_only_terms = self._review_term_deltas(xml_text, pdf_text)
+            xml_structural_class = self._xml_structural_class(node.path if node else "", xml_text)
+            pdf_evidence_class = self._pdf_evidence_class(fragment, block_by_id.get(fragment.fragment_id))
+            candidate_semantic_class = self._candidate_semantic_class(
+                xml_structural_class=xml_structural_class,
+                pdf_evidence_class=pdf_evidence_class,
+                alignment=alignment,
+            )
+            raw_xml_only_terms, raw_pdf_only_terms = self._review_term_deltas(xml_text, pdf_text)
+            xml_only_terms, pdf_only_terms, ignored_structural_terms = self._effective_review_term_deltas(
+                xml_only_terms=raw_xml_only_terms,
+                pdf_only_terms=raw_pdf_only_terms,
+                candidate_semantic_class=candidate_semantic_class,
+            )
             has_linked_issue = f"fragment:{fragment.fragment_id}" in linked_issues or (
                 bool(node_id) and f"node:{node_id}" in linked_issues
             )
@@ -1667,19 +1697,37 @@ class IngestionService:
                 pdf_only_terms=pdf_only_terms,
                 linked_issue=has_linked_issue,
             )
+            review_issue_class = self._review_issue_class(
+                alignment=alignment,
+                linked_issue=has_linked_issue,
+                xml_only_terms=xml_only_terms,
+                pdf_only_terms=pdf_only_terms,
+            )
+            review_source_emphasis = self._review_source_emphasis(
+                xml_only_terms=xml_only_terms,
+                pdf_only_terms=pdf_only_terms,
+            )
             base_status = self._derive_review_base_status(
                 alignment=alignment,
                 issues=issues,
                 approved=approved,
+                candidate_semantic_class=candidate_semantic_class,
             )
+            needs_human_review = base_status in {"review required", "mismatch", "paused", "ambiguous"}
 
             review_units.append(
                 {
                     "candidate_id": f"candidate:{fragment.fragment_id}",
                     "title": self._review_title(xml_text, pdf_text, fragment.fragment_id),
-                    "candidate_type": self._review_candidate_type(node.path if node else "", xml_text),
+                    "candidate_type": candidate_semantic_class,
+                    "xml_structural_class": xml_structural_class,
+                    "pdf_evidence_class": pdf_evidence_class,
+                    "candidate_semantic_class": candidate_semantic_class,
                     "confidence": float(alignment.get("confidence", 0.0)),
                     "base_status": base_status,
+                    "needs_human_review": needs_human_review,
+                    "review_issue_class": review_issue_class,
+                    "review_source_emphasis": review_source_emphasis,
                     "matched": bool(alignment.get("matched")),
                     "page": alignment.get("page", fragment.page),
                     "fragment_id": fragment.fragment_id,
@@ -1691,9 +1739,48 @@ class IngestionService:
                     "issues": issues,
                     "xml_only_terms": xml_only_terms,
                     "pdf_only_terms": pdf_only_terms,
+                    "raw_xml_only_terms": raw_xml_only_terms,
+                    "raw_pdf_only_terms": raw_pdf_only_terms,
+                    "ignored_structural_terms": ignored_structural_terms,
                 }
             )
         return review_units
+
+    def _review_issue_class(
+        self,
+        *,
+        alignment: dict[str, Any],
+        linked_issue: bool,
+        xml_only_terms: list[str],
+        pdf_only_terms: list[str],
+    ) -> str:
+        if not alignment.get("matched") or not alignment.get("node_id"):
+            return "unmatched"
+        if linked_issue:
+            return "validation"
+        if float(alignment.get("confidence", 0.0)) < 0.9:
+            return "low_confidence"
+        if xml_only_terms and pdf_only_terms:
+            return "mixed_mismatch"
+        if xml_only_terms:
+            return "xml_mismatch"
+        if pdf_only_terms:
+            return "pdf_mismatch"
+        return "clean_match"
+
+    def _review_source_emphasis(
+        self,
+        *,
+        xml_only_terms: list[str],
+        pdf_only_terms: list[str],
+    ) -> str:
+        if xml_only_terms and pdf_only_terms:
+            return "mixed"
+        if xml_only_terms:
+            return "xml"
+        if pdf_only_terms:
+            return "pdf"
+        return "balanced"
 
     def _linked_review_issue_keys(
         self,
@@ -1722,9 +1809,17 @@ class IngestionService:
         pdf_terms = {token for token in normalize_text(pdf_text).split() if token}
         return sorted(xml_terms - pdf_terms)[:10], sorted(pdf_terms - xml_terms)[:10]
 
-    def _review_candidate_type(self, xml_path: str, xml_text: str) -> str:
+    def _xml_structural_class(self, xml_path: str, xml_text: str) -> str:
         normalized_path = xml_path.lower()
         normalized_text = xml_text.lower()
+        if not normalized_path and not normalized_text:
+            return "ambiguous"
+        if "/title[" in normalized_path or normalized_path.endswith("/title"):
+            return "title"
+        if "/num[" in normalized_path or normalized_path.endswith("/num"):
+            return "context_key"
+        if any(marker in normalized_path for marker in ("/note[", "/intro-part[", "/intro[", "/subtitle[")) or normalized_path.endswith("/note"):
+            return "note"
         if "table" in normalized_path:
             return "table"
         if "xref" in normalized_path or "reference" in normalized_path:
@@ -1732,6 +1827,67 @@ class IngestionService:
         if "definition" in normalized_path or " means " in normalized_text:
             return "definition"
         return "rule"
+
+    def _pdf_evidence_class(self, fragment: PdfFragment, block: dict[str, Any] | None) -> str:
+        fragment_id = fragment.fragment_id.lower()
+        if "__row_" in fragment_id:
+            return "table_row"
+        if "__cell_" in fragment_id:
+            return "table_cell"
+        if block and block.get("block_type"):
+            return str(block["block_type"]).lower()
+        return "unknown"
+
+    def _candidate_semantic_class(
+        self,
+        *,
+        xml_structural_class: str,
+        pdf_evidence_class: str,
+        alignment: dict[str, Any],
+    ) -> str:
+        if xml_structural_class != "ambiguous":
+            return xml_structural_class
+        if alignment.get("matched") and pdf_evidence_class in {"table_row", "table_cell"}:
+            return "table"
+        return "ambiguous"
+
+    def _effective_review_term_deltas(
+        self,
+        *,
+        xml_only_terms: list[str],
+        pdf_only_terms: list[str],
+        candidate_semantic_class: str,
+    ) -> tuple[list[str], list[str], list[str]]:
+        if candidate_semantic_class not in {"title", "context_key"}:
+            return xml_only_terms, pdf_only_terms, []
+
+        ignored = {
+            term
+            for term in [*xml_only_terms, *pdf_only_terms]
+            if self._is_structural_title_token(term)
+        }
+        return (
+            [term for term in xml_only_terms if term not in ignored],
+            [term for term in pdf_only_terms if term not in ignored],
+            sorted(ignored),
+        )
+
+    def _is_structural_title_token(self, term: str) -> bool:
+        if term in {
+            "part",
+            "section",
+            "volume",
+            "schedule",
+            "appendix",
+            "chapter",
+            "clause",
+            "table",
+            "figure",
+            "diagram",
+            "map",
+        }:
+            return True
+        return bool(re.match(r"^[a-z]{1,4}\d[a-z0-9]*$", term))
 
     def _review_title(self, xml_text: str, pdf_text: str, fragment_id: str) -> str:
         source = clean_text(xml_text) or clean_text(pdf_text)
@@ -1764,6 +1920,7 @@ class IngestionService:
         alignment: dict[str, Any],
         issues: list[str],
         approved: bool,
+        candidate_semantic_class: str,
     ) -> str:
         if approved:
             return "approved"
@@ -1773,6 +1930,8 @@ class IngestionService:
             or float(alignment.get("confidence", 0.0)) < 0.85
         ):
             return "review required"
+        if candidate_semantic_class in {"title", "context_key"} and not issues:
+            return "match"
         if any("XML-only" in issue or "PDF-only" in issue for issue in issues):
             return "mismatch"
         return "match"

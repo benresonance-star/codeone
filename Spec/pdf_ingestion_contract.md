@@ -1,6 +1,6 @@
 # PDF Ingestion Validation Contract
 ## NCC PDF Ingestion Constraint Manual
-### Version 1.7.0
+### Version 1.8.0
 
 ---
 
@@ -241,6 +241,17 @@ Current-state expectation for lineage-oriented review payloads:
 - the review payload exists to support candidate review and traceability before the first-class candidate runtime is fully implemented
 - the payload may operate in `full` or `focused` mode depending on XML artifact type and fragment volume
 - focused narrow-artifact review may preferentially surface row-level XML nodes and row-level PDF fragments when those matches exist
+- review units may surface a three-schema classification bundle:
+  `xml_structural_class`, `pdf_evidence_class`, and `candidate_semantic_class`
+- review units may also surface triage facets such as `review_issue_class`, `review_source_emphasis`, and `needs_human_review`
+- `candidate_type` should be treated as a compatibility alias for `candidate_semantic_class`
+- XML structural class is the primary semantic typing signal when a linked XML node exists
+- PDF evidence class remains first-class review metadata even when semantic typing is XML-led
+- raw token deltas may be preserved separately from effective mismatch deltas so structural title tokens do not force rule-style mismatch outcomes
+- the review workspace should distinguish:
+  `candidate_total` for candidates created by validation,
+  `candidate_surfaced` for candidates included in the current workspace,
+  and `candidate_needs_review` for the subset still requiring human review
 - `document_family_id` may be truncated and suffixed with a deterministic hash when needed to stay within persistence limits
 - storage-safe identifier shortening must not make the family identifier nondeterministic for the same PDF/XML pair
 - retained runs may be reloaded through an explicit run-detail API such as `GET /api/ingestions/runs/{run_id}`
@@ -253,6 +264,7 @@ Current-state expectation for UI validation feedback:
 - a retained PDF file endpoint such as `GET /api/ingestions/runs/{run_id}/pdf` may still exist for retained artifacts, but the UI is not required to auto-embed that file after refresh
 - the current review console may require an explicit `Relink PDF` action in the original preview panel so the operator can reattach the local PDF in the current browser session
 - when the operator relinks the PDF locally, the embedded preview should preserve page-level candidate navigation, while exact in-page highlighting remains optional follow-on behavior
+- the review sidebar may support filter tabs, explicit sort modes such as confidence, issue type, and XML/PDF emphasis, plus pagination for larger surfaced candidate sets
 
 Current-state expectation for `table_validation`:
 - `table_id`, extraction counts, status, and confidence are required for emitted table entries

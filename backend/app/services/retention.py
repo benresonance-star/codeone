@@ -148,8 +148,7 @@ class RetentionService:
         run = session.get(IngestionRun, run_id)
         if not run:
             raise LookupError("Ingestion run not found.")
-        if run.status == "purged":
-            raise ValueError("Purged runs cannot restore the review workspace.")
+        self._require_restorable_run(run, "review workspace")
 
         pdf_validation = self._validation_payload(session, run_id, "pdf")
         xml_validation = self._validation_payload(session, run_id, "xml")
@@ -187,6 +186,7 @@ class RetentionService:
             xml_name=xml_document.file_name,
             xml_nodes=xml_context["xml_nodes"],
             fragments=fragments,
+            structured_blocks=[],
             alignments=alignments,
             canonical_snippets=canonical_snippets,
             xml_validation=xml_validation,
@@ -235,8 +235,7 @@ class RetentionService:
         run = session.get(IngestionRun, run_id)
         if not run:
             raise LookupError("Ingestion run not found.")
-        if run.status == "purged":
-            raise ValueError("Purged runs cannot restore the retained PDF.")
+        self._require_restorable_run(run, "retained PDF")
 
         pdf_document = session.get(SourceDocument, run.pdf_source_document_id)
         if not pdf_document:
@@ -275,8 +274,7 @@ class RetentionService:
         run = session.get(IngestionRun, run_id)
         if not run:
             raise LookupError("Ingestion run not found.")
-        if run.status == "purged":
-            raise ValueError("Purged runs cannot store review decisions.")
+        self._require_active_review_run(run)
 
         timestamp = now_utc()
         record = session.scalar(
@@ -309,6 +307,18 @@ class RetentionService:
             record.updated_at = timestamp
         session.flush()
         return self._serialize_review_decision(record)
+
+    def _require_restorable_run(self, run: IngestionRun, resource_name: str) -> None:
+        if run.status == "purged":
+            raise ValueError(f"Purged runs cannot restore the {resource_name}.")
+        if run.status == "invalidated":
+            raise ValueError(f"Invalidated runs cannot restore the {resource_name}.")
+
+    def _require_active_review_run(self, run: IngestionRun) -> None:
+        if run.status == "purged":
+            raise ValueError("Purged runs cannot store review decisions.")
+        if run.status == "invalidated":
+            raise ValueError("Invalidated runs cannot store review decisions.")
 
     def invalidate_run(self, session: Session, run_id: str, reason: str, requested_by: str = "system") -> dict[str, Any]:
         run = session.get(IngestionRun, run_id)
