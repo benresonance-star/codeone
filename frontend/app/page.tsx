@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
+import { CandidateReviewWorkspace } from "../components/candidate-review-workspace";
 import { ValidationViewer } from "../components/validation-viewer";
 
 type IngestionResponse = {
@@ -21,6 +22,32 @@ type IngestionResponse = {
     pdf_validation: Record<string, any>;
   };
   raw_metrics: Record<string, any>;
+  lineage?: {
+    xml_nodes?: {
+      node_id: string;
+      clause_id: string;
+      text: string;
+      path: string;
+    }[];
+    pdf_fragments?: {
+      fragment_id: string;
+      page: number;
+      text: string;
+      bbox: number[];
+    }[];
+    alignments?: {
+      fragment_id: string;
+      node_id?: string | null;
+      confidence: number;
+      matched: boolean;
+      page?: number;
+      bbox?: number[];
+    }[];
+    canonical_snippets?: {
+      clause_id?: string;
+      fragment_id?: string;
+    }[];
+  };
 };
 
 type RunRecord = {
@@ -59,17 +86,36 @@ export default function HomePage() {
   const [runLoading, setRunLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [purgePreview, setPurgePreview] = useState<PurgeSummary | null>(null);
+  const [validationStartedAt, setValidationStartedAt] = useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const summaryText = useMemo(() => {
+    if (loading) {
+      return `Validating ${pdfFile?.name ?? "selected PDF"} against ${xmlFile?.name ?? "selected XML"}...`;
+    }
     if (!response) {
       return "Upload a PDF and XML pair to validate the linked NCC representations.";
     }
     return `XML: ${response.summary.xml_status} | PDF: ${response.summary.pdf_status} | Can Progress: ${response.summary.can_progress}`;
-  }, [response]);
+  }, [loading, pdfFile, response, xmlFile]);
 
   useEffect(() => {
     void refreshRuns();
   }, []);
+
+  useEffect(() => {
+    if (!loading || validationStartedAt === null) {
+      setElapsedSeconds(0);
+      return;
+    }
+    const updateElapsed = () => {
+      setElapsedSeconds(Math.max(0, Math.floor((Date.now() - validationStartedAt) / 1000)));
+    };
+    updateElapsed();
+    const timer = window.setInterval(updateElapsed, 1000);
+    return () => window.clearInterval(timer);
+  }, [loading, validationStartedAt]);
 
   async function refreshRuns() {
     setRunLoading(true);
@@ -175,6 +221,10 @@ export default function HomePage() {
 
     setLoading(true);
     setError(null);
+    setResponse(null);
+    setValidationStartedAt(Date.now());
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     const formData = new FormData();
     formData.append("pdf", pdfFile);
@@ -184,6 +234,7 @@ export default function HomePage() {
       const result = await fetch(`${API_BASE_URL}/api/ingestions/validate`, {
         method: "POST",
         body: formData,
+        signal: controller.signal,
       });
 
       if (!result.ok) {
@@ -195,10 +246,20 @@ export default function HomePage() {
       setResponse(payload);
       await refreshRuns();
     } catch (submissionError) {
-      setError(submissionError instanceof Error ? submissionError.message : "Unknown error");
+      if (submissionError instanceof Error && submissionError.name === "AbortError") {
+        setError("Validation cancelled.");
+      } else {
+        setError(submissionError instanceof Error ? submissionError.message : "Unknown error");
+      }
     } finally {
       setLoading(false);
+      setValidationStartedAt(null);
+      abortControllerRef.current = null;
     }
+  }
+
+  function cancelValidation() {
+    abortControllerRef.current?.abort();
   }
 
   return (
@@ -206,38 +267,94 @@ export default function HomePage() {
       <section className="panel">
         <h1>NCC Ingestion Console</h1>
         <p>
-          Run the hardened XML and PDF contracts together and inspect whether the paired document can
-          progress toward the semantic layer.
+            Run the hardened XML and PDF contracts together, inspect review candidates, and check whether
+            the paired document can progress toward candidate-backed semantic processing.
         </p>
         <p>{summaryText}</p>
       </section>
 
       <section className="panel">
-        <form className="grid" onSubmit={onSubmit}>
+        <form className="grid" onSubmit={onSubmit} aria-busy={loading}>
           <div>
             <label htmlFor="pdf">PDF document</label>
-            <input id="pdf" type="file" accept=".pdf" onChange={(event) => setPdfFile(event.target.files?.[0] ?? null)} />
+            <input
+              id="pdf"
+              type="file"
+              accept=".pdf"
+              disabled={loading}
+              onChange={(event) => setPdfFile(event.target.files?.[0] ?? null)}
+            />
           </div>
           <div>
             <label htmlFor="xml">XML source</label>
-            <input id="xml" type="file" accept=".xml" onChange={(event) => setXmlFile(event.target.files?.[0] ?? null)} />
+            <input
+              id="xml"
+              type="file"
+              accept=".xml"
+              disabled={loading}
+              onChange={(event) => setXmlFile(event.target.files?.[0] ?? null)}
+            />
           </div>
           <button type="submit" disabled={loading}>
             {loading ? "Validating..." : "Validate ingestion"}
           </button>
           {error ? <p style={{ color: "#fca5a5" }}>{error}</p> : null}
         </form>
+        {loading ? (
+          <div className="validation-progress" aria-live="polite">
+            <div className="validation-progress-header">
+              <div>
+                <h2>Validation in progress</h2>
+                <p>
+                  Running XML validation, PDF extraction, alignment, and transitional review payload assembly.
+                  Exact stage progress is not yet available.
+                </p>
+              </div>
+              <span className="status warn">Working</span>
+            </div>
+            <div className="progress-indicator" />
+            <div className="grid two-column">
+              <div className="metric-list">
+                <div>
+                  <strong>PDF</strong>: {pdfFile?.name ?? "n/a"}
+                </div>
+                <div>
+                  <strong>XML</strong>: {xmlFile?.name ?? "n/a"}
+                </div>
+                <div>
+                  <strong>Elapsed</strong>: {elapsedSeconds}s
+                </div>
+              </div>
+              <div className="metric-list">
+                <div>
+                  <strong>Status</strong>: Waiting for the validation response from the backend.
+                </div>
+                <div>
+                  <strong>Previous results</strong>: Hidden until the new request completes.
+                </div>
+              </div>
+            </div>
+            <div className="action-row" style={{ marginBottom: 0 }}>
+              <button type="button" onClick={cancelValidation}>
+                Cancel validation
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       {response ? (
-        <div className="grid">
-          <ValidationViewer title="XML Validation" result={response.results.xml_validation} />
-          <ValidationViewer title="PDF Validation" result={response.results.pdf_validation} />
-          <section className="panel">
-            <h2>Raw Metrics</h2>
-            <pre>{JSON.stringify(response.raw_metrics, null, 2)}</pre>
-          </section>
-        </div>
+        <>
+          <CandidateReviewWorkspace response={response} pdfFile={pdfFile} />
+          <div className="grid">
+            <ValidationViewer title="XML Validation" result={response.results.xml_validation} />
+            <ValidationViewer title="PDF Validation" result={response.results.pdf_validation} />
+            <section className="panel">
+              <h2>Raw Metrics</h2>
+              <pre>{JSON.stringify(response.raw_metrics, null, 2)}</pre>
+            </section>
+          </div>
+        </>
       ) : null}
 
       <section className="panel">

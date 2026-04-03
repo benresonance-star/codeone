@@ -60,10 +60,14 @@
 
     "gate_decision": {
       "type": "object",
+      "description": "Compatibility gate object for PDF validation. The existing field names are retained while Candidate Extraction becomes the mandatory stage between alignment and semantic promotion.",
       "additionalProperties": false,
       "required": ["can_progress_to_semantic_layer", "blocked"],
       "properties": {
-        "can_progress_to_semantic_layer": { "type": "boolean" },
+        "can_progress_to_semantic_layer": {
+          "type": "boolean",
+          "description": "Backward-compatible gate name. When true, validation and alignment evidence are sufficient to enter candidate extraction. Candidate validation and promotion are still required before semantic-layer snippet creation."
+        },
         "blocked": { "type": "boolean" },
         "reason": { "type": ["string", "null"] }
       }

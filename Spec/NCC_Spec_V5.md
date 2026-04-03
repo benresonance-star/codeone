@@ -1,6 +1,6 @@
 # NCC Ingestion & Agentic Compliance System  
 ## Full Specification (with Embedded Validation Contract)  
-### Version 5.0.0
+### Version 5.2.0
 
 ---
 
@@ -36,6 +36,9 @@ No invalid data enters the canonical layer.
 Source Layer  
 Ingestion Layer  
 Validation Contract Layer (critical)  
+Alignment Layer  
+Candidate Extraction Layer  
+Candidate Validation Layer  
 Semantic Layer  
 Operational Layer  
 Evaluation Layer  
@@ -70,8 +73,12 @@ The PDF Ingestion Validation Contract is a non-bypassable rule system that:
 
 ## Enforcement Flow
 
-PDF → Ingestion → Validation Contract → Pass → Semantic Layer  
-                                     → Fail → STOP  
+XML + PDF → Ingestion + Validation Contracts → Pass → Alignment Layer  
+                                              → Fail → STOP  
+
+Alignment Layer → Candidate Extraction Layer → Candidate Validation Layer  
+Candidate Validation Layer → Promote → Semantic Layer  
+Candidate Validation Layer → Reject / Review → STOP  
 
 ---
 
@@ -88,7 +95,7 @@ Those files define:
 - deterministic rule thresholds and outcomes
 - XML/PDF relationship expectations
 - required PDF validation output structure
-- gate behavior for progression to the semantic layer
+- gate behavior for progression into downstream candidate-stage processing
 
 ---
 
@@ -98,17 +105,22 @@ Those files define:
 2. Extract blocks  
 3. Classify blocks  
 4. Extract tables  
-5. Align XML  
-6. Attach metadata  
-7. Run validation contract  
-8. If fail → STOP  
-9. If pass → store  
+5. Attach metadata  
+6. Run validation contracts  
+7. If fail → STOP  
+8. Align XML  
+9. Generate candidates  
+10. Validate candidates  
+11. If candidate validation fails → STOP  
+12. Promote validated candidates to semantic snippets  
+13. Store  
 
 ---
 
 # 6. CANONICAL DATA MODEL
 
-All snippets must originate from validated ingestion.
+All canonical snippets must originate from validated candidate objects.
+No semantic object may be created directly from aligned source data.
 
 ---
 
@@ -116,6 +128,7 @@ All snippets must originate from validated ingestion.
 
 Agents must:
 - obey validation contract  
+- produce or consume candidates before canonical snippets  
 - not bypass rules  
 - not hallucinate data  
 
@@ -125,6 +138,9 @@ Agents must:
 
 UI must:
 - display validation results  
+- display candidate objects with XML/PDF traceability  
+- surface in-flight validation progress while a run is executing  
+- accept transitional lineage-backed review payloads until the first-class candidate runtime is fully implemented  
 - highlight errors  
 - allow corrections  
 - re-run validation  
@@ -143,11 +159,18 @@ Backend:
 - PostgreSQL
 - Redis
 
+Persistence identifiers:
+- `document_family_id` must be deterministic for a given PDF/XML pair
+- when the natural paired-name identifier is too long for storage constraints, the system may shorten it with a stable hash suffix rather than fail ingestion
+
 ---
 
 # 10. DATABASE
 
 - snippets  
+- candidates  
+- candidate_validation_results  
+- candidate_relations  
 - source_documents  
 - alignments  
 - contexts  
@@ -166,7 +189,8 @@ Backend:
 
 # 12. FINAL RULE
 
-If validation fails, the system must stop.
+If validation fails, alignment must not progress.
+If candidate validation fails, semantic promotion must not progress.
 
 ---
 

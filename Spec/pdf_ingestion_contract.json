@@ -1,14 +1,14 @@
 {
   "contract_id": "pdf_ingestion_v1",
-  "contract_version": "1.2.0",
-  "description": "Deterministic validation contract for NCC PDF ingestion and XML-linked validation with strategy-driven extraction.",
+  "contract_version": "1.4.0",
+  "description": "Deterministic validation contract for NCC PDF ingestion and XML-linked validation with strategy-driven extraction and candidate-backed semantic promotion.",
   "representation_model": {
     "primary_representation": "pdf",
     "paired_representation": "xml",
     "relationship": "same_ncc_content_different_form",
     "pdf_role": "rendered_spatial_authority",
     "xml_role": "structural_authority",
-    "alignment_dependency": "PDF-to-XML alignment can only support semantic progression when the paired XML source has passed its gate and alignment evidence remains within configured thresholds.",
+    "alignment_dependency": "PDF-to-XML alignment can only support candidate extraction and later semantic progression when the paired XML source has passed its gate and alignment evidence remains within configured thresholds.",
     "strategy_routing": "Extraction may be routed by document strategy so that different NCC section families can use different extractor modes while remaining bound to the same validation contract."
   },
   "thresholds": {
@@ -28,14 +28,18 @@
     "default_docling_mode": "text",
     "table_heavy_docling_mode": "tables",
     "mode_selection_rule": "Known table-heavy PDFs may enable Docling table structure when benchmark evidence shows materially better table recovery.",
-    "contract_invariance": "Changing extractor mode must not relax structure, alignment, metadata, or quality requirements."
+    "contract_invariance": "Changing extractor mode must not relax structure, alignment, metadata, or quality requirements.",
+    "table_linking_current_state": "Extracted PDF tables may be emitted without XML linkage fields when no deterministic XML-side table mapping exists yet.",
+    "candidate_stage_mandatory": true,
+    "current_gate_semantics": "The existing schema field can_progress_to_semantic_layer is retained for compatibility, but in the staged architecture it should be interpreted as permission to enter candidate extraction, not direct canonical snippet creation.",
+    "document_family_id_policy": "The paired PDF/XML family identifier must stay deterministic, but may be shortened with a stable hash suffix when required to satisfy persistence limits."
   },
   "status_model": {
     "PASS": "All blocking rules pass and no warning outcomes remain.",
     "PASS_WITH_WARNINGS": "All blocking rules pass and only bounded warning outcomes remain.",
-    "REVIEW_REQUIRED": "The PDF output is structurally usable but requires review before semantic progression.",
+    "REVIEW_REQUIRED": "The PDF output is structurally usable but requires review before candidate extraction and semantic progression.",
     "FAIL": "Validation completed and the PDF output did not satisfy contract requirements.",
-    "BLOCKED": "A blocking rule prevents progression to the semantic layer."
+    "BLOCKED": "A blocking rule prevents progression to the candidate and semantic layers."
   },
   "rules": [
     {
@@ -89,13 +93,33 @@
     },
     {
       "rule_id": "C7_QUALITY_SCORE",
-      "description": "Overall PDF ingestion quality score must meet the configured threshold before semantic progression.",
+      "description": "Overall PDF ingestion quality score must meet the configured threshold before candidate extraction and later semantic progression.",
       "severity": "blocking",
       "pass_when": "confidence.overall >= thresholds.min_quality_score",
       "block_when": "confidence.overall < thresholds.min_quality_score",
       "error_code": "EXECUTION_BLOCKED"
     }
   ],
+  "table_validation_contract": {
+    "required_fields": [
+      "table_id",
+      "status",
+      "rows_expected",
+      "rows_extracted",
+      "confidence"
+    ],
+    "optional_xml_link_fields": [
+      "node_id",
+      "related_xml_node"
+    ],
+    "current_behavior": "XML linkage fields are only emitted when a concrete XML-side table mapping exists.",
+    "future_direction": [
+      "deterministic table-to-XML node linkage",
+      "explicit linked or unlinked or ambiguous mapping states",
+      "XML bundle support for one PDF to many XML sources",
+      "lineage metadata that distinguishes extracted table identity from XML table identity"
+    ]
+  },
   "companion_strategy_metadata": {
     "description": "Strategy metadata may be emitted alongside the validated result to explain which extractor configuration was selected.",
     "fields": [
@@ -104,6 +128,29 @@
       "extractor_options",
       "runtime_mode",
       "runtime_notes"
+    ]
+  },
+  "review_workspace_payload": {
+    "description": "The ingestion response may expose a transitional lineage payload to support UI review workspaces before the first-class candidate runtime is fully implemented.",
+    "fields": [
+      "lineage.xml_nodes",
+      "lineage.pdf_fragments",
+      "lineage.alignments",
+      "lineage.canonical_snippets"
+    ],
+    "ui_behavior_notes": [
+      "the UI may show in-flight validation progress while awaiting the response",
+      "temporary progress feedback is not a validation-status outcome",
+      "storage-safe document family identifiers must remain deterministic for the same PDF/XML pair"
+    ]
+  },
+  "candidate_stage_contract": {
+    "mandatory": true,
+    "entry_requirement": "Validated PDF and XML alignment evidence may only authorize candidate extraction, not direct canonical snippet creation.",
+    "snippet_promotion_rule": "Canonical snippets must originate from validated candidates.",
+    "future_schema_direction": [
+      "explicit candidate-stage gate fields",
+      "candidate promotion evidence in validation or lineage payloads"
     ]
   }
 }

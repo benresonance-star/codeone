@@ -4,6 +4,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from difflib import SequenceMatcher
+import hashlib
 from typing import Any
 import re
 import xml.etree.ElementTree as ET
@@ -41,6 +42,9 @@ def average(values: list[float]) -> float:
     if not values:
         return 0.0
     return round(sum(values) / len(values), 3)
+
+
+MAX_DOCUMENT_FAMILY_ID_LENGTH = 80
 
 
 @dataclass
@@ -91,6 +95,9 @@ class IngestionService:
         )
         pdf_context = self._validate_pdf(pdf_bytes, pdf_name, xml_context, strategy)
         document_family_id = self._build_document_family_id(pdf_name=pdf_name, xml_name=xml_name)
+        # Transitional shortcut: snippets are still built directly from aligned
+        # fragments. The first-class Candidate layer spec requires replacing
+        # this with candidate extraction, candidate validation, and promotion.
         canonical_snippets = self._build_canonical_snippets(
             can_progress=bool(pdf_context["result"]["gate_decision"]["can_progress_to_semantic_layer"]),
             fragments=pdf_context["fragments"],
@@ -583,17 +590,17 @@ class IngestionService:
             rows_extracted = len(table.rows or [])
             table_confidence = 0.99 if rows_extracted > 0 else 0.0
             related_node = table.related_block_id
-            table_validation.append(
-                {
-                    "table_id": table.table_id,
-                    "node_id": related_node,
-                    "related_xml_node": related_node,
-                    "status": "PASS" if rows_extracted > 0 else "FAIL",
-                    "rows_expected": rows_extracted,
-                    "rows_extracted": rows_extracted,
-                    "confidence": round(table_confidence, 3),
-                }
-            )
+            validation_entry = {
+                "table_id": table.table_id,
+                "status": "PASS" if rows_extracted > 0 else "FAIL",
+                "rows_expected": rows_extracted,
+                "rows_extracted": rows_extracted,
+                "confidence": round(table_confidence, 3),
+            }
+            if related_node:
+                validation_entry["node_id"] = related_node
+                validation_entry["related_xml_node"] = related_node
+            table_validation.append(validation_entry)
 
         alignment_avg = average([item["confidence"] for item in aligned]) if aligned else 0.0
         missing_bbox = len([block for block in extracted.blocks if len(block.bbox) != 4])
@@ -1194,14 +1201,26 @@ class IngestionService:
     def _build_document_family_id(self, *, pdf_name: str, xml_name: str) -> str:
         pdf_stem = re.sub(r"\.pdf$", "", pdf_name, flags=re.IGNORECASE)
         xml_stem = re.sub(r"\.xml$", "", xml_name, flags=re.IGNORECASE)
+        pdf_slug = self._slugify(pdf_stem)
+        xml_slug = self._slugify(xml_stem)
         common_tokens = [
             token
-            for token in self._slugify(pdf_stem).split("_")
-            if token and token in self._slugify(xml_stem).split("_")
+            for token in pdf_slug.split("_")
+            if token and token in xml_slug.split("_")
         ]
         if common_tokens:
-            return "_".join(common_tokens[:8])
-        return f"{self._slugify(pdf_stem)}__{self._slugify(xml_stem)}"
+            candidate = "_".join(common_tokens[:8])
+        else:
+            candidate = f"{pdf_slug}__{xml_slug}"
+        return self._bounded_document_family_id(candidate)
+
+    def _bounded_document_family_id(self, candidate: str) -> str:
+        if len(candidate) <= MAX_DOCUMENT_FAMILY_ID_LENGTH:
+            return candidate
+        digest = hashlib.sha1(candidate.encode("utf-8")).hexdigest()[:12]
+        prefix_length = MAX_DOCUMENT_FAMILY_ID_LENGTH - len(digest) - 1
+        prefix = candidate[:prefix_length].rstrip("_") or "document_family"
+        return f"{prefix}_{digest}"
 
     def _build_canonical_snippets(
         self,

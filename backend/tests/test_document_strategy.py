@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 from types import SimpleNamespace
 
+from app.models.document_strategy import ExtractedPdf, ExtractedTable, StructuredBlock
 from app.services.document_strategy import DocumentStrategyRouter
 from app.services.ingestion import IngestionService, PdfFragment, XmlNode
 from app.services.extractors.docling_stub import DoclingExtractor
@@ -110,6 +111,66 @@ class ParityScaffoldTests(unittest.TestCase):
                 alignment_avg=0.97,
             )
         )
+
+    def test_validate_pdf_omits_unmapped_table_link_fields(self) -> None:
+        extracted = ExtractedPdf(
+            pages_processed=1,
+            total_words=3,
+            blocks=[
+                StructuredBlock(
+                    block_id="docling_1_1",
+                    page=1,
+                    bbox=[0.0, 0.0, 1.0, 1.0],
+                    block_type="paragraph",
+                    text="Sample clause text",
+                    source_strategy="docling",
+                )
+            ],
+            tables=[
+                ExtractedTable(
+                    table_id="docling_tbl_1",
+                    rows=[["A", "B"]],
+                    headers_present=True,
+                    related_block_id=None,
+                    bbox=[0.0, 0.0, 1.0, 1.0],
+                    metadata={"num_rows": 1, "num_cols": 2},
+                )
+            ],
+            strategy_name="docling",
+            runtime_mode="native_tables_text",
+        )
+        xml_context = {
+            "result": {
+                "gate_decision": {"can_progress_to_alignment_layer": False},
+                "document": {"doc_id": "benchmark_xml"},
+            },
+            "xml_nodes": [],
+        }
+        self.service._extract_pdf = lambda pdf_bytes, strategy: extracted  # type: ignore[method-assign]
+
+        result = self.service._validate_pdf(b"pdf", "benchmark.pdf", xml_context, self.strategy)
+
+        table_entry = result["result"]["table_validation"][0]
+        self.assertNotIn("node_id", table_entry)
+        self.assertNotIn("related_xml_node", table_entry)
+
+    def test_document_family_id_is_bounded_for_long_file_names(self) -> None:
+        family_id = self.service._build_document_family_id(
+            pdf_name="NCC 2022 - Vol 1 - Parts J2 and J3 - Energy Efficiency.pdf",
+            xml_name="table-J3D11a-maximum-conductance-to-solar-heat-gain-ratio.xml",
+        )
+
+        self.assertLessEqual(len(family_id), 80)
+        self.assertTrue(family_id.startswith("ncc_2022_vol_1_parts_j2_and_j3_energy_efficiency"))
+
+    def test_document_family_id_bounding_is_deterministic(self) -> None:
+        pdf_name = "NCC 2022 - Vol 1 - Parts J2 and J3 - Energy Efficiency.pdf"
+        xml_name = "table-J3D11a-maximum-conductance-to-solar-heat-gain-ratio.xml"
+
+        first = self.service._build_document_family_id(pdf_name=pdf_name, xml_name=xml_name)
+        second = self.service._build_document_family_id(pdf_name=pdf_name, xml_name=xml_name)
+
+        self.assertEqual(first, second)
 
 
 class DoclingExtractorTests(unittest.TestCase):

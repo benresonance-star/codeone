@@ -1,6 +1,6 @@
 # PDF Ingestion Validation Contract
 ## NCC PDF Ingestion Constraint Manual
-### Version 1.2.0
+### Version 1.4.0
 
 ---
 
@@ -31,9 +31,9 @@ The PDF must therefore be suitable for:
 - visible table capture
 - metadata traceability
 - reliable XML relationship mapping
-- downstream semantic progression
+- downstream candidate extraction and later semantic progression
 
-If PDF validation fails, the system must stop before semantic compilation.
+If PDF validation fails, the system must stop before candidate extraction and semantic compilation.
 
 PDF extraction may be strategy-driven rather than globally uniform.
 The ingestion system may select different extractor modes for different NCC document classes or section families when that improves structural fidelity without changing the validation contract itself.
@@ -46,14 +46,18 @@ The PDF validation result must use these meanings consistently:
 
 - `PASS`: all blocking rules pass and no warnings remain
 - `PASS_WITH_WARNINGS`: all blocking rules pass and only bounded warning outcomes remain
-- `REVIEW_REQUIRED`: the PDF output requires review before semantic progression
+- `REVIEW_REQUIRED`: the PDF output requires review before candidate extraction and semantic progression
 - `FAIL`: validation completed but the PDF output did not satisfy contract requirements
-- `BLOCKED`: one or more blocking rules prevent progression to the semantic layer
+- `BLOCKED`: one or more blocking rules prevent progression to the candidate and semantic layers
 
 For PDF validation:
-- `PASS` and `PASS_WITH_WARNINGS` may allow progression to the semantic layer
+- `PASS` and `PASS_WITH_WARNINGS` may allow progression to the candidate extraction layer
 - `REVIEW_REQUIRED` must not progress automatically
 - `FAIL` and `BLOCKED` must not progress
+
+Schema compatibility note:
+- the current result schema still uses `can_progress_to_semantic_layer`
+- until a dedicated candidate-stage gate field is introduced, that field should be interpreted as permission to enter the candidate stage, not permission to create canonical snippets directly
 
 ---
 
@@ -77,6 +81,7 @@ Operational assumptions:
 - Docling text-first mode remains the default baseline unless a strategy explicitly selects a stronger mode
 - table-heavy PDFs may enable Docling table-structure mode when benchmark evidence shows materially better table recovery
 - extractor-mode changes must not weaken blocking rules for structure, alignment, metadata, or quality
+- persisted `document_family_id` values must remain deterministic and storage-safe even when paired PDF and XML names are long
 
 ---
 
@@ -138,6 +143,11 @@ Extracted tables must preserve enough structure for downstream use:
 
 The extraction system may change runtime mode to improve table fidelity, but the output still counts as invalid if rows are empty, headers are unusable where required, or table structure cannot support downstream parity and review.
 
+Current linkage behavior:
+- extracted tables must still appear in `table_validation` even when no XML-side table node has been linked yet
+- when no XML table link exists, XML linkage fields should be omitted rather than populated with null placeholders
+- absence of a table link does not by itself imply that table extraction failed; it means table-to-XML mapping is not yet explicit for that artifact
+
 Outcome:
 - block progression if extracted tables are structurally unusable
 
@@ -146,6 +156,7 @@ Outcome:
 PDF fragments must align to the paired XML representation with sufficient confidence.
 
 The XML side must already be allowed to progress to the alignment layer before the PDF side can claim a trustworthy alignment result.
+Successful alignment opens the path to candidate extraction; it does not authorize direct canonical snippet generation.
 
 Outcome:
 - `PASS` when the XML gate is open, unresolved alignments are `0`, low-confidence alignments are `0`, and average alignment confidence is at least `0.95`
@@ -195,6 +206,34 @@ Companion ingestion metadata may additionally surface:
 - extractor strategy
 - extractor options such as Docling runtime mode
 - runtime notes explaining whether text-first or table-aware extraction was used
+- candidate-stage readiness notes while the schema remains backward-compatible
+
+Companion ingestion responses may additionally surface a transitional review payload for UI review workspaces, including:
+- `lineage.xml_nodes`
+- `lineage.pdf_fragments`
+- `lineage.alignments`
+- `lineage.canonical_snippets`
+
+Current-state expectation for lineage-oriented review payloads:
+- the review payload exists to support candidate review and traceability before the first-class candidate runtime is fully implemented
+- `document_family_id` may be truncated and suffixed with a deterministic hash when needed to stay within persistence limits
+- storage-safe identifier shortening must not make the family identifier nondeterministic for the same PDF/XML pair
+
+Current-state expectation for UI validation feedback:
+- the UI may show in-flight validation progress, selected file names, elapsed time, and request-cancel affordances while the backend request is still running
+- temporary progress feedback is operational UI state, not a contract-level validation outcome
+
+Current-state expectation for `table_validation`:
+- `table_id`, extraction counts, status, and confidence are required for emitted table entries
+- `node_id` and `related_xml_node` are optional and should only be emitted when a concrete XML-side linkage exists
+
+Future robust implementations to plan for:
+- deterministic table-to-XML node linkage for extracted tables
+- explicit table mapping states such as linked, unlinked, ambiguous, or review-required
+- XML bundle support where a single PDF section corresponds to multiple XML files
+- stronger lineage metadata that distinguishes extracted table identity from XML table identity
+- explicit candidate-stage gate fields in the validation schema
+- candidate promotion evidence that records which validated candidates produced canonical snippets
 
 ---
 
@@ -212,6 +251,8 @@ This contract must be:
 # Final rule
 
 If PDF validation fails, the PDF must not progress to:
+- candidate extraction
+- candidate validation
 - semantic compilation
 - canonical snippet generation
 - downstream compliance evaluation

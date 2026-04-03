@@ -176,9 +176,9 @@ Outcome:
 - `REVIEW_REQUIRED` when table structure issues are greater than `0` and less than or equal to `1`
 - `BLOCKED` when table structure issues are greater than `1`
 
-## X9 — Snippet readiness
+## X9 — Candidate-backed snippet readiness
 
-The XML must be sufficiently structured for downstream canonical snippet generation.
+The XML must be sufficiently structured for downstream candidate extraction and candidate-backed canonical snippet generation.
 This means the XML must preserve:
 - stable clause identity
 - hierarchical position
@@ -189,6 +189,10 @@ This means the XML must preserve:
 
 Outcome:
 - block progression if snippet readiness or traceability completeness fails
+
+Schema compatibility note:
+- the current rule name remains `X9_SNIPPET_READINESS` for compatibility
+- this should be interpreted as readiness for candidate extraction and later validated promotion into snippets, not direct snippet creation from XML alone
 
 ## X10 — Quality threshold
 
@@ -234,6 +238,8 @@ This contract must be:
 
 If XML validation fails, the XML must not progress to:
 - alignment
+- candidate extraction
+- candidate validation
 - semantic compilation
 - snippet generation
 

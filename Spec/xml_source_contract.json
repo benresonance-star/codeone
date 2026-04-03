@@ -1,14 +1,14 @@
 {
   "contract_id": "xml_source_v1",
-  "contract_version": "1.1.0",
-  "description": "Deterministic validation contract for NCC XML source ingestion.",
+  "contract_version": "1.2.0",
+  "description": "Deterministic validation contract for NCC XML source ingestion with candidate-backed semantic promotion.",
   "representation_model": {
     "primary_representation": "xml",
     "paired_representation": "pdf",
     "relationship": "same_ncc_content_different_form",
     "xml_role": "structural_authority",
     "pdf_role": "rendered_spatial_authority",
-    "alignment_dependency": "XML must pass its gate before XML-to-PDF alignment can be trusted downstream."
+    "alignment_dependency": "XML must pass its gate before XML-to-PDF alignment and downstream candidate extraction can be trusted."
   },
   "thresholds": {
     "expected_root_elements": [
@@ -27,7 +27,7 @@
     "PASS_WITH_WARNINGS": "All blocking rules pass and one or more warning outcomes are triggered.",
     "REVIEW_REQUIRED": "No blocking rule is triggered, but one or more review-required outcomes must be resolved before alignment progression.",
     "FAIL": "Validation completed and the source did not satisfy contract requirements.",
-    "BLOCKED": "A blocking rule prevents progression to alignment and later semantic stages."
+    "BLOCKED": "A blocking rule prevents progression to alignment, candidate, and later semantic stages."
   },
   "rules": [
     {
@@ -100,7 +100,7 @@
     },
     {
       "rule_id": "X9_SNIPPET_READINESS",
-      "description": "XML must be suitable for canonical snippet generation by preserving stable clause identity, hierarchy, node content, references, and traceability metadata needed for later PDF relationships.",
+      "description": "XML must be suitable for candidate extraction and later candidate-backed snippet promotion by preserving stable clause identity, hierarchy, node content, references, and traceability metadata needed for later PDF relationships.",
       "severity": "blocking",
       "pass_when": "xml.snippet_readiness == true AND xml.traceability_metadata_complete == true",
       "block_when": "xml.snippet_readiness != true OR xml.traceability_metadata_complete != true",
@@ -114,5 +114,11 @@
       "block_when": "xml.quality_score < thresholds.min_quality_score",
       "error_code": "EXECUTION_BLOCKED"
     }
-  ]
+  ],
+  "candidate_stage_contract": {
+    "mandatory": true,
+    "entry_requirement": "Validated XML may participate in candidate extraction only after alignment prerequisites are satisfied.",
+    "snippet_promotion_rule": "Canonical snippets must be promoted from validated candidates rather than generated directly from XML structure.",
+    "compatibility_note": "The legacy rule identifier X9_SNIPPET_READINESS is retained for compatibility while candidate-stage semantics become normative."
+  }
 }

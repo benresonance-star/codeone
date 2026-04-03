@@ -106,6 +106,7 @@
     },
     "gate_decision": {
       "type": "object",
+      "description": "Entry gate for alignment compatibility. This schema keeps existing field names while candidate-stage semantics are documented in the higher-level contracts.",
       "additionalProperties": false,
       "required": [
         "can_progress_to_alignment_layer",
@@ -113,7 +114,8 @@
       ],
       "properties": {
         "can_progress_to_alignment_layer": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "When true, the XML may enter alignment processing. This does not by itself authorize candidate extraction, semantic promotion, or direct snippet creation."
         },
         "blocked": {
           "type": "boolean"
