@@ -112,6 +112,11 @@ class RetentionService:
             pdf_document.id,
             document_strategy=payload["summary"].get("document_strategy", {}),
             parity_scaffold=lineage.get("parity_scaffold", {}),
+            candidate_runtime={
+                "xml_semantic_units": lineage.get("xml_semantic_units", []),
+                "pdf_evidence_packets": lineage.get("pdf_evidence_packets", []),
+                "candidate_objects": lineage.get("candidate_objects", []),
+            },
         )
 
         session.flush()
@@ -166,28 +171,45 @@ class RetentionService:
 
         fragments = self._load_fragments(session, run_id)
         alignments = self._load_alignments(session, run_id, fragments)
-        canonical_snippet_records = self._load_canonical_snippet_records(session, run_id)
-        canonical_snippets = ingestion_service._build_canonical_snippets(
-            can_progress=bool(canonical_snippet_records),
-            fragments=fragments,
-            alignments=alignments,
-        )
 
         evaluation_payload = self._evaluation_payload(session, run_id)
         parity_scaffold = evaluation_payload.get("parity_scaffold", {}) if isinstance(evaluation_payload, dict) else {}
         document_strategy = (
             evaluation_payload.get("document_strategy", {}) if isinstance(evaluation_payload, dict) else {}
         )
+        candidate_runtime = (
+            evaluation_payload.get("candidate_runtime", {}) if isinstance(evaluation_payload, dict) else {}
+        )
+        semantic_units = candidate_runtime.get("xml_semantic_units") or xml_context.get("semantic_units") or []
 
         pdf_tables = self._table_payloads(session, run_id, "pdf")
         xml_tables = self._table_payloads(session, run_id, "xml")
+        pdf_evidence_packets = candidate_runtime.get("pdf_evidence_packets") or ingestion_service._build_pdf_evidence_packets(
+            semantic_units=semantic_units,
+            fragments=fragments,
+            structured_blocks=[],
+            alignments=alignments,
+            xml_validation=xml_validation,
+            pdf_validation=pdf_validation,
+        )
+        candidate_objects = candidate_runtime.get("candidate_objects") or ingestion_service._build_candidate_objects(
+            semantic_units=semantic_units,
+            pdf_evidence_packets=pdf_evidence_packets,
+        )
+        canonical_snippet_records = self._load_canonical_snippet_records(session, run_id)
+        canonical_snippets = ingestion_service._build_canonical_snippets(
+            can_progress=bool(canonical_snippet_records),
+            candidates=candidate_objects,
+        )
         review_workspace = ingestion_service._build_review_workspace(
             pdf_name=pdf_document.file_name,
             xml_name=xml_document.file_name,
             xml_nodes=xml_context["xml_nodes"],
+            semantic_units=semantic_units,
             fragments=fragments,
             structured_blocks=[],
             alignments=alignments,
+            candidates=candidate_objects,
             canonical_snippets=canonical_snippets,
             xml_validation=xml_validation,
             pdf_validation=pdf_validation,
@@ -220,10 +242,13 @@ class RetentionService:
             "lineage": {
                 "document_family_id": run.document_family_id,
                 "xml_nodes": [self._serialize_xml_node(node) for node in xml_context["xml_nodes"]],
+                "xml_semantic_units": semantic_units,
                 "pdf_fragments": [self._serialize_fragment(fragment) for fragment in fragments],
                 "structured_blocks": [],
                 "alignments": alignments,
                 "parity_scaffold": parity_scaffold if isinstance(parity_scaffold, dict) else {},
+                "pdf_evidence_packets": pdf_evidence_packets,
+                "candidate_objects": candidate_objects,
                 "canonical_snippets": canonical_snippets,
                 "pdf_tables": pdf_tables,
                 "xml_tables": xml_tables,
@@ -581,6 +606,7 @@ class RetentionService:
         *,
         document_strategy: dict[str, Any],
         parity_scaffold: dict[str, Any],
+        candidate_runtime: dict[str, Any],
     ) -> None:
         session.add(
             EvaluationRecord(
@@ -591,6 +617,7 @@ class RetentionService:
                     "state": "pending",
                     "document_strategy": document_strategy,
                     "parity_scaffold": parity_scaffold,
+                    "candidate_runtime": candidate_runtime,
                 },
                 created_at=now_utc(),
             )
@@ -604,6 +631,10 @@ class RetentionService:
                     "state": "pending",
                     "document_strategy": document_strategy,
                     "parity_scaffold_summary": parity_scaffold.get("summary", {}),
+                    "candidate_runtime_summary": {
+                        "semantic_units": len(candidate_runtime.get("xml_semantic_units", [])),
+                        "candidate_objects": len(candidate_runtime.get("candidate_objects", [])),
+                    },
                 },
                 created_at=now_utc(),
             )

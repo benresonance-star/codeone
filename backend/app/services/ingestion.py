@@ -99,21 +99,32 @@ class IngestionService:
         )
         pdf_context = self._validate_pdf(pdf_bytes, pdf_name, xml_context, strategy)
         document_family_id = self._build_document_family_id(pdf_name=pdf_name, xml_name=xml_name)
-        # Transitional shortcut: snippets are still built directly from aligned
-        # fragments. The first-class Candidate layer spec requires replacing
-        # this with candidate extraction, candidate validation, and promotion.
+        semantic_units = xml_context["semantic_units"]
+        pdf_evidence_packets = self._build_pdf_evidence_packets(
+            semantic_units=semantic_units,
+            fragments=pdf_context["fragments"],
+            structured_blocks=pdf_context["structured_blocks"],
+            alignments=pdf_context["alignments"],
+            xml_validation=xml_context["result"],
+            pdf_validation=pdf_context["result"],
+        )
+        candidate_objects = self._build_candidate_objects(
+            semantic_units=semantic_units,
+            pdf_evidence_packets=pdf_evidence_packets,
+        )
         canonical_snippets = self._build_canonical_snippets(
             can_progress=bool(pdf_context["result"]["gate_decision"]["can_progress_to_semantic_layer"]),
-            fragments=pdf_context["fragments"],
-            alignments=pdf_context["alignments"],
+            candidates=candidate_objects,
         )
         review_workspace = self._build_review_workspace(
             pdf_name=pdf_name,
             xml_name=xml_name,
             xml_nodes=xml_context["xml_nodes"],
+            semantic_units=semantic_units,
             fragments=pdf_context["fragments"],
             structured_blocks=pdf_context["structured_blocks"],
             alignments=pdf_context["alignments"],
+            candidates=candidate_objects,
             canonical_snippets=canonical_snippets,
             xml_validation=xml_context["result"],
             pdf_validation=pdf_context["result"],
@@ -141,10 +152,13 @@ class IngestionService:
             "lineage": {
                 "document_family_id": document_family_id,
                 "xml_nodes": xml_context["xml_nodes"],
+                "xml_semantic_units": semantic_units,
                 "pdf_fragments": pdf_context["fragments"],
                 "structured_blocks": pdf_context["structured_blocks"],
                 "alignments": pdf_context["alignments"],
                 "parity_scaffold": pdf_context["parity_scaffold"],
+                "pdf_evidence_packets": pdf_evidence_packets,
+                "candidate_objects": candidate_objects,
                 "canonical_snippets": canonical_snippets,
                 "pdf_tables": pdf_context["result"].get("table_validation", []),
                 "xml_tables": xml_context["result"].get("table_validation", []),
@@ -178,6 +192,7 @@ class IngestionService:
         }
 
         xml_nodes: list[XmlNode] = []
+        semantic_units: list[dict[str, Any]] = []
         trace_sample: list[dict[str, Any]] = []
 
         try:
@@ -215,7 +230,7 @@ class IngestionService:
                 reason="XML is not well formed.",
             )
             validate_payload("xml_result_schema", result)
-            return {"result": result, "metrics": metrics, "xml_nodes": xml_nodes}
+            return {"result": result, "metrics": metrics, "xml_nodes": xml_nodes, "semantic_units": semantic_units}
 
         all_elements = list(root.iter())
         metrics["nodes_processed"] = len(all_elements)
@@ -251,8 +266,23 @@ class IngestionService:
                     if target:
                         references.append(target)
 
+            node_path = self._element_path(element)
+
+            semantic_node_id = self._semantic_node_id(
+                element=element,
+                fallback_path=node_path,
+                text=text_value,
+            )
+            if semantic_node_id:
+                semantic_unit = self._semantic_unit_from_parts(
+                    node_id=semantic_node_id,
+                    path=node_path,
+                    text=text_value,
+                )
+                if semantic_unit is not None:
+                    semantic_units.append(semantic_unit)
+
             if element_id and len(text_value) >= 20:
-                node_path = self._element_path(element)
                 xml_nodes.append(
                     XmlNode(
                         node_id=element_id,
@@ -273,6 +303,8 @@ class IngestionService:
                     )
 
         xml_nodes.extend(self._table_row_xml_nodes(root))
+        semantic_units.extend(self._semantic_units_from_xml_nodes(xml_nodes))
+        semantic_units = list({unit["unit_id"]: unit for unit in semantic_units}.values())
 
         metrics["duplicate_ids"] = sum(count - 1 for count in id_counts.values() if count > 1)
         metrics["empty_required_nodes"] = empty_required_nodes
@@ -560,7 +592,12 @@ class IngestionService:
             trace_sample=trace_sample,
         )
         validate_payload("xml_result_schema", result)
-        return {"result": result, "metrics": metrics, "xml_nodes": xml_nodes}
+        return {
+            "result": result,
+            "metrics": metrics,
+            "xml_nodes": xml_nodes,
+            "semantic_units": semantic_units,
+        }
 
     def _validate_pdf(
         self,
@@ -1536,9 +1573,11 @@ class IngestionService:
         pdf_name: str,
         xml_name: str,
         xml_nodes: list[XmlNode],
+        semantic_units: list[dict[str, Any]] | None = None,
         fragments: list[PdfFragment],
         structured_blocks: list[dict[str, Any]] | None = None,
         alignments: list[dict[str, Any]],
+        candidates: list[dict[str, Any]] | None = None,
         canonical_snippets: list[dict[str, Any]],
         xml_validation: dict[str, Any],
         pdf_validation: dict[str, Any],
@@ -1561,16 +1600,35 @@ class IngestionService:
             for snippet in canonical_snippets
             if snippet.get("fragment_id") in review_fragment_ids
         ]
-        review_units = self._build_review_units(
-            xml_nodes=review_xml_nodes,
-            fragments=review_fragments,
-            structured_blocks=structured_blocks,
-            alignments=review_alignments,
-            canonical_snippets=review_snippets,
-            xml_validation=xml_validation,
-            pdf_validation=pdf_validation,
+        semantic_units = semantic_units or self._semantic_units_from_xml_nodes(xml_nodes)
+        candidate_objects = candidates or self._build_candidate_objects(
+            semantic_units=semantic_units,
+            pdf_evidence_packets=self._build_pdf_evidence_packets(
+                semantic_units=semantic_units,
+                fragments=fragments,
+                structured_blocks=structured_blocks,
+                alignments=alignments,
+                xml_validation=xml_validation,
+                pdf_validation=pdf_validation,
+            ),
         )
-        candidate_total = len(alignments)
+        if workspace_mode == "focused":
+            review_candidates = [
+                candidate
+                for candidate in candidate_objects
+                if candidate.get("xml_node_id") in review_node_ids
+                or any(
+                    evidence.get("fragment_id") in review_fragment_ids
+                    for evidence in (candidate.get("evidence") or [])
+                )
+            ]
+        else:
+            review_candidates = candidate_objects
+        review_units = self._build_review_units(
+            candidates=review_candidates,
+            canonical_snippets=review_snippets,
+        )
+        candidate_total = len(candidate_objects)
         candidate_surfaced = len(review_units)
         candidate_needs_review = len(
             [unit for unit in review_units if unit.get("needs_human_review")]
@@ -1580,8 +1638,10 @@ class IngestionService:
             "mode": workspace_mode,
             "reason": workspace_reason,
             "xml_nodes": review_xml_nodes,
+            "xml_semantic_units": semantic_units,
             "pdf_fragments": review_fragments,
             "alignments": review_alignments,
+            "candidates": review_candidates,
             "canonical_snippets": review_snippets,
             "review_units": review_units,
             "alignment_total": len(alignments),
@@ -1641,107 +1701,48 @@ class IngestionService:
     def _build_review_units(
         self,
         *,
-        xml_nodes: list[XmlNode],
-        fragments: list[PdfFragment],
-        structured_blocks: list[dict[str, Any]] | None,
-        alignments: list[dict[str, Any]],
+        candidates: list[dict[str, Any]],
         canonical_snippets: list[dict[str, Any]],
-        xml_validation: dict[str, Any],
-        pdf_validation: dict[str, Any],
     ) -> list[dict[str, Any]]:
-        xml_by_id = {node.node_id: node for node in xml_nodes}
-        fragment_by_id = {fragment.fragment_id: fragment for fragment in fragments}
-        block_by_id = {
-            str(block.get("block_id")): block
-            for block in (structured_blocks or [])
-            if isinstance(block, dict) and block.get("block_id")
-        }
-        approved_pairs = {
-            (str(snippet.get("fragment_id")), str(snippet.get("clause_id")))
+        approved_candidate_ids = {
+            str(snippet.get("candidate_id"))
             for snippet in canonical_snippets
-            if snippet.get("fragment_id") and snippet.get("clause_id")
+            if snippet.get("candidate_id")
         }
-        linked_issues = self._linked_review_issue_keys(xml_validation, pdf_validation)
 
         review_units: list[dict[str, Any]] = []
-        for alignment in alignments:
-            fragment_id = str(alignment.get("fragment_id") or "")
-            fragment = fragment_by_id.get(fragment_id)
-            if fragment is None:
-                continue
-
-            node_id = str(alignment.get("node_id") or "") or None
-            node = xml_by_id.get(node_id) if node_id else None
-            xml_text = node.text if node else ""
-            pdf_text = fragment.text
-            xml_structural_class = self._xml_structural_class(node.path if node else "", xml_text)
-            pdf_evidence_class = self._pdf_evidence_class(fragment, block_by_id.get(fragment.fragment_id))
-            candidate_semantic_class = self._candidate_semantic_class(
-                xml_structural_class=xml_structural_class,
-                pdf_evidence_class=pdf_evidence_class,
-                alignment=alignment,
-            )
-            raw_xml_only_terms, raw_pdf_only_terms = self._review_term_deltas(xml_text, pdf_text)
-            xml_only_terms, pdf_only_terms, ignored_structural_terms = self._effective_review_term_deltas(
-                xml_only_terms=raw_xml_only_terms,
-                pdf_only_terms=raw_pdf_only_terms,
-                candidate_semantic_class=candidate_semantic_class,
-            )
-            has_linked_issue = f"fragment:{fragment.fragment_id}" in linked_issues or (
-                bool(node_id) and f"node:{node_id}" in linked_issues
-            )
-            approved = bool(node_id and (fragment.fragment_id, node_id) in approved_pairs)
-            issues = self._build_review_issues(
-                alignment=alignment,
-                xml_only_terms=xml_only_terms,
-                pdf_only_terms=pdf_only_terms,
-                linked_issue=has_linked_issue,
-            )
-            review_issue_class = self._review_issue_class(
-                alignment=alignment,
-                linked_issue=has_linked_issue,
-                xml_only_terms=xml_only_terms,
-                pdf_only_terms=pdf_only_terms,
-            )
-            review_source_emphasis = self._review_source_emphasis(
-                xml_only_terms=xml_only_terms,
-                pdf_only_terms=pdf_only_terms,
-            )
-            base_status = self._derive_review_base_status(
-                alignment=alignment,
-                issues=issues,
-                approved=approved,
-                candidate_semantic_class=candidate_semantic_class,
-            )
-            needs_human_review = base_status in {"review required", "mismatch", "paused", "ambiguous"}
-
+        for candidate in candidates:
+            evidence = candidate.get("evidence") or []
+            primary_evidence = evidence[0] if evidence else {}
+            approved = candidate.get("candidate_id") in approved_candidate_ids
+            base_status = "approved" if approved else str(candidate.get("review", {}).get("base_status") or "review required")
             review_units.append(
                 {
-                    "candidate_id": f"candidate:{fragment.fragment_id}",
-                    "title": self._review_title(xml_text, pdf_text, fragment.fragment_id),
-                    "candidate_type": candidate_semantic_class,
-                    "xml_structural_class": xml_structural_class,
-                    "pdf_evidence_class": pdf_evidence_class,
-                    "candidate_semantic_class": candidate_semantic_class,
-                    "confidence": float(alignment.get("confidence", 0.0)),
+                    "candidate_id": candidate.get("candidate_id"),
+                    "title": candidate.get("title"),
+                    "candidate_type": candidate.get("candidate_type"),
+                    "xml_structural_class": candidate.get("xml_structural_class"),
+                    "pdf_evidence_class": primary_evidence.get("pdf_evidence_class", "unknown"),
+                    "candidate_semantic_class": candidate.get("candidate_semantic_class"),
+                    "confidence": float(candidate.get("confidence", {}).get("overall", 0.0)),
                     "base_status": base_status,
-                    "needs_human_review": needs_human_review,
-                    "review_issue_class": review_issue_class,
-                    "review_source_emphasis": review_source_emphasis,
-                    "matched": bool(alignment.get("matched")),
-                    "page": alignment.get("page", fragment.page),
-                    "fragment_id": fragment.fragment_id,
-                    "node_id": node_id,
-                    "xml_path": node.path if node else "No XML node linked yet",
-                    "xml_text": xml_text,
-                    "pdf_text": pdf_text,
-                    "bbox": alignment.get("bbox", fragment.bbox),
-                    "issues": issues,
-                    "xml_only_terms": xml_only_terms,
-                    "pdf_only_terms": pdf_only_terms,
-                    "raw_xml_only_terms": raw_xml_only_terms,
-                    "raw_pdf_only_terms": raw_pdf_only_terms,
-                    "ignored_structural_terms": ignored_structural_terms,
+                    "needs_human_review": bool(candidate.get("review", {}).get("needs_human_review", False)) and not approved,
+                    "review_issue_class": candidate.get("review", {}).get("issue_class", "clean_match"),
+                    "review_source_emphasis": candidate.get("review", {}).get("source_emphasis", "balanced"),
+                    "matched": bool(evidence),
+                    "page": primary_evidence.get("page"),
+                    "fragment_id": primary_evidence.get("fragment_id") or f"xml_only:{candidate.get('xml_node_id')}",
+                    "node_id": candidate.get("xml_node_id"),
+                    "xml_path": candidate.get("xml_path", "No XML node linked yet"),
+                    "xml_text": candidate.get("xml_text", ""),
+                    "pdf_text": primary_evidence.get("text", ""),
+                    "bbox": primary_evidence.get("bbox", []),
+                    "issues": candidate.get("review", {}).get("issues", []),
+                    "xml_only_terms": candidate.get("review", {}).get("xml_only_terms", []),
+                    "pdf_only_terms": candidate.get("review", {}).get("pdf_only_terms", []),
+                    "raw_xml_only_terms": candidate.get("review", {}).get("raw_xml_only_terms", []),
+                    "raw_pdf_only_terms": candidate.get("review", {}).get("raw_pdf_only_terms", []),
+                    "ignored_structural_terms": candidate.get("review", {}).get("ignored_structural_terms", []),
                 }
             )
         return review_units
@@ -1803,6 +1804,217 @@ class IngestionService:
             if node_id:
                 linked_issues.add(f"node:{node_id}")
         return linked_issues
+
+    def _semantic_unit_from_parts(
+        self,
+        *,
+        node_id: str,
+        path: str,
+        text: str,
+    ) -> dict[str, Any] | None:
+        semantic_class = self._xml_structural_class(path, text)
+        min_text_length = 1 if semantic_class in {"title", "context_key"} else 5
+        if semantic_class == "ambiguous" or len(clean_text(text)) < min_text_length:
+            return None
+        return {
+            "unit_id": f"unit:{node_id}",
+            "node_id": node_id,
+            "semantic_class": semantic_class,
+            "title": self._review_title(text, "", node_id),
+            "text": text,
+            "path": path,
+        }
+
+    def _semantic_node_id(
+        self,
+        *,
+        element: ET.Element,
+        fallback_path: str,
+        text: str,
+    ) -> str | None:
+        explicit_id = element.attrib.get("id") or element.attrib.get("{http://www.w3.org/XML/1998/namespace}id")
+        if explicit_id:
+            return explicit_id
+
+        tag_name = element.tag.split("}")[-1].lower()
+        semantic_class = self._xml_structural_class(fallback_path, text)
+        if semantic_class not in {"title", "context_key", "note"}:
+            return None
+
+        digest = hashlib.sha1(fallback_path.encode("utf-8")).hexdigest()[:10]
+        return f"{tag_name}_{digest}"
+
+    def _semantic_units_from_xml_nodes(self, xml_nodes: list[XmlNode]) -> list[dict[str, Any]]:
+        units = [
+            unit
+            for unit in (
+                self._semantic_unit_from_parts(
+                    node_id=node.node_id,
+                    path=node.path,
+                    text=node.text,
+                )
+                for node in xml_nodes
+            )
+            if unit is not None
+        ]
+        return list({unit["unit_id"]: unit for unit in units}.values())
+
+    def _build_pdf_evidence_packets(
+        self,
+        *,
+        semantic_units: list[dict[str, Any]],
+        fragments: list[PdfFragment],
+        structured_blocks: list[dict[str, Any]] | None,
+        alignments: list[dict[str, Any]],
+        xml_validation: dict[str, Any],
+        pdf_validation: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        fragment_by_id = {fragment.fragment_id: fragment for fragment in fragments}
+        block_by_id = {
+            str(block.get("block_id")): block
+            for block in (structured_blocks or [])
+            if isinstance(block, dict) and block.get("block_id")
+        }
+        linked_issues = self._linked_review_issue_keys(xml_validation, pdf_validation)
+        by_node: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for alignment in alignments:
+            node_id = alignment.get("node_id")
+            if alignment.get("matched") and node_id:
+                by_node[str(node_id)].append(alignment)
+
+        packets: list[dict[str, Any]] = []
+        for unit in semantic_units:
+            node_id = str(unit["node_id"])
+            aligned_items = sorted(
+                by_node.get(node_id, []),
+                key=lambda item: (float(item.get("confidence", 0.0)), str(item.get("fragment_id", ""))),
+                reverse=True,
+            )
+            evidence_fragments: list[dict[str, Any]] = []
+            for item in aligned_items:
+                fragment = fragment_by_id.get(str(item.get("fragment_id") or ""))
+                if fragment is None:
+                    continue
+                evidence_fragments.append(
+                    {
+                        "fragment_id": fragment.fragment_id,
+                        "page": item.get("page", fragment.page),
+                        "bbox": item.get("bbox", fragment.bbox),
+                        "text": fragment.text,
+                        "confidence": float(item.get("confidence", 0.0)),
+                        "pdf_evidence_class": self._pdf_evidence_class(fragment, block_by_id.get(fragment.fragment_id)),
+                        "matched": bool(item.get("matched")),
+                    }
+                )
+            linked_issue = f"node:{node_id}" in linked_issues or any(
+                f"fragment:{evidence['fragment_id']}" in linked_issues for evidence in evidence_fragments
+            )
+            packets.append(
+                {
+                    "unit_id": unit["unit_id"],
+                    "node_id": node_id,
+                    "linked_issue": linked_issue,
+                    "evidence_fragments": evidence_fragments,
+                }
+            )
+        return packets
+
+    def _build_candidate_objects(
+        self,
+        *,
+        semantic_units: list[dict[str, Any]],
+        pdf_evidence_packets: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        packet_by_unit_id = {packet["unit_id"]: packet for packet in pdf_evidence_packets}
+        candidates: list[dict[str, Any]] = []
+        for unit in semantic_units:
+            packet = packet_by_unit_id.get(unit["unit_id"], {"evidence_fragments": [], "linked_issue": False})
+            evidence = list(packet.get("evidence_fragments") or [])
+            primary_evidence = evidence[0] if evidence else {}
+            pdf_text = str(primary_evidence.get("text") or "")
+            raw_xml_only_terms, raw_pdf_only_terms = self._review_term_deltas(unit["text"], pdf_text)
+            xml_only_terms, pdf_only_terms, ignored_structural_terms = self._effective_review_term_deltas(
+                xml_only_terms=raw_xml_only_terms,
+                pdf_only_terms=raw_pdf_only_terms,
+                candidate_semantic_class=unit["semantic_class"],
+            )
+            alignment_like = {
+                "matched": bool(primary_evidence),
+                "node_id": unit["node_id"] if primary_evidence else None,
+                "confidence": float(primary_evidence.get("confidence", 0.0)),
+            }
+            issues = self._build_review_issues(
+                alignment=alignment_like,
+                xml_only_terms=xml_only_terms,
+                pdf_only_terms=pdf_only_terms,
+                linked_issue=bool(packet.get("linked_issue")),
+            )
+            review_issue_class = self._review_issue_class(
+                alignment=alignment_like,
+                linked_issue=bool(packet.get("linked_issue")),
+                xml_only_terms=xml_only_terms,
+                pdf_only_terms=pdf_only_terms,
+            )
+            review_source_emphasis = self._review_source_emphasis(
+                xml_only_terms=xml_only_terms,
+                pdf_only_terms=pdf_only_terms,
+            )
+            base_status = self._derive_review_base_status(
+                alignment=alignment_like,
+                issues=issues,
+                approved=False,
+                candidate_semantic_class=unit["semantic_class"],
+            )
+            validation_state = "pass" if base_status == "match" else "requires_review"
+            overall_confidence = float(primary_evidence.get("confidence", 0.0))
+            candidates.append(
+                {
+                    "candidate_id": f"candidate:{unit['unit_id']}",
+                    "semantic_unit_id": unit["unit_id"],
+                    "xml_node_id": unit["node_id"],
+                    "title": unit["title"],
+                    "candidate_type": unit["semantic_class"],
+                    "xml_structural_class": unit["semantic_class"],
+                    "candidate_semantic_class": unit["semantic_class"],
+                    "xml_path": unit["path"],
+                    "xml_text": unit["text"],
+                    "status": "validated" if validation_state == "pass" else "draft",
+                    "validation_state": validation_state,
+                    "confidence": {
+                        "overall": overall_confidence,
+                        "sources": {
+                            "alignment": overall_confidence,
+                            "structure": 1.0 if unit["semantic_class"] != "ambiguous" else 0.0,
+                        },
+                    },
+                    "source": {
+                        "xml_node_id": unit["node_id"],
+                        "pdf_fragment_id": primary_evidence.get("fragment_id"),
+                        "alignment_confidence": overall_confidence,
+                    },
+                    "proposed": {
+                        "snippet_id": f"snippet:{unit['unit_id']}",
+                        "display_name": unit["title"],
+                        "description": unit["text"][:160],
+                        "content": pdf_text or unit["text"],
+                    },
+                    "evidence": evidence,
+                    "review": {
+                        "base_status": base_status,
+                        "needs_human_review": base_status in {"review required", "mismatch", "paused", "ambiguous"},
+                        "issue_class": review_issue_class,
+                        "source_emphasis": review_source_emphasis,
+                        "issues": issues,
+                        "xml_only_terms": xml_only_terms,
+                        "pdf_only_terms": pdf_only_terms,
+                        "raw_xml_only_terms": raw_xml_only_terms,
+                        "raw_pdf_only_terms": raw_pdf_only_terms,
+                        "ignored_structural_terms": ignored_structural_terms,
+                    },
+                    "depends_on": [],
+                }
+            )
+        return candidates
 
     def _review_term_deltas(self, xml_text: str, pdf_text: str) -> tuple[list[str], list[str]]:
         xml_terms = {token for token in normalize_text(xml_text).split() if token}
@@ -1940,26 +2152,26 @@ class IngestionService:
         self,
         *,
         can_progress: bool,
-        fragments: list[PdfFragment],
-        alignments: list[dict[str, Any]],
+        candidates: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
         if not can_progress:
             return []
 
-        fragment_by_id = {fragment.fragment_id: fragment for fragment in fragments}
         snippets: list[dict[str, Any]] = []
-        for alignment in alignments:
-            if not alignment["matched"] or not alignment["node_id"]:
+        for candidate in candidates:
+            if candidate.get("validation_state") != "pass":
                 continue
-            fragment = fragment_by_id.get(alignment["fragment_id"])
-            if not fragment:
+            source = candidate.get("source") or {}
+            fragment_id = source.get("pdf_fragment_id")
+            if not fragment_id or not candidate.get("xml_node_id"):
                 continue
             snippets.append(
                 {
-                    "clause_id": alignment["node_id"],
-                    "fragment_id": fragment.fragment_id,
-                    "content": fragment.text,
-                    "confidence": alignment["confidence"],
+                    "candidate_id": candidate["candidate_id"],
+                    "clause_id": candidate["xml_node_id"],
+                    "fragment_id": fragment_id,
+                    "content": candidate.get("proposed", {}).get("content", ""),
+                    "confidence": float(candidate.get("confidence", {}).get("overall", 0.0)),
                 }
             )
         return snippets

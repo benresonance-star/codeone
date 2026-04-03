@@ -1,6 +1,6 @@
 # PDF Ingestion Validation Contract
 ## NCC PDF Ingestion Constraint Manual
-### Version 1.8.0
+### Version 1.9.0
 
 ---
 
@@ -32,6 +32,13 @@ The PDF must therefore be suitable for:
 - metadata traceability
 - reliable XML relationship mapping
 - downstream candidate extraction and later semantic progression
+
+Current staged runtime model:
+- XML semantic units define the candidate inventory
+- PDF evidence packets are gathered against those XML semantic units
+- candidate objects reconcile XML structure and PDF evidence
+- review units are UI-facing projections of candidate objects
+- canonical snippets may only be promoted from validated candidates
 
 If PDF validation fails, the system must stop before candidate extraction and semantic compilation.
 
@@ -228,17 +235,24 @@ Companion ingestion metadata may additionally surface:
 - runtime notes explaining whether text-first or table-aware extraction was used
 - candidate-stage readiness notes while the schema remains backward-compatible
 
-Companion ingestion responses may additionally surface a transitional review payload for UI review workspaces, including:
+Companion ingestion responses may additionally surface a candidate-first review payload for UI review workspaces, including:
 - `lineage.xml_nodes`
+- `lineage.xml_semantic_units`
 - `lineage.pdf_fragments`
 - `lineage.alignments`
+- `lineage.pdf_evidence_packets`
+- `lineage.candidate_objects`
 - `lineage.canonical_snippets`
+- `review_workspace.candidates`
 - `review_workspace.review_units`
 - `summary.ingestion_run_id`
 - `summary.created_at`
 
 Current-state expectation for lineage-oriented review payloads:
-- the review payload exists to support candidate review and traceability before the first-class candidate runtime is fully implemented
+- the runtime should treat XML semantic units as the primary candidate inventory, even when legacy alignment fields are still surfaced for compatibility
+- PDF evidence should be gathered per XML semantic unit rather than treating fragments as long-term candidate identity
+- candidate objects should be retained as first-class lineage payloads and review-workspace payloads
+- review units should be derived from candidate objects rather than emitted directly from fragment alignments
 - the payload may operate in `full` or `focused` mode depending on XML artifact type and fragment volume
 - focused narrow-artifact review may preferentially surface row-level XML nodes and row-level PDF fragments when those matches exist
 - review units may surface a three-schema classification bundle:
@@ -252,10 +266,12 @@ Current-state expectation for lineage-oriented review payloads:
   `candidate_total` for candidates created by validation,
   `candidate_surfaced` for candidates included in the current workspace,
   and `candidate_needs_review` for the subset still requiring human review
+- `candidate_total` should reflect semantic-unit-seeded candidate objects, not just surviving fragment alignments
+- candidate identifiers should be stable and semantic-unit-led rather than using fragment ids as the long-term primary identity
 - `document_family_id` may be truncated and suffixed with a deterministic hash when needed to stay within persistence limits
 - storage-safe identifier shortening must not make the family identifier nondeterministic for the same PDF/XML pair
 - retained runs may be reloaded through an explicit run-detail API such as `GET /api/ingestions/runs/{run_id}`
-- the reloaded run payload should restore validation outputs, lineage, review workspace state, and persisted reviewer decisions without recomputing extraction at request time
+- the reloaded run payload should restore validation outputs, XML semantic units, PDF evidence packets, candidate objects, review workspace state, and persisted reviewer decisions without recomputing extraction at request time
 
 Current-state expectation for UI validation feedback:
 - the UI may show in-flight validation progress, selected file names, elapsed time, and request-cancel affordances while the backend request is still running
@@ -277,6 +293,7 @@ Future robust implementations to plan for:
 - stronger lineage metadata that distinguishes extracted table identity from XML table identity
 - explicit candidate-stage gate fields in the validation schema
 - candidate promotion evidence that records which validated candidates produced canonical snippets
+- explicit semantic-unit and evidence-packet schemas when the companion ingestion payloads are promoted from compatibility payloads to fully contract-bound runtime objects
 
 ---
 

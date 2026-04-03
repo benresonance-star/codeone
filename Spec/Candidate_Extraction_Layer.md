@@ -8,10 +8,12 @@
 
 The Candidate Extraction Layer is a mandatory system layer that transforms:
 
-Validated XML + Validated PDF + Alignment
+Validated XML
++ XML semantic units
++ gathered PDF evidence
 → Structured Candidate Objects
 
-A candidate is a proposed semantic object derived from aligned source data, not yet accepted into the canonical system.
+A candidate is a proposed semantic object derived from XML-seeded semantic units plus gathered PDF evidence, not yet accepted into the canonical system.
 
 This layer ensures that:
 - semantic interpretation is staged and inspectable  
@@ -38,9 +40,10 @@ The Candidate Extraction Layer exists to:
 # 3. POSITION IN SYSTEM
 
 XML (validated)
-PDF (validated)
         ↓
-Alignment (validated)
+XML Semantic Units
+        ↓
+Gather PDF Evidence
         ↓
 Candidate Extraction Layer
         ↓
@@ -49,6 +52,7 @@ Candidate Validation Layer
 Semantic Layer (canonical snippets)
 
 No direct Alignment → Semantic path is permitted.
+Alignment remains evidence-gathering input, not the long-term candidate identity model.
 
 ---
 
@@ -63,6 +67,7 @@ All snippets must originate from validated candidate objects.
 
 {
   "candidate_id": "string",
+  "semantic_unit_id": "string",
   "candidate_type": "candidate_semantic_class (compatibility alias)",
 
   "classification": {
@@ -73,14 +78,26 @@ All snippets must originate from validated candidate objects.
 
   "source": {
     "xml_node_id": "string",
-    "pdf_fragment_id": "string",
+    "pdf_fragment_id": "string or null",
     "alignment_confidence": "number"
   },
+
+  "evidence": [
+    {
+      "fragment_id": "string",
+      "page": "number",
+      "bbox": ["number", "number", "number", "number"],
+      "text": "string",
+      "confidence": "number",
+      "pdf_evidence_class": "paragraph | heading | list_item | table_row | table_cell | unknown"
+    }
+  ],
 
   "proposed": {
     "snippet_id": "string",
     "display_name": "string",
-    "description": "string"
+    "description": "string",
+    "content": "string"
   },
 
   "status": "draft | validated | rejected | promoted",
@@ -198,9 +215,12 @@ UI must allow:
 
 # 13. STORAGE
 
+- xml_semantic_units
+- pdf_evidence_packets
 - candidates  
 - candidate_validation_results  
 - candidate_relations  
+- candidate_review_projections
 - classification facets for XML, PDF, and candidate semantic layers  
 
 ---

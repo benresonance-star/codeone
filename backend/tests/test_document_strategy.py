@@ -209,6 +209,8 @@ class ParityScaffoldTests(unittest.TestCase):
         self.assertEqual(workspace["mode"], "focused")
         self.assertEqual(workspace["alignment_total"], 120)
         self.assertEqual(workspace["alignment_displayed"], 6)
+        self.assertEqual(workspace["candidate_total"], 2)
+        self.assertEqual(workspace["candidate_surfaced"], 2)
         self.assertEqual(len(workspace["pdf_fragments"]), 6)
         self.assertEqual(len(workspace["xml_nodes"]), 2)
 
@@ -256,7 +258,7 @@ class ParityScaffoldTests(unittest.TestCase):
         self.assertEqual(workspace["candidate_surfaced"], 1)
         self.assertEqual(workspace["candidate_needs_review"], 1)
         review_unit = workspace["review_units"][0]
-        self.assertEqual(review_unit["candidate_id"], "candidate:frag_1")
+        self.assertEqual(review_unit["candidate_id"], "candidate:unit:node_a")
         self.assertEqual(review_unit["candidate_type"], "definition")
         self.assertEqual(review_unit["xml_structural_class"], "definition")
         self.assertEqual(review_unit["pdf_evidence_class"], "unknown")
@@ -373,6 +375,64 @@ class ParityScaffoldTests(unittest.TestCase):
         self.assertFalse(review_unit["needs_human_review"])
         self.assertEqual(review_unit["review_issue_class"], "clean_match")
         self.assertEqual(review_unit["review_source_emphasis"], "balanced")
+
+    def test_validate_xml_emits_semantic_units_for_titles_and_rows(self) -> None:
+        xml_bytes = b"""<?xml version="1.0" encoding="UTF-8"?>
+<table-reference id="tbl_ref_1">
+  <num>J3D11a</num>
+  <title>Maximum conductance to solar heat gain ratio</title>
+  <table id="tbl_data_1">
+    <tgroup cols="2">
+      <tbody>
+        <row>
+          <entry>2</entry>
+          <entry>16.95</entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </table>
+</table-reference>
+"""
+
+        result = self.service._validate_xml(xml_bytes, "table-J3D11a-maximum-conductance-to-solar-heat-gain-ratio.xml")
+
+        semantic_units = result["semantic_units"]
+        unit_ids = {unit["unit_id"] for unit in semantic_units}
+        semantic_classes = {unit["semantic_class"] for unit in semantic_units}
+        self.assertIn("unit:tbl_ref_1", unit_ids)
+        self.assertIn("unit:tbl_ref_1__row_1", unit_ids)
+        self.assertIn("table", semantic_classes)
+        self.assertIn("title", semantic_classes)
+
+    def test_canonical_snippets_promote_passed_candidates_only(self) -> None:
+        candidates = [
+            {
+                "candidate_id": "candidate:unit:node_pass",
+                "xml_node_id": "node_pass",
+                "validation_state": "pass",
+                "source": {"pdf_fragment_id": "frag_1"},
+                "proposed": {"content": "Passed candidate content"},
+                "confidence": {"overall": 0.97},
+            },
+            {
+                "candidate_id": "candidate:unit:node_review",
+                "xml_node_id": "node_review",
+                "validation_state": "requires_review",
+                "source": {"pdf_fragment_id": "frag_2"},
+                "proposed": {"content": "Review candidate content"},
+                "confidence": {"overall": 0.84},
+            },
+        ]
+
+        snippets = self.service._build_canonical_snippets(
+            can_progress=True,
+            candidates=candidates,
+        )
+
+        self.assertEqual(len(snippets), 1)
+        self.assertEqual(snippets[0]["candidate_id"], "candidate:unit:node_pass")
+        self.assertEqual(snippets[0]["clause_id"], "node_pass")
+        self.assertEqual(snippets[0]["fragment_id"], "frag_1")
 
     def test_validate_xml_adds_synthesized_table_row_nodes(self) -> None:
         xml_bytes = b"""<?xml version="1.0" encoding="UTF-8"?>

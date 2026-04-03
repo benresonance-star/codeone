@@ -81,6 +81,46 @@ type ReviewDecision = {
   decision_status: ReviewStatus;
 };
 
+type CandidateObject = {
+  candidate_id: string;
+  xml_node_id?: string | null;
+  title?: string;
+  candidate_type?: string;
+  xml_structural_class?: string;
+  candidate_semantic_class?: string;
+  xml_path?: string;
+  xml_text?: string;
+  confidence?: {
+    overall?: number;
+  };
+  source?: {
+    pdf_fragment_id?: string | null;
+  };
+  proposed?: {
+    content?: string;
+  };
+  evidence?: Array<{
+    fragment_id?: string;
+    page?: number | null;
+    bbox?: number[];
+    text?: string;
+    confidence?: number;
+    pdf_evidence_class?: string;
+  }>;
+  review?: {
+    base_status?: ReviewStatus | string;
+    needs_human_review?: boolean;
+    issue_class?: string;
+    source_emphasis?: string;
+    issues?: string[];
+    xml_only_terms?: string[];
+    pdf_only_terms?: string[];
+    raw_xml_only_terms?: string[];
+    raw_pdf_only_terms?: string[];
+    ignored_structural_terms?: string[];
+  };
+};
+
 type CandidateRecord = {
   id: string;
   title: string;
@@ -137,16 +177,21 @@ type IngestionResponseLike = {
   };
   lineage?: {
     xml_nodes?: XmlNode[];
+    xml_semantic_units?: Array<Record<string, unknown>>;
     pdf_fragments?: PdfFragment[];
     alignments?: AlignmentRecord[];
+    pdf_evidence_packets?: Array<Record<string, unknown>>;
+    candidate_objects?: CandidateObject[];
     canonical_snippets?: CanonicalSnippet[];
   };
   review_workspace?: {
     mode?: string;
     reason?: string;
     xml_nodes?: XmlNode[];
+    xml_semantic_units?: Array<Record<string, unknown>>;
     pdf_fragments?: PdfFragment[];
     alignments?: AlignmentRecord[];
+    candidates?: CandidateObject[];
     canonical_snippets?: CanonicalSnippet[];
     review_units?: ReviewUnit[];
     alignment_total?: number;
@@ -612,6 +657,37 @@ function mapReviewUnitToCandidate(unit: ReviewUnit): CandidateRecord {
   };
 }
 
+function mapCandidateObjectToCandidate(candidate: CandidateObject): CandidateRecord {
+  const primaryEvidence = candidate.evidence?.[0];
+  return {
+    id: candidate.candidate_id,
+    title: candidate.title ?? candidate.candidate_id,
+    candidateType: candidate.candidate_type ?? candidate.candidate_semantic_class ?? "ambiguous",
+    xmlStructuralClass: candidate.xml_structural_class ?? candidate.candidate_type ?? "ambiguous",
+    pdfEvidenceClass: primaryEvidence?.pdf_evidence_class ?? "unknown",
+    candidateSemanticClass: candidate.candidate_semantic_class ?? candidate.candidate_type ?? "ambiguous",
+    reviewIssueClass: candidate.review?.issue_class ?? "clean_match",
+    reviewSourceEmphasis: candidate.review?.source_emphasis ?? "balanced",
+    confidence: candidate.confidence?.overall ?? primaryEvidence?.confidence ?? 0,
+    baseStatus: normalizeReviewStatus(candidate.review?.base_status ?? "review required"),
+    needsHumanReview: candidate.review?.needs_human_review ?? false,
+    matched: Boolean(primaryEvidence),
+    page: primaryEvidence?.page ?? null,
+    fragmentId: primaryEvidence?.fragment_id ?? `xml_only:${candidate.xml_node_id ?? candidate.candidate_id}`,
+    nodeId: candidate.xml_node_id ?? null,
+    xmlPath: candidate.xml_path ?? "No XML node linked yet",
+    xmlText: candidate.xml_text ?? "",
+    pdfText: primaryEvidence?.text ?? candidate.proposed?.content ?? "",
+    bbox: primaryEvidence?.bbox ?? [],
+    issues: candidate.review?.issues ?? [],
+    xmlOnlyTerms: candidate.review?.xml_only_terms ?? [],
+    pdfOnlyTerms: candidate.review?.pdf_only_terms ?? [],
+    rawXmlOnlyTerms: candidate.review?.raw_xml_only_terms ?? candidate.review?.xml_only_terms ?? [],
+    rawPdfOnlyTerms: candidate.review?.raw_pdf_only_terms ?? candidate.review?.pdf_only_terms ?? [],
+    ignoredStructuralTerms: candidate.review?.ignored_structural_terms ?? [],
+  };
+}
+
 function normalizeReviewStatus(value: ReviewStatus | string): ReviewStatus {
   switch (value) {
     case "match":
@@ -713,6 +789,10 @@ function buildLegacyCandidates(response: IngestionResponseLike): CandidateRecord
 }
 
 function buildCandidates(response: IngestionResponseLike): CandidateRecord[] {
+  const candidateObjects = response.review_workspace?.candidates ?? response.lineage?.candidate_objects ?? [];
+  if (candidateObjects.length > 0) {
+    return candidateObjects.map(mapCandidateObjectToCandidate);
+  }
   const explicitUnits = response.review_workspace?.review_units ?? [];
   if (explicitUnits.length > 0) {
     return explicitUnits.map(mapReviewUnitToCandidate);
