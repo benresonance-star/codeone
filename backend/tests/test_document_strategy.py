@@ -172,6 +172,44 @@ class ParityScaffoldTests(unittest.TestCase):
 
         self.assertEqual(first, second)
 
+    def test_review_workspace_focuses_narrow_xml_artifacts(self) -> None:
+        xml_nodes = [
+            XmlNode(node_id="node_a", clause_id="node_a", text="Maximum conductance ratio climate zone 1", path="/table[@id='node_a']"),
+            XmlNode(node_id="node_b", clause_id="node_b", text="Maximum conductance ratio climate zone 2", path="/table[@id='node_b']"),
+        ]
+        fragments = [
+            PdfFragment(fragment_id=f"frag_{index}", page=1, text=f"Fragment {index}", bbox=[0.0, 0.0, 1.0, 1.0])
+            for index in range(1, 121)
+        ]
+        alignments = []
+        for index, fragment in enumerate(fragments, start=1):
+            node_id = "node_a" if index % 2 else "node_b"
+            alignments.append(
+                {
+                    "fragment_id": fragment.fragment_id,
+                    "node_id": node_id,
+                    "confidence": round(0.99 - (index * 0.001), 3),
+                    "matched": True,
+                    "page": fragment.page,
+                    "bbox": fragment.bbox,
+                }
+            )
+
+        workspace = self.service._build_review_workspace(
+            pdf_name="NCC 2022 - Vol 1 - Parts J2 and J3 - Energy Efficiency.pdf",
+            xml_name="table-J3D11a-maximum-conductance-to-solar-heat-gain-ratio.xml",
+            xml_nodes=xml_nodes,
+            fragments=fragments,
+            alignments=alignments,
+            canonical_snippets=[],
+        )
+
+        self.assertEqual(workspace["mode"], "focused")
+        self.assertEqual(workspace["alignment_total"], 120)
+        self.assertEqual(workspace["alignment_displayed"], 6)
+        self.assertEqual(len(workspace["pdf_fragments"]), 6)
+        self.assertEqual(len(workspace["xml_nodes"]), 2)
+
 
 class DoclingExtractorTests(unittest.TestCase):
     def setUp(self) -> None:

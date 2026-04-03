@@ -48,6 +48,36 @@ type IngestionResponse = {
       fragment_id?: string;
     }[];
   };
+  review_workspace?: {
+    mode?: string;
+    reason?: string;
+    xml_nodes?: {
+      node_id: string;
+      clause_id: string;
+      text: string;
+      path: string;
+    }[];
+    pdf_fragments?: {
+      fragment_id: string;
+      page: number;
+      text: string;
+      bbox: number[];
+    }[];
+    alignments?: {
+      fragment_id: string;
+      node_id?: string | null;
+      confidence: number;
+      matched: boolean;
+      page?: number;
+      bbox?: number[];
+    }[];
+    canonical_snippets?: {
+      clause_id?: string;
+      fragment_id?: string;
+    }[];
+    alignment_total?: number;
+    alignment_displayed?: number;
+  };
 };
 
 type RunRecord = {

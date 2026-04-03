@@ -86,6 +86,16 @@ type IngestionResponseLike = {
     alignments?: AlignmentRecord[];
     canonical_snippets?: CanonicalSnippet[];
   };
+  review_workspace?: {
+    mode?: string;
+    reason?: string;
+    xml_nodes?: XmlNode[];
+    pdf_fragments?: PdfFragment[];
+    alignments?: AlignmentRecord[];
+    canonical_snippets?: CanonicalSnippet[];
+    alignment_total?: number;
+    alignment_displayed?: number;
+  };
 };
 
 type CandidateReviewWorkspaceProps = {
@@ -231,10 +241,11 @@ function renderHighlightedText(text: string, emphasisTerms: string[], className:
 }
 
 function buildCandidates(response: IngestionResponseLike): CandidateRecord[] {
-  const xmlNodes = response.lineage?.xml_nodes ?? [];
-  const pdfFragments = response.lineage?.pdf_fragments ?? [];
-  const alignments = response.lineage?.alignments ?? [];
-  const canonicalSnippets = response.lineage?.canonical_snippets ?? [];
+  const workspace = response.review_workspace ?? response.lineage;
+  const xmlNodes = workspace?.xml_nodes ?? [];
+  const pdfFragments = workspace?.pdf_fragments ?? [];
+  const alignments = workspace?.alignments ?? [];
+  const canonicalSnippets = workspace?.canonical_snippets ?? [];
 
   const xmlById = new Map(xmlNodes.map((node) => [node.node_id, node]));
   const fragmentById = new Map(pdfFragments.map((fragment) => [fragment.fragment_id, fragment]));

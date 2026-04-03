@@ -29,6 +29,7 @@ class IngestionResponse(BaseModel):
     results: ValidationBundleResponse
     raw_metrics: dict[str, Any] = Field(default_factory=dict)
     lineage: dict[str, Any] = Field(default_factory=dict)
+    review_workspace: dict[str, Any] = Field(default_factory=dict)
 
 
 class IngestionRunRecord(BaseModel):

@@ -45,6 +45,9 @@ def average(values: list[float]) -> float:
 
 
 MAX_DOCUMENT_FAMILY_ID_LENGTH = 80
+REVIEW_WORKSPACE_MAX_ALIGNMENTS_PER_NODE = 3
+REVIEW_WORKSPACE_NARROW_XML_NODE_LIMIT = 12
+REVIEW_WORKSPACE_LARGE_FRAGMENT_LIMIT = 100
 
 
 @dataclass
@@ -103,6 +106,14 @@ class IngestionService:
             fragments=pdf_context["fragments"],
             alignments=pdf_context["alignments"],
         )
+        review_workspace = self._build_review_workspace(
+            pdf_name=pdf_name,
+            xml_name=xml_name,
+            xml_nodes=xml_context["xml_nodes"],
+            fragments=pdf_context["fragments"],
+            alignments=pdf_context["alignments"],
+            canonical_snippets=canonical_snippets,
+        )
 
         return {
             "summary": {
@@ -134,6 +145,7 @@ class IngestionService:
                 "pdf_tables": pdf_context["result"].get("table_validation", []),
                 "xml_tables": xml_context["result"].get("table_validation", []),
             },
+            "review_workspace": review_workspace,
         }
 
     def _validate_xml(self, xml_bytes: bytes, xml_name: str) -> dict[str, Any]:
@@ -1221,6 +1233,77 @@ class IngestionService:
         prefix_length = MAX_DOCUMENT_FAMILY_ID_LENGTH - len(digest) - 1
         prefix = candidate[:prefix_length].rstrip("_") or "document_family"
         return f"{prefix}_{digest}"
+
+    def _build_review_workspace(
+        self,
+        *,
+        pdf_name: str,
+        xml_name: str,
+        xml_nodes: list[XmlNode],
+        fragments: list[PdfFragment],
+        alignments: list[dict[str, Any]],
+        canonical_snippets: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        workspace_mode = "full"
+        workspace_reason = "default_full_lineage_review"
+        review_alignments = list(alignments)
+
+        if self._should_focus_review_workspace(xml_name=xml_name, xml_nodes=xml_nodes, fragments=fragments):
+            workspace_mode = "focused"
+            workspace_reason = "narrow_xml_artifact_focus"
+            review_alignments = self._focused_review_alignments(alignments)
+
+        review_fragment_ids = {item["fragment_id"] for item in review_alignments}
+        review_node_ids = {item["node_id"] for item in review_alignments if item.get("node_id")}
+
+        return {
+            "mode": workspace_mode,
+            "reason": workspace_reason,
+            "xml_nodes": [node for node in xml_nodes if node.node_id in review_node_ids] if review_node_ids else [],
+            "pdf_fragments": [fragment for fragment in fragments if fragment.fragment_id in review_fragment_ids],
+            "alignments": review_alignments,
+            "canonical_snippets": [
+                snippet
+                for snippet in canonical_snippets
+                if snippet.get("fragment_id") in review_fragment_ids
+            ],
+            "alignment_total": len(alignments),
+            "alignment_displayed": len(review_alignments),
+        }
+
+    def _should_focus_review_workspace(
+        self,
+        *,
+        xml_name: str,
+        xml_nodes: list[XmlNode],
+        fragments: list[PdfFragment],
+    ) -> bool:
+        normalized_xml_name = self._slugify(xml_name)
+        narrow_artifact_prefixes = ("table_", "image_", "figure_", "diagram_", "map_")
+        if not normalized_xml_name.startswith(narrow_artifact_prefixes):
+            return False
+        return (
+            len(xml_nodes) <= REVIEW_WORKSPACE_NARROW_XML_NODE_LIMIT
+            and len(fragments) >= REVIEW_WORKSPACE_LARGE_FRAGMENT_LIMIT
+        )
+
+    def _focused_review_alignments(self, alignments: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        by_node: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for alignment in alignments:
+            node_id = alignment.get("node_id")
+            if not alignment.get("matched") or not node_id:
+                continue
+            by_node[str(node_id)].append(alignment)
+
+        selected: list[dict[str, Any]] = []
+        for node_alignments in by_node.values():
+            ranked = sorted(
+                node_alignments,
+                key=lambda item: (float(item.get("confidence", 0.0)), -int(item.get("page") or 0)),
+                reverse=True,
+            )
+            selected.extend(ranked[:REVIEW_WORKSPACE_MAX_ALIGNMENTS_PER_NODE])
+        return selected
 
     def _build_canonical_snippets(
         self,
