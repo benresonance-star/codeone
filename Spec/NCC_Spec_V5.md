@@ -1,6 +1,6 @@
 # NCC Ingestion & Agentic Compliance System  
 ## Full Specification (with Embedded Validation Contract)  
-### Version 5.2.0
+### Version 5.3.0
 
 ---
 
@@ -54,7 +54,7 @@ Learning Layer
 
 ## Definition
 
-The PDF Ingestion Validation Contract is a non-bypassable rule system that:
+The PDF and XML ingestion validation contracts are non-bypassable rule systems that:
 
 - validates all ingestion outputs  
 - blocks invalid data  
@@ -67,14 +67,17 @@ The PDF Ingestion Validation Contract is a non-bypassable rule system that:
 
 /Spec/pdf_ingestion_contract.md  
 /Spec/pdf_ingestion_contract.json  
+/Spec/xml_source_contract.md  
+/Spec/xml_source_contract.json  
 /Spec/validation_result.schema.json  
 
 ---
 
 ## Enforcement Flow
 
-XML + PDF → Ingestion + Validation Contracts → Pass → Alignment Layer  
-                                              → Fail → STOP  
+XML + PDF → Ingestion + Validation Contracts → Pass / Pass_With_Warnings → Alignment Layer  
+                                              → Review_Required → HITL Review  
+                                              → Fail / Blocked → STOP  
 
 Alignment Layer → Candidate Extraction Layer → Candidate Validation Layer  
 Candidate Validation Layer → Promote → Semantic Layer  
@@ -84,10 +87,12 @@ Candidate Validation Layer → Reject / Review → STOP
 
 ## Contract Source Of Truth
 
-The authoritative PDF validation contract is externalized in:
+The authoritative validation contracts are externalized in:
 
 - `/Spec/pdf_ingestion_contract.json`
 - `/Spec/pdf_ingestion_contract.md`
+- `/Spec/xml_source_contract.json`
+- `/Spec/xml_source_contract.md`
 - `/Spec/validation_result.schema.json`
 
 Those files define:
@@ -101,19 +106,21 @@ Those files define:
 
 # 5. INGESTION PIPELINE
 
-1. Load PDF  
-2. Extract blocks  
-3. Classify blocks  
-4. Extract tables  
-5. Attach metadata  
-6. Run validation contracts  
-7. If fail → STOP  
-8. Align XML  
-9. Generate candidates  
-10. Validate candidates  
-11. If candidate validation fails → STOP  
-12. Promote validated candidates to semantic snippets  
-13. Store  
+1. Load PDF and XML  
+2. Extract blocks and tables  
+3. Attach structural metadata  
+4. Synthesize row-level XML nodes for narrow table artifacts where appropriate  
+5. Synthesize row-sized PDF fragments from extracted tables where appropriate  
+6. Run XML and PDF validation contracts  
+7. If blocked → STOP  
+8. If review required → hold for human review  
+9. Scope broad part-wrapper PDF evidence before alignment when the XML only represents wrapper or intro content  
+10. Align XML and PDF evidence  
+11. Generate candidates  
+12. Validate candidates  
+13. If candidate validation fails → STOP  
+14. Promote validated candidates to semantic snippets  
+15. Store  
 
 ---
 
@@ -141,6 +148,7 @@ UI must:
 - display candidate objects with XML/PDF traceability  
 - surface in-flight validation progress while a run is executing  
 - accept transitional lineage-backed review payloads until the first-class candidate runtime is fully implemented  
+- surface focused review workspaces for narrow XML artifacts, including row-level review items for narrow table XMLs  
 - highlight errors  
 - allow corrections  
 - re-run validation  
@@ -162,6 +170,12 @@ Backend:
 Persistence identifiers:
 - `document_family_id` must be deterministic for a given PDF/XML pair
 - when the natural paired-name identifier is too long for storage constraints, the system may shorten it with a stable hash suffix rather than fail ingestion
+
+Current ingestion and review behavior:
+- narrow table XMLs may align at row level through synthesized XML row nodes and row-sized PDF fragments
+- focused review mode may reduce a large fragment set to only the most relevant row-level evidence for narrow artifacts
+- broad NCC `part` XMLs should no longer be treated as malformed merely because they use corpus-native structural roots
+- broad `part` wrapper XML pairings may narrow the PDF evidence set to the relevant part-introduction band before parity checks so they degrade to reviewable outcomes rather than failing for the wrong reasons
 
 ---
 

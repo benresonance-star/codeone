@@ -1,6 +1,6 @@
 # PDF Ingestion Validation Contract
 ## NCC PDF Ingestion Constraint Manual
-### Version 1.4.0
+### Version 1.5.0
 
 ---
 
@@ -120,6 +120,11 @@ Outcome:
 
 The PDF must be split to the required section-level scope before canonical ingestion proceeds.
 
+Current broad-part behavior:
+- section-level splitting remains the default contract expectation
+- when the paired XML is a structural `part` wrapper rather than a clause-complete body, validation may scope the extracted PDF fragment set to the relevant part heading and intro or wrapper region before running parity checks
+- this scoping does not relax the contract; it prevents broad wrapper XML from being compared against obviously out-of-scope PDF content
+
 Outcome:
 - block progression if the PDF is not split or is split to the wrong scope
 
@@ -140,8 +145,14 @@ Extracted tables must preserve enough structure for downstream use:
 - row presence
 - usable header information where expected
 - stable table identity
+- row-level text that can be converted into reviewable fragment evidence when the table is structurally usable
 
 The extraction system may change runtime mode to improve table fidelity, but the output still counts as invalid if rows are empty, headers are unusable where required, or table structure cannot support downstream parity and review.
+
+Current row-level behavior:
+- extracted table rows may be emitted as additional PDF fragments using stable ids such as `{table_id}__row_{n}`
+- row fragments should preserve page provenance and a row-bounded bounding box when source table geometry is available
+- narrow table XML artifacts may synthesize XML-side `__row_` nodes so parity can occur at row granularity instead of only whole-table granularity
 
 Current linkage behavior:
 - extracted tables must still appear in `table_validation` even when no XML-side table node has been linked yet
@@ -158,6 +169,11 @@ PDF fragments must align to the paired XML representation with sufficient confid
 The XML side must already be allowed to progress to the alignment layer before the PDF side can claim a trustworthy alignment result.
 Successful alignment opens the path to candidate extraction; it does not authorize direct canonical snippet generation.
 
+Current alignment behavior:
+- when both a broad table or container node and a specific row node are plausible targets, alignment should prefer the more specific row-level node rather than defaulting to the earlier broad container
+- row-level preference is especially important for narrow table XMLs that are being reviewed against a large PDF section
+- focused review for narrow artifacts should keep row-level review items and may discard aggregate title or container entries once row matches exist
+
 Outcome:
 - `PASS` when the XML gate is open, unresolved alignments are `0`, low-confidence alignments are `0`, and average alignment confidence is at least `0.95`
 - `PASS_WITH_WARNINGS` when the XML gate is open, average alignment confidence is at least `0.9`, unresolved alignments are at most `5`, and low-confidence alignments are at most `5`
@@ -172,6 +188,10 @@ Fragments must carry enough metadata to support:
 
 Outcome:
 - block progression if required traceability metadata is missing
+
+Clarification:
+- unresolved alignments are part of `C5_XML_ALIGNMENT`, not by themselves evidence that fragment metadata is missing
+- `C6_METADATA` should evaluate actual traceability fields such as fragment identity, page reference, source strategy, and bounding box completeness
 
 ## C7 — Quality threshold
 
@@ -216,6 +236,8 @@ Companion ingestion responses may additionally surface a transitional review pay
 
 Current-state expectation for lineage-oriented review payloads:
 - the review payload exists to support candidate review and traceability before the first-class candidate runtime is fully implemented
+- the payload may operate in `full` or `focused` mode depending on XML artifact type and fragment volume
+- focused narrow-artifact review may preferentially surface row-level XML nodes and row-level PDF fragments when those matches exist
 - `document_family_id` may be truncated and suffixed with a deterministic hash when needed to stay within persistence limits
 - storage-safe identifier shortening must not make the family identifier nondeterministic for the same PDF/XML pair
 
