@@ -35,6 +35,8 @@ type AlignmentRecord = {
 type CanonicalSnippet = {
   clause_id?: string;
   fragment_id?: string;
+  content?: string;
+  confidence?: number;
 };
 
 type ReviewStatus =
@@ -89,6 +91,15 @@ type CandidateRecord = {
   pdfOnlyTerms: string[];
 };
 
+type CandidateWithDisplayStatus = CandidateRecord & {
+  displayStatus: ReviewStatus;
+};
+
+type ComparisonRow = {
+  label: string;
+  value: string;
+};
+
 type IngestionResponseLike = {
   summary?: {
     ingestion_run_id?: string | null;
@@ -129,7 +140,7 @@ type CandidateReviewWorkspaceProps = {
   response: IngestionResponseLike;
   pdfFile: File | null;
   apiBaseUrl: string;
-  retainedPdfUrl: string | null;
+  onRelinkPdf: () => void;
 };
 
 type FilterKey = "review" | "all" | "approved" | "rejected";
@@ -326,6 +337,65 @@ function describeCandidateStatus(candidate: CandidateRecord): string {
   }
 }
 
+function formatBbox(bbox: number[]): string {
+  if (!bbox.length) {
+    return "n/a";
+  }
+  return bbox.join(", ");
+}
+
+function formatList(values: string[]): string {
+  if (!values.length) {
+    return "none";
+  }
+  return values.join(", ");
+}
+
+function buildCandidateJson(candidate: CandidateWithDisplayStatus): Record<string, unknown> {
+  return {
+    candidateId: candidate.id,
+    title: candidate.title,
+    candidateType: candidate.candidateType,
+    fragmentId: candidate.fragmentId,
+    nodeId: candidate.nodeId,
+    baseStatus: candidate.baseStatus,
+    displayStatus: candidate.displayStatus,
+    matched: candidate.matched,
+    confidence: candidate.confidence,
+    page: candidate.page,
+    bbox: candidate.bbox,
+    xmlPath: candidate.xmlPath,
+    xmlOnlyTerms: candidate.xmlOnlyTerms,
+    pdfOnlyTerms: candidate.pdfOnlyTerms,
+    issues: candidate.issues,
+  };
+}
+
+function buildSnippetJson(snippet: CanonicalSnippet | null): Record<string, unknown> | null {
+  if (!snippet) {
+    return null;
+  }
+  return {
+    clauseId: snippet.clause_id ?? null,
+    fragmentId: snippet.fragment_id ?? null,
+    content: snippet.content ?? null,
+    confidence: snippet.confidence ?? null,
+  };
+}
+
+function renderComparisonRows(rows: ComparisonRow[]) {
+  return (
+    <div className="comparison-field-list">
+      {rows.map((row) => (
+        <div key={row.label} className="comparison-field-row">
+          <strong>{row.label}</strong>
+          <span>{row.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function mapReviewUnitToCandidate(unit: ReviewUnit): CandidateRecord {
   return {
     id: unit.candidate_id,
@@ -447,7 +517,7 @@ export function CandidateReviewWorkspace({
   response,
   pdfFile,
   apiBaseUrl,
-  retainedPdfUrl,
+  onRelinkPdf,
 }: CandidateReviewWorkspaceProps) {
   const [filter, setFilter] = useState<FilterKey>("review");
   const [statusOverrides, setStatusOverrides] = useState<Record<string, ReviewStatus>>({});
@@ -470,9 +540,9 @@ export function CandidateReviewWorkspace({
       setPdfUrl(nextUrl);
       return () => URL.revokeObjectURL(nextUrl);
     }
-    setPdfUrl(retainedPdfUrl);
+    setPdfUrl(null);
     return undefined;
-  }, [pdfFile, retainedPdfUrl]);
+  }, [pdfFile]);
 
   useEffect(() => {
     let cancelled = false;
@@ -517,7 +587,7 @@ export function CandidateReviewWorkspace({
   }, [apiBaseUrl, runId]);
 
   const candidates = useMemo(() => buildCandidates(response), [response]);
-  const candidatesWithStatus = useMemo(
+  const candidatesWithStatus = useMemo<CandidateWithDisplayStatus[]>(
     () =>
       candidates.map((candidate) => ({
         ...candidate,
@@ -553,6 +623,102 @@ export function CandidateReviewWorkspace({
 
   const selectedCandidate =
     filteredCandidates.find((candidate) => candidate.id === selectedCandidateId) ?? filteredCandidates[0] ?? null;
+
+  const workspaceSnippets = useMemo(
+    () => response.review_workspace?.canonical_snippets ?? response.lineage?.canonical_snippets ?? [],
+    [response]
+  );
+
+  const selectedSnippet = useMemo(() => {
+    if (!selectedCandidate) {
+      return null;
+    }
+    if (selectedCandidate.nodeId) {
+      const exactSnippet = workspaceSnippets.find(
+        (snippet) =>
+          snippet.fragment_id === selectedCandidate.fragmentId && snippet.clause_id === selectedCandidate.nodeId
+      );
+      if (exactSnippet) {
+        return exactSnippet;
+      }
+    }
+    return (
+      workspaceSnippets.find((snippet) => snippet.fragment_id === selectedCandidate.fragmentId) ?? null
+    );
+  }, [selectedCandidate, workspaceSnippets]);
+
+  const selectedCandidateJson = useMemo(
+    () => (selectedCandidate ? buildCandidateJson(selectedCandidate) : null),
+    [selectedCandidate]
+  );
+
+  const selectedSnippetJson = useMemo(() => buildSnippetJson(selectedSnippet), [selectedSnippet]);
+
+  const candidateComparisonRows = useMemo<ComparisonRow[]>(() => {
+    if (!selectedCandidate) {
+      return [];
+    }
+    return [
+      { label: "Link status", value: selectedCandidate.nodeId ? "Linked to XML node" : "No XML node linked" },
+      {
+        label: "Approval state",
+        value: selectedSnippet ? "Promoted snippet exists" : "No promoted snippet yet",
+      },
+      { label: "Display status", value: selectedCandidate.displayStatus },
+      { label: "Base status", value: selectedCandidate.baseStatus },
+      { label: "Matched", value: String(selectedCandidate.matched) },
+      { label: "Confidence", value: selectedCandidate.confidence.toFixed(3) },
+      { label: "Candidate page", value: selectedCandidate.page ? String(selectedCandidate.page) : "n/a" },
+      { label: "BBox", value: formatBbox(selectedCandidate.bbox) },
+    ];
+  }, [selectedCandidate, selectedSnippet]);
+
+  const xmlComparisonRows = useMemo<ComparisonRow[]>(() => {
+    if (!selectedCandidate) {
+      return [];
+    }
+    return [
+      { label: "XML path", value: selectedCandidate.xmlPath },
+      { label: "Missing in PDF", value: formatList(selectedCandidate.xmlOnlyTerms) },
+      { label: "XML text length", value: String(cleanText(selectedCandidate.xmlText).length) },
+    ];
+  }, [selectedCandidate]);
+
+  const pdfComparisonRows = useMemo<ComparisonRow[]>(() => {
+    if (!selectedCandidate) {
+      return [];
+    }
+    return [
+      { label: "Fragment id", value: selectedCandidate.fragmentId },
+      { label: "Page", value: selectedCandidate.page ? String(selectedCandidate.page) : "n/a" },
+      { label: "Missing in XML", value: formatList(selectedCandidate.pdfOnlyTerms) },
+      { label: "PDF text length", value: String(cleanText(selectedCandidate.pdfText).length) },
+    ];
+  }, [selectedCandidate]);
+
+  const snippetComparisonRows = useMemo<ComparisonRow[]>(() => {
+    if (!selectedSnippet) {
+      return [];
+    }
+    return [
+      { label: "Clause id", value: selectedSnippet.clause_id ?? "n/a" },
+      { label: "Fragment id", value: selectedSnippet.fragment_id ?? "n/a" },
+      { label: "Confidence", value: typeof selectedSnippet.confidence === "number" ? selectedSnippet.confidence.toFixed(3) : "n/a" },
+      { label: "Snippet length", value: String(cleanText(selectedSnippet.content).length) },
+    ];
+  }, [selectedSnippet]);
+
+  const mismatchSummaryRows = useMemo<ComparisonRow[]>(() => {
+    if (!selectedCandidate) {
+      return [];
+    }
+    return [
+      { label: "Blocked by validation issue", value: selectedCandidate.issues.some((issue) => issue.includes("Validation warnings or errors")) ? "Yes" : "No" },
+      { label: "Missing in XML", value: formatList(selectedCandidate.pdfOnlyTerms) },
+      { label: "Missing in PDF", value: formatList(selectedCandidate.xmlOnlyTerms) },
+      { label: "Issue summary", value: selectedCandidate.issues[0] ?? "No review issues flagged" },
+    ];
+  }, [selectedCandidate]);
 
   const selectedQueueIndex = useMemo(() => {
     if (!selectedCandidate) {
@@ -843,83 +1009,102 @@ export function CandidateReviewWorkspace({
                   </p>
                 ) : null}
 
-                <div className="grid two-column">
-                  <div className="evidence-panel">
-                    <h4>XML Evidence</h4>
-                    <p className="muted">{selectedCandidate.xmlPath}</p>
-                    <div className="evidence-text">
-                      {selectedCandidate.xmlText
-                        ? renderHighlightedText(
-                            selectedCandidate.xmlText,
-                            selectedCandidate.xmlOnlyTerms,
-                            "token-xml-only"
-                          )
-                        : "No XML node linked yet."}
+                <section className="comparison-section">
+                  <div className="section-header compact">
+                    <div>
+                      <h4>Candidate Comparison</h4>
+                      <p className="muted">
+                        Structured comparison first, with raw JSON available below for inspection.
+                      </p>
                     </div>
                   </div>
-
-                  <div className="evidence-panel">
-                    <h4>PDF Evidence</h4>
-                    <p className="muted">
-                      Page {selectedCandidate.page ?? "n/a"} | BBox{" "}
-                      {selectedCandidate.bbox.length ? selectedCandidate.bbox.join(", ") : "n/a"}
-                    </p>
-                    <div className="evidence-text">
-                      {renderHighlightedText(
-                        selectedCandidate.pdfText,
-                        selectedCandidate.pdfOnlyTerms,
-                        "token-pdf-only"
+                  <div className="comparison-grid">
+                    <div className="evidence-panel">
+                      <h4>Candidate Object</h4>
+                      {renderComparisonRows(candidateComparisonRows)}
+                    </div>
+                    <div className="evidence-panel">
+                      <h4>XML Evidence</h4>
+                      {renderComparisonRows(xmlComparisonRows)}
+                      <div className="evidence-text comparison-evidence-text">
+                        {selectedCandidate.xmlText
+                          ? renderHighlightedText(
+                              selectedCandidate.xmlText,
+                              selectedCandidate.xmlOnlyTerms,
+                              "token-xml-only"
+                            )
+                          : "No XML node linked yet."}
+                      </div>
+                    </div>
+                    <div className="evidence-panel">
+                      <h4>PDF Evidence</h4>
+                      {renderComparisonRows(pdfComparisonRows)}
+                      <div className="evidence-text comparison-evidence-text">
+                        {renderHighlightedText(
+                          selectedCandidate.pdfText,
+                          selectedCandidate.pdfOnlyTerms,
+                          "token-pdf-only"
+                        )}
+                      </div>
+                    </div>
+                    <div className="evidence-panel">
+                      <h4>Promoted Snippet</h4>
+                      {selectedSnippet ? (
+                        <>
+                          {renderComparisonRows(snippetComparisonRows)}
+                          <div className="evidence-text comparison-evidence-text">
+                            {cleanText(selectedSnippet.content) || "Snippet content is not available."}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="empty-state comparison-empty-state">
+                          No promoted snippet for this candidate yet.
+                        </div>
                       )}
                     </div>
                   </div>
-                </div>
-
-                <div className="grid two-column">
-                  <div className="evidence-panel">
-                    <h4>Match / Mismatch Summary</h4>
-                    <div className="detail-list">
-                      <div>
-                        <strong>Matched</strong>: {String(selectedCandidate.matched)}
-                      </div>
-                      <div>
-                        <strong>Confidence</strong>: {selectedCandidate.confidence}
-                      </div>
-                      <div>
-                        <strong>XML-only terms</strong>:{" "}
-                        {selectedCandidate.xmlOnlyTerms.length
-                          ? selectedCandidate.xmlOnlyTerms.join(", ")
-                          : "none"}
-                      </div>
-                      <div>
-                        <strong>PDF-only terms</strong>:{" "}
-                        {selectedCandidate.pdfOnlyTerms.length
-                          ? selectedCandidate.pdfOnlyTerms.join(", ")
-                          : "none"}
-                      </div>
+                  <div className="grid two-column">
+                    <div className="evidence-panel">
+                      <h4>Mismatch / Comparison Summary</h4>
+                      {renderComparisonRows(mismatchSummaryRows)}
+                    </div>
+                    <div className="evidence-panel">
+                      <h4>Review Issues</h4>
+                      {selectedCandidate.issues.length ? (
+                        <ul className="issue-list">
+                          {selectedCandidate.issues.map((issue, index) => (
+                            <li key={`${selectedCandidate.id}-${index}`}>{issue}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="muted">No review issues flagged for this candidate.</p>
+                      )}
                     </div>
                   </div>
-
-                  <div className="evidence-panel">
-                    <h4>Review Issues</h4>
-                    {selectedCandidate.issues.length ? (
-                      <ul className="issue-list">
-                        {selectedCandidate.issues.map((issue, index) => (
-                          <li key={`${selectedCandidate.id}-${index}`}>{issue}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="muted">No review issues flagged for this candidate.</p>
-                    )}
-                  </div>
-                </div>
+                  <details className="detail-disclosure">
+                    <summary>Open candidate JSON</summary>
+                    <pre>{JSON.stringify(selectedCandidateJson, null, 2)}</pre>
+                  </details>
+                  <details className="detail-disclosure">
+                    <summary>Open promoted snippet JSON</summary>
+                    <pre>{JSON.stringify(selectedSnippetJson ?? { state: "no_promoted_snippet" }, null, 2)}</pre>
+                  </details>
+                </section>
               </section>
 
               <section className="panel subsection">
-                <h3>Original PDF Preview</h3>
-                <p className="muted">
-                  The preview jumps to the selected candidate page. Precise fragment highlighting inside the page
-                  is still follow-on work.
-                </p>
+                <div className="section-header compact">
+                  <div>
+                    <h3>Original PDF Preview</h3>
+                    <p className="muted">
+                      The review workspace restores automatically after refresh. The PDF preview is local to this
+                      browser session, so use `Relink PDF` to reattach the original file when needed.
+                    </p>
+                  </div>
+                  <button type="button" className="button-secondary" onClick={onRelinkPdf}>
+                    Relink PDF
+                  </button>
+                </div>
                 {pdfUrl ? (
                   <iframe
                     className="pdf-frame"
@@ -928,8 +1113,8 @@ export function CandidateReviewWorkspace({
                   />
                 ) : (
                   <p className="muted">
-                    The retained PDF preview is not available for this run right now. Upload the PDF again in
-                    this browser session to restore the embedded preview.
+                    No PDF is currently linked in this browser session. Use `Relink PDF` to choose the original
+                    file and restore the embedded preview for page-linked review.
                   </p>
                 )}
               </section>

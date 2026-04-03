@@ -1,6 +1,6 @@
 # PDF Ingestion Validation Contract
 ## NCC PDF Ingestion Constraint Manual
-### Version 1.6.0
+### Version 1.7.0
 
 ---
 
@@ -250,8 +250,9 @@ Current-state expectation for UI validation feedback:
 - the UI may show in-flight validation progress, selected file names, elapsed time, and request-cancel affordances while the backend request is still running
 - temporary progress feedback is operational UI state, not a contract-level validation outcome
 - after a refresh, the UI may reopen a retained workspace from persisted run data rather than forcing a fresh validation request
-- when a retained PDF is still present in storage, the UI may restore the embedded PDF preview through a dedicated file endpoint such as `GET /api/ingestions/runs/{run_id}/pdf`
-- retained PDF preview restoration should preserve page-level candidate navigation, while exact in-page highlighting remains optional follow-on behavior
+- a retained PDF file endpoint such as `GET /api/ingestions/runs/{run_id}/pdf` may still exist for retained artifacts, but the UI is not required to auto-embed that file after refresh
+- the current review console may require an explicit `Relink PDF` action in the original preview panel so the operator can reattach the local PDF in the current browser session
+- when the operator relinks the PDF locally, the embedded preview should preserve page-level candidate navigation, while exact in-page highlighting remains optional follow-on behavior
 
 Current-state expectation for `table_validation`:
 - `table_id`, extraction counts, status, and confidence are required for emitted table entries

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { CandidateReviewWorkspace } from "../components/candidate-review-workspace";
 import { ValidationViewer } from "../components/validation-viewer";
@@ -130,7 +130,10 @@ type PurgeDialogState = {
   summary: PurgeSummary;
 };
 
+type RestoreStatus = "idle" | "restoring" | "restored" | "none" | "stale" | "failed";
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const LAST_RUN_STORAGE_KEY = "codeone:last-loaded-run-id";
 
 function formatDateTime(value: string | null | undefined): string {
   if (!value) {
@@ -159,11 +162,14 @@ export default function HomePage() {
   const [purgeDialog, setPurgeDialog] = useState<PurgeDialogState | null>(null);
   const [purgeDialogLoading, setPurgeDialogLoading] = useState(false);
   const [workspaceLoadingRunId, setWorkspaceLoadingRunId] = useState<string | null>(null);
+  const [workspaceRestoreMessage, setWorkspaceRestoreMessage] = useState<string | null>(null);
+  const [restoreStatus, setRestoreStatus] = useState<RestoreStatus>("idle");
   const [showInactiveRuns, setShowInactiveRuns] = useState(false);
   const [hiddenRunIds, setHiddenRunIds] = useState<string[]>([]);
   const [validationStartedAt, setValidationStartedAt] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const pdfRelinkInputRef = useRef<HTMLInputElement | null>(null);
 
   const summaryText = useMemo(() => {
     if (loading) {
@@ -209,10 +215,56 @@ export default function HomePage() {
 
   const latestRun = runs[0] ?? null;
   const loadedRunId = response?.summary.ingestion_run_id ?? null;
-  const retainedPdfUrl = loadedRunId ? `${API_BASE_URL}/api/ingestions/runs/${loadedRunId}/pdf` : null;
+  const isAutoRestoring = !response && (restoreStatus === "idle" || restoreStatus === "restoring");
 
   useEffect(() => {
     void refreshRuns();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function restoreWorkspaceOnStartup(): Promise<void> {
+      const storedRunId = readStoredLastRunId();
+      if (!storedRunId) {
+        if (!cancelled) {
+          setRestoreStatus("none");
+        }
+        return;
+      }
+
+      if (!cancelled) {
+        setRestoreStatus("restoring");
+        setWorkspaceRestoreMessage(null);
+      }
+
+      const result = await loadWorkspace(storedRunId, { quietOnFailure: true });
+      if (cancelled) {
+        return;
+      }
+
+      if (result.ok) {
+        setRestoreStatus("restored");
+        setWorkspaceRestoreMessage("Automatically reopened the last retained workspace after refresh.");
+        return;
+      }
+
+      if (result.stale) {
+        clearStoredLastRunId();
+        setRestoreStatus("stale");
+        setWorkspaceRestoreMessage("The last retained workspace is no longer available, so the console opened without it.");
+        return;
+      }
+
+      setRestoreStatus("failed");
+      setWorkspaceRestoreMessage("Automatic workspace restore did not complete. Use `Load workspace` after the backend is reachable.");
+    }
+
+    void restoreWorkspaceOnStartup();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -243,6 +295,22 @@ export default function HomePage() {
     } finally {
       setRunLoading(false);
     }
+  }
+
+  function persistLastRunId(runId: string | null | undefined): void {
+    if (!runId) {
+      clearStoredLastRunId();
+      return;
+    }
+    window.localStorage.setItem(LAST_RUN_STORAGE_KEY, runId);
+  }
+
+  function clearStoredLastRunId(): void {
+    window.localStorage.removeItem(LAST_RUN_STORAGE_KEY);
+  }
+
+  function readStoredLastRunId(): string | null {
+    return window.localStorage.getItem(LAST_RUN_STORAGE_KEY);
   }
 
   async function invalidateRun(runId: string) {
@@ -365,21 +433,45 @@ export default function HomePage() {
     }
   }
 
-  async function loadWorkspace(runId: string) {
+  async function loadWorkspace(
+    runId: string,
+    options?: {
+      quietOnFailure?: boolean;
+    }
+  ): Promise<{ ok: boolean; stale: boolean }> {
+    const quietOnFailure = Boolean(options?.quietOnFailure);
     setActionError(null);
+    setWorkspaceRestoreMessage(null);
     setWorkspaceLoadingRunId(runId);
     try {
       const result = await fetch(`${API_BASE_URL}/api/ingestions/runs/${runId}`);
       if (!result.ok) {
         const payload = await result.json().catch(() => ({}));
-        throw new Error(payload.detail ?? "Failed to load retained workspace.");
+        const detail = payload.detail ?? "Failed to load retained workspace.";
+        const stale = result.status === 404 || result.status === 409;
+        throw Object.assign(new Error(detail), { stale });
       }
       const payload = (await result.json()) as IngestionResponse;
       setResponse(payload);
       setPdfFile(null);
       setXmlFile(null);
+      persistLastRunId(payload.summary.ingestion_run_id);
+      return { ok: true, stale: false };
     } catch (loadError) {
-      setActionError(loadError instanceof Error ? loadError.message : "Unknown error");
+      const stale =
+        loadError instanceof Error &&
+        "stale" in loadError &&
+        typeof (loadError as Error & { stale?: unknown }).stale === "boolean"
+          ? Boolean((loadError as Error & { stale?: boolean }).stale)
+          : false;
+
+      if (stale) {
+        clearStoredLastRunId();
+      }
+      if (!quietOnFailure) {
+        setActionError(loadError instanceof Error ? loadError.message : "Unknown error");
+      }
+      return { ok: false, stale };
     } finally {
       setWorkspaceLoadingRunId(null);
     }
@@ -416,6 +508,9 @@ export default function HomePage() {
 
       const payload = (await result.json()) as IngestionResponse;
       setResponse(payload);
+      persistLastRunId(payload.summary.ingestion_run_id);
+      setRestoreStatus("restored");
+      setWorkspaceRestoreMessage(null);
       await refreshRuns();
     } catch (submissionError) {
       if (submissionError instanceof Error && submissionError.name === "AbortError") {
@@ -434,6 +529,18 @@ export default function HomePage() {
     abortControllerRef.current?.abort();
   }
 
+  function handleRelinkPdf(): void {
+    pdfRelinkInputRef.current?.click();
+  }
+
+  function handleRelinkPdfSelection(event: ChangeEvent<HTMLInputElement>): void {
+    const nextFile = event.target.files?.[0] ?? null;
+    if (nextFile) {
+      setPdfFile(nextFile);
+    }
+    event.target.value = "";
+  }
+
   function hideRun(runId: string) {
     setHiddenRunIds((current) => (current.includes(runId) ? current : [...current, runId]));
   }
@@ -448,6 +555,13 @@ export default function HomePage() {
 
   return (
     <main>
+      <input
+        ref={pdfRelinkInputRef}
+        type="file"
+        accept=".pdf"
+        onChange={handleRelinkPdfSelection}
+        style={{ display: "none" }}
+      />
       <section className="panel hero-panel">
         <div className="hero-grid">
           <div className="hero-copy">
@@ -592,13 +706,14 @@ export default function HomePage() {
                 Loaded run {response.summary.ingestion_run_id ?? "n/a"} recorded{" "}
                 {formatDateTime(response.summary.created_at)}.
               </p>
+              {workspaceRestoreMessage ? <p className="muted">{workspaceRestoreMessage}</p> : null}
             </div>
           </section>
           <CandidateReviewWorkspace
             response={response}
             pdfFile={pdfFile}
             apiBaseUrl={API_BASE_URL}
-            retainedPdfUrl={retainedPdfUrl}
+            onRelinkPdf={handleRelinkPdf}
           />
           <div className="grid results-grid">
             <ValidationViewer title="XML Validation" result={response.results.xml_validation} />
@@ -617,6 +732,19 @@ export default function HomePage() {
             </section>
           </div>
         </>
+      ) : isAutoRestoring ? (
+        <section className="panel">
+          <div className="section-header compact">
+            <div>
+              <span className="eyebrow">Review output</span>
+              <h2>Restoring retained workspace</h2>
+              <p className="muted">
+                Reopening the last retained workspace after refresh. If the saved run is still available, the
+                review console and retained PDF preview will return automatically.
+              </p>
+            </div>
+          </div>
+        </section>
       ) : (
         <section className="panel">
           <div className="section-header compact">
@@ -625,8 +753,10 @@ export default function HomePage() {
               <h2>No workspace loaded</h2>
               <p className="muted">
                 Validate a new PDF/XML pair above, or reopen a retained run from the retention list below using
-                `Load workspace`.
+                `Load workspace`. The console will also try to reopen the last retained workspace after refresh
+                when that run is still available.
               </p>
+              {workspaceRestoreMessage ? <p className="muted">{workspaceRestoreMessage}</p> : null}
             </div>
           </div>
         </section>
