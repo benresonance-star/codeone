@@ -210,6 +210,188 @@ class ParityScaffoldTests(unittest.TestCase):
         self.assertEqual(len(workspace["pdf_fragments"]), 6)
         self.assertEqual(len(workspace["xml_nodes"]), 2)
 
+    def test_validate_xml_adds_synthesized_table_row_nodes(self) -> None:
+        xml_bytes = b"""<?xml version="1.0" encoding="UTF-8"?>
+<table-reference id="tbl_ref_1">
+  <num>J3D11a</num>
+  <title>Maximum conductance to solar heat gain ratio</title>
+  <table id="tbl_data_1">
+    <tgroup cols="2">
+      <thead>
+        <row>
+          <entry>Climate zone</entry>
+          <entry>Maximum ratio</entry>
+        </row>
+      </thead>
+      <tbody>
+        <row>
+          <entry>2</entry>
+          <entry>16.95</entry>
+        </row>
+        <row>
+          <entry>3</entry>
+          <entry>19.88</entry>
+        </row>
+      </tbody>
+    </tgroup>
+  </table>
+</table-reference>
+"""
+
+        result = self.service._validate_xml(xml_bytes, "table-J3D11a-maximum-conductance-to-solar-heat-gain-ratio.xml")
+
+        row_nodes = [node for node in result["xml_nodes"] if "__row_" in node.node_id]
+        self.assertEqual(len(row_nodes), 2)
+        self.assertIn("Climate zone: 2", row_nodes[0].text)
+        self.assertIn("Maximum ratio: 16.95", row_nodes[0].text)
+
+    def test_validate_pdf_adds_row_fragments_from_tables(self) -> None:
+        extracted = ExtractedPdf(
+            pages_processed=1,
+            total_words=3,
+            blocks=[
+                StructuredBlock(
+                    block_id="docling_1_1",
+                    page=1,
+                    bbox=[0.0, 0.0, 10.0, 10.0],
+                    block_type="paragraph",
+                    text="Sample clause text",
+                    source_strategy="docling",
+                )
+            ],
+            tables=[
+                ExtractedTable(
+                    table_id="docling_tbl_1",
+                    rows=[
+                        ["Climate zone", "Maximum ratio"],
+                        ["2", "16.95"],
+                        ["3", "19.88"],
+                    ],
+                    headers_present=True,
+                    related_block_id="docling_1_2",
+                    bbox=[0.0, 10.0, 50.0, 40.0],
+                    metadata={"page": 2, "num_rows": 3, "num_cols": 2},
+                )
+            ],
+            strategy_name="docling",
+            runtime_mode="native_tables_text",
+        )
+        xml_context = {
+            "result": {
+                "gate_decision": {"can_progress_to_alignment_layer": False},
+                "document": {"doc_id": "benchmark_xml"},
+            },
+            "xml_nodes": [],
+        }
+        self.service._extract_pdf = lambda pdf_bytes, strategy: extracted  # type: ignore[method-assign]
+
+        result = self.service._validate_pdf(b"pdf", "benchmark.pdf", xml_context, self.strategy)
+
+        row_fragments = [fragment for fragment in result["fragments"] if "__row_" in fragment.fragment_id]
+        self.assertEqual(len(row_fragments), 2)
+        self.assertEqual(row_fragments[0].page, 2)
+        self.assertIn("Climate zone: 2", row_fragments[0].text)
+        self.assertIn("Maximum ratio: 16.95", row_fragments[0].text)
+
+    def test_align_fragment_prefers_specific_row_node_over_large_container(self) -> None:
+        fragment = PdfFragment(
+            fragment_id="frag_1",
+            page=1,
+            text="Climate zone: 2 Maximum ratio: 16.95",
+            bbox=[0.0, 0.0, 1.0, 1.0],
+        )
+        xml_nodes = [
+            XmlNode(
+                node_id="table_root",
+                clause_id="table_root",
+                text="J3D11a Maximum conductance ratio Climate zone Maximum ratio 2 16.95 3 19.88 4 13.34 5 11.83 6 6.27 7 12.90 8 12.90",
+                path="/table-reference[@id='table_root']",
+            ),
+            XmlNode(
+                node_id="table_root__row_1",
+                clause_id="table_root__row_1",
+                text="J3D11a Maximum conductance ratio Climate zone: 2 Maximum ratio: 16.95",
+                path="/table-reference[@id='table_root']/tbody/row[1]",
+            ),
+        ]
+
+        alignment = self.service._align_fragment(fragment, xml_nodes)
+
+        self.assertTrue(alignment["matched"])
+        self.assertEqual(alignment["node_id"], "table_root__row_1")
+
+    def test_review_workspace_prefers_row_nodes_when_specific_matches_exist(self) -> None:
+        xml_nodes = [
+            XmlNode(
+                node_id="table_root",
+                clause_id="table_root",
+                text="J3D11a Maximum conductance ratio Climate zone Maximum ratio 2 16.95 3 19.88",
+                path="/table-reference[@id='table_root']",
+            ),
+            XmlNode(
+                node_id="table_root__row_1",
+                clause_id="table_root__row_1",
+                text="J3D11a Maximum conductance ratio Climate zone: 2 Maximum ratio: 16.95",
+                path="/table-reference[@id='table_root']/tbody/row[1]",
+            ),
+            XmlNode(
+                node_id="table_root__row_2",
+                clause_id="table_root__row_2",
+                text="J3D11a Maximum conductance ratio Climate zone: 3 Maximum ratio: 19.88",
+                path="/table-reference[@id='table_root']/tbody/row[2]",
+            ),
+        ]
+        fragments = [
+            PdfFragment(fragment_id=f"frag_{index}", page=1, text=f"Fragment {index}", bbox=[0.0, 0.0, 1.0, 1.0])
+            for index in range(1, 121)
+        ]
+        alignments = [
+            {
+                "fragment_id": "docling_tbl_1__row_1",
+                "node_id": "table_root__row_1",
+                "confidence": 0.95,
+                "matched": True,
+                "page": 2,
+                "bbox": [0.0, 0.0, 1.0, 1.0],
+            },
+            {
+                "fragment_id": "docling_tbl_1__row_2",
+                "node_id": "table_root__row_2",
+                "confidence": 0.94,
+                "matched": True,
+                "page": 2,
+                "bbox": [0.0, 0.0, 1.0, 1.0],
+            },
+            {
+                "fragment_id": "frag_parent",
+                "node_id": "table_root",
+                "confidence": 0.95,
+                "matched": True,
+                "page": 1,
+                "bbox": [0.0, 0.0, 1.0, 1.0],
+            },
+        ]
+        fragments.extend(
+            [
+                PdfFragment(fragment_id="docling_tbl_1__row_1", page=2, text="Climate zone: 2 Maximum ratio: 16.95", bbox=[0.0, 10.0, 10.0, 20.0]),
+                PdfFragment(fragment_id="docling_tbl_1__row_2", page=2, text="Climate zone: 3 Maximum ratio: 19.88", bbox=[0.0, 20.0, 10.0, 30.0]),
+                PdfFragment(fragment_id="frag_parent", page=1, text="J3D11a Maximum conductance ratio", bbox=[0.0, 0.0, 10.0, 10.0]),
+            ]
+        )
+
+        workspace = self.service._build_review_workspace(
+            pdf_name="NCC 2022 - Vol 1 - Parts J2 and J3 - Energy Efficiency.pdf",
+            xml_name="table-J3D11a-maximum-conductance-to-solar-heat-gain-ratio.xml",
+            xml_nodes=xml_nodes,
+            fragments=fragments,
+            alignments=alignments,
+            canonical_snippets=[],
+        )
+
+        self.assertEqual(workspace["mode"], "focused")
+        self.assertEqual(workspace["alignments"][0]["node_id"], "table_root__row_1")
+        self.assertEqual([node.node_id for node in workspace["xml_nodes"]], ["table_root", "table_root__row_1", "table_root__row_2"])
+
 
 class DoclingExtractorTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -487,6 +669,34 @@ class DoclingExtractorTests(unittest.TestCase):
         tables = self.extractor._collect_tables(result, strategy)
 
         self.assertEqual(tables, [])
+
+    def test_collect_tables_preserves_page_metadata_and_related_block_id(self) -> None:
+        strategy = DocumentStrategyRouter().route(
+            pdf_name="NCC 2022 - Vol 1 - Parts J2 and J3 - Energy Efficiency.pdf",
+            xml_name="benchmark.xml",
+            requested_document_class="clause_parity",
+            requested_extraction_profile="baseline_clause_parity",
+            requested_evaluation_profile="baseline_clause_parity",
+            requested_extractor_strategy="docling",
+        )
+        table_item = SimpleNamespace(
+            label="table",
+            text="",
+            data=SimpleNamespace(num_rows=2, num_cols=2, table_cells=[]),
+            prov=[SimpleNamespace(page_no=3, bbox=SimpleNamespace(l=0.0, t=0.0, r=10.0, b=20.0))],
+            export_to_dataframe=lambda doc=None: SimpleNamespace(
+                fillna=lambda value: SimpleNamespace(values=SimpleNamespace(tolist=lambda: [["Header", "Value"], ["A", "1"]]))
+            ),
+            caption_text="Example table",
+        )
+        document = SimpleNamespace(iterate_items=lambda: [(table_item, 1)])
+        result = SimpleNamespace(document=document)
+
+        tables = self.extractor._collect_tables(result, strategy)
+
+        self.assertEqual(len(tables), 1)
+        self.assertEqual(tables[0].metadata["page"], 3)
+        self.assertEqual(tables[0].related_block_id, "docling_3_1")
 
     def test_runtime_flags_honor_strategy_requested_tables_mode(self) -> None:
         decision = self._decision(extractor_options={"docling_mode": "tables"})

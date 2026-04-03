@@ -48,6 +48,7 @@ MAX_DOCUMENT_FAMILY_ID_LENGTH = 80
 REVIEW_WORKSPACE_MAX_ALIGNMENTS_PER_NODE = 3
 REVIEW_WORKSPACE_NARROW_XML_NODE_LIMIT = 12
 REVIEW_WORKSPACE_LARGE_FRAGMENT_LIMIT = 100
+TABLE_ROW_FRAGMENT_MIN_TEXT_LENGTH = 12
 
 
 @dataclass
@@ -265,6 +266,8 @@ class IngestionService:
                             "notes": text_value[:120],
                         }
                     )
+
+        xml_nodes.extend(self._table_row_xml_nodes(root))
 
         metrics["duplicate_ids"] = sum(count - 1 for count in id_counts.values() if count > 1)
         metrics["empty_required_nodes"] = empty_required_nodes
@@ -567,7 +570,7 @@ class IngestionService:
         xml_nodes: list[XmlNode] = xml_context["xml_nodes"]
 
         extracted = self._extract_pdf(pdf_bytes, strategy)
-        fragments = self._fragments_from_blocks(extracted.blocks)
+        fragments = self._fragments_from_blocks(extracted.blocks, extracted.tables)
         page_count = extracted.pages_processed
         total_words = extracted.total_words
         text_based_ratio = 1.0 if page_count and total_words > 0 else 0.0
@@ -920,8 +923,12 @@ class IngestionService:
             raise ValueError(f"Unsupported extractor strategy: {strategy.extractor_strategy}")
         return extractor.extract(pdf_bytes, decision=strategy)
 
-    def _fragments_from_blocks(self, blocks: list[StructuredBlock]) -> list[PdfFragment]:
-        return [
+    def _fragments_from_blocks(
+        self,
+        blocks: list[StructuredBlock],
+        tables: list[Any] | None = None,
+    ) -> list[PdfFragment]:
+        fragments = [
             PdfFragment(
                 fragment_id=block.block_id,
                 page=block.page,
@@ -929,6 +936,108 @@ class IngestionService:
                 bbox=block.bbox,
             )
             for block in blocks
+        ]
+        if tables:
+            fragments.extend(self._fragments_from_tables(tables))
+        return fragments
+
+    def _fragments_from_tables(self, tables: list[Any]) -> list[PdfFragment]:
+        fragments: list[PdfFragment] = []
+        for table in tables:
+            row_groups = self._table_row_groups(table.rows, table.headers_present)
+            if not row_groups:
+                continue
+            page = max(int((table.metadata or {}).get("page") or 1), 1)
+            for row_index, row_group in enumerate(row_groups, start=1):
+                row_text = self._table_row_fragment_text(table, row_group["headers"], row_group["values"])
+                if len(row_text) < TABLE_ROW_FRAGMENT_MIN_TEXT_LENGTH:
+                    continue
+                fragments.append(
+                    PdfFragment(
+                        fragment_id=f"{table.table_id}__row_{row_index}",
+                        page=page,
+                        text=row_text,
+                        bbox=self._table_row_fragment_bbox(
+                            table.bbox,
+                            row_index=row_index,
+                            row_count=len(row_groups),
+                            has_header=bool(row_group["headers"]),
+                        ),
+                    )
+                )
+        return fragments
+
+    def _table_row_groups(
+        self,
+        rows: list[list[str]],
+        headers_present: bool,
+    ) -> list[dict[str, list[str]]]:
+        normalized_rows = [
+            [clean_text(cell) for cell in row]
+            for row in rows
+            if any(clean_text(cell) for cell in row)
+        ]
+        if not normalized_rows:
+            return []
+
+        if headers_present and len(normalized_rows) >= 2:
+            headers = normalized_rows[0]
+            body_rows = normalized_rows[1:]
+        else:
+            headers = []
+            body_rows = normalized_rows
+
+        grouped_rows: list[dict[str, list[str]]] = []
+        for row in body_rows:
+            values = row[:]
+            if not any(values):
+                continue
+            grouped_rows.append({"headers": headers, "values": values})
+        return grouped_rows
+
+    def _table_row_fragment_text(
+        self,
+        table: Any,
+        headers: list[str],
+        values: list[str],
+    ) -> str:
+        metadata = table.metadata or {}
+        prefix_parts = [clean_text(str(metadata.get("caption_text") or ""))]
+        labeled_values: list[str] = []
+        for index, value in enumerate(values):
+            if not value:
+                continue
+            header = headers[index] if index < len(headers) and headers[index] else ""
+            if header:
+                labeled_values.append(f"{header}: {value}")
+            elif len(values) == 2 and index == 1 and values[0]:
+                labeled_values.append(f"{values[0]}: {value}")
+            else:
+                labeled_values.append(value)
+        prefix_parts.extend(labeled_values)
+        return clean_text(" ".join(part for part in prefix_parts if part))
+
+    def _table_row_fragment_bbox(
+        self,
+        bbox: list[float] | None,
+        *,
+        row_index: int,
+        row_count: int,
+        has_header: bool,
+    ) -> list[float]:
+        if not bbox or len(bbox) != 4 or row_count <= 0:
+            return [0.0, 0.0, 0.0, 0.0]
+        x0, top, x1, bottom = bbox
+        total_visual_rows = row_count + (1 if has_header else 0)
+        visual_row_index = row_index + (1 if has_header else 0)
+        row_height = (bottom - top) / max(total_visual_rows, 1)
+        row_top = top + ((visual_row_index - 1) * row_height)
+        row_bottom = min(bottom, row_top + row_height)
+        return [
+            round(float(x0), 2),
+            round(float(row_top), 2),
+            round(float(x1), 2),
+            round(float(row_bottom), 2),
         ]
 
     def _serialize_block(self, block: StructuredBlock) -> dict[str, Any]:
@@ -1210,6 +1319,86 @@ class IngestionService:
                 metadata["volume"] = match.group(1)
         return metadata
 
+    def _table_row_xml_nodes(self, root: ET.Element) -> list[XmlNode]:
+        nodes: list[XmlNode] = []
+        for element in root.iter():
+            if element.tag.split("}")[-1].lower() != "table-reference":
+                continue
+
+            table_ref_id = element.attrib.get("id") or self._slugify(clean_text(" ".join(element.itertext()))[:40])
+            table_num = self._first_child_text(element, "num")
+            table_title = self._first_child_text(element, "title")
+            table_element = next(
+                (child for child in element.iter() if child.tag.split("}")[-1].lower() == "table"),
+                None,
+            )
+            if table_element is None:
+                continue
+
+            header_rows = self._table_section_rows(table_element, "thead")
+            body_rows = self._table_section_rows(table_element, "tbody")
+            headers = header_rows[0] if header_rows else []
+
+            for index, row in enumerate(body_rows, start=1):
+                values = [clean_text(value) for value in row]
+                if not any(values):
+                    continue
+                row_text = self._table_row_text(table_num, table_title, headers, values)
+                if len(row_text) < 20:
+                    continue
+                row_node_id = f"{table_ref_id}__row_{index}"
+                nodes.append(
+                    XmlNode(
+                        node_id=row_node_id,
+                        clause_id=row_node_id,
+                        text=row_text,
+                        path=f"{self._element_path(element)}/tbody/row[{index}]",
+                    )
+                )
+        return nodes
+
+    def _table_section_rows(self, table_element: ET.Element, section_tag: str) -> list[list[str]]:
+        rows: list[list[str]] = []
+        sections = [element for element in table_element.iter() if element.tag.split("}")[-1].lower() == section_tag]
+        for section in sections:
+            for row in section:
+                if row.tag.split("}")[-1].lower() != "row":
+                    continue
+                rows.append(
+                    [
+                        clean_text(" ".join(entry.itertext()))
+                        for entry in row
+                        if entry.tag.split("}")[-1].lower() == "entry"
+                    ]
+                )
+        return rows
+
+    def _table_row_text(
+        self,
+        table_num: str,
+        table_title: str,
+        headers: list[str],
+        values: list[str],
+    ) -> str:
+        parts = [part for part in (table_num, table_title) if part]
+        labeled_values: list[str] = []
+        for index, value in enumerate(values):
+            if not value:
+                continue
+            header = headers[index] if index < len(headers) and headers[index] else f"column_{index + 1}"
+            labeled_values.append(f"{header}: {value}")
+        if labeled_values:
+            parts.append("; ".join(labeled_values))
+        else:
+            parts.extend(values)
+        return clean_text(" ".join(parts))
+
+    def _first_child_text(self, element: ET.Element, tag_name: str) -> str:
+        for child in element:
+            if child.tag.split("}")[-1].lower() == tag_name:
+                return clean_text(" ".join(child.itertext()))
+        return ""
+
     def _build_document_family_id(self, *, pdf_name: str, xml_name: str) -> str:
         pdf_stem = re.sub(r"\.pdf$", "", pdf_name, flags=re.IGNORECASE)
         xml_stem = re.sub(r"\.xml$", "", xml_name, flags=re.IGNORECASE)
@@ -1251,7 +1440,7 @@ class IngestionService:
         if self._should_focus_review_workspace(xml_name=xml_name, xml_nodes=xml_nodes, fragments=fragments):
             workspace_mode = "focused"
             workspace_reason = "narrow_xml_artifact_focus"
-            review_alignments = self._focused_review_alignments(alignments)
+            review_alignments = self._focused_review_alignments(alignments, xml_nodes)
 
         review_fragment_ids = {item["fragment_id"] for item in review_alignments}
         review_node_ids = {item["node_id"] for item in review_alignments if item.get("node_id")}
@@ -1287,7 +1476,12 @@ class IngestionService:
             and len(fragments) >= REVIEW_WORKSPACE_LARGE_FRAGMENT_LIMIT
         )
 
-    def _focused_review_alignments(self, alignments: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _focused_review_alignments(
+        self,
+        alignments: list[dict[str, Any]],
+        xml_nodes: list[XmlNode],
+    ) -> list[dict[str, Any]]:
+        node_lookup = {node.node_id: node for node in xml_nodes}
         by_node: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for alignment in alignments:
             node_id = alignment.get("node_id")
@@ -1296,10 +1490,15 @@ class IngestionService:
             by_node[str(node_id)].append(alignment)
 
         selected: list[dict[str, Any]] = []
-        for node_alignments in by_node.values():
+        ranked_groups = sorted(
+            by_node.items(),
+            key=lambda item: self._review_group_priority(item[0], item[1], node_lookup),
+            reverse=True,
+        )
+        for node_id, node_alignments in ranked_groups:
             ranked = sorted(
                 node_alignments,
-                key=lambda item: (float(item.get("confidence", 0.0)), -int(item.get("page") or 0)),
+                key=lambda item: self._review_alignment_priority(item, node_lookup.get(node_id)),
                 reverse=True,
             )
             selected.extend(ranked[:REVIEW_WORKSPACE_MAX_ALIGNMENTS_PER_NODE])
@@ -1374,16 +1573,25 @@ class IngestionService:
 
         best_score = 0.0
         best_node: XmlNode | None = None
+        best_key = (-1.0, -1.0, 0.0)
+        candidate_tokens = set(candidate_text.split())
         for node in xml_nodes:
             node_text = normalize_text(node.text)
             if not node_text:
                 continue
+            token_score = self._token_overlap_score(candidate_tokens, set(node_text.split()))
             if candidate_text in node_text or node_text in candidate_text:
-                score = max(len(candidate_text), len(node_text)) / max(len(candidate_text), len(node_text))
-                score = max(score, SequenceMatcher(None, candidate_text, node_text[: len(candidate_text) + 80]).ratio())
+                overlap_score = min(len(candidate_text), len(node_text)) / max(len(candidate_text), len(node_text))
+                score = max(overlap_score, token_score, SequenceMatcher(None, candidate_text, node_text).ratio())
             else:
-                score = SequenceMatcher(None, candidate_text, node_text).ratio()
-            if score > best_score:
+                score = max(token_score, SequenceMatcher(None, candidate_text, node_text).ratio())
+            candidate_key = (
+                round(score, 3),
+                self._node_specificity_score(node),
+                -float(len(node_text)),
+            )
+            if candidate_key > best_key:
+                best_key = candidate_key
                 best_score = score
                 best_node = node
 
@@ -1395,6 +1603,52 @@ class IngestionService:
             "page": fragment.page,
             "bbox": fragment.bbox,
         }
+
+    def _token_overlap_score(self, candidate_tokens: set[str], node_tokens: set[str]) -> float:
+        if not candidate_tokens or not node_tokens:
+            return 0.0
+        overlap = candidate_tokens & node_tokens
+        if not overlap:
+            return 0.0
+        coverage = len(overlap) / len(candidate_tokens)
+        specificity = len(overlap) / len(node_tokens)
+        return round((0.75 * coverage) + (0.25 * specificity), 3)
+
+    def _node_specificity_score(self, node: XmlNode) -> float:
+        score = 0.0
+        if "__row_" in node.node_id or "/row[" in node.path:
+            score += 2.0
+        if "/tbody/" in node.path or "/thead/" in node.path:
+            score += 0.5
+        score += min(node.path.count("/"), 10) / 10
+        return round(score, 3)
+
+    def _review_group_priority(
+        self,
+        node_id: str,
+        node_alignments: list[dict[str, Any]],
+        node_lookup: dict[str, XmlNode],
+    ) -> tuple[float, float, float]:
+        node = node_lookup.get(node_id)
+        best_confidence = max((float(item.get("confidence", 0.0)) for item in node_alignments), default=0.0)
+        return (
+            self._node_specificity_score(node) if node else 0.0,
+            best_confidence,
+            -float(len(node.text)) if node else 0.0,
+        )
+
+    def _review_alignment_priority(
+        self,
+        alignment: dict[str, Any],
+        node: XmlNode | None,
+    ) -> tuple[float, float, float, float]:
+        fragment_id = str(alignment.get("fragment_id") or "")
+        return (
+            float(alignment.get("confidence", 0.0)),
+            self._node_specificity_score(node) if node else 0.0,
+            1.0 if "__row_" in fragment_id else 0.0,
+            -float(int(alignment.get("page") or 0)),
+        )
 
     def _element_path(self, element: ET.Element) -> str:
         tag_name = element.tag.split("}")[-1]

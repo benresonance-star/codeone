@@ -115,6 +115,7 @@ class DoclingExtractor:
 
             rows, normalization_meta = self._normalize_table(item, document, decision, items, item_index)
             provenance = self._primary_provenance(item)
+            page_number = int(getattr(provenance, "page_no", 1) or 1)
             data = getattr(item, "data", None)
             if not rows:
                 continue
@@ -124,9 +125,11 @@ class DoclingExtractor:
                     table_id=f"docling_tbl_{table_index}",
                     rows=rows,
                     headers_present=self._headers_present(rows),
+                    related_block_id=f"docling_{page_number}_{item_index + 1}",
                     bbox=self._bbox_from_provenance(provenance),
                     metadata={
                         "source": "docling",
+                        "page": page_number,
                         "num_rows": getattr(data, "num_rows", len(rows)),
                         "num_cols": getattr(data, "num_cols", max((len(row) for row in rows), default=0)),
                         "caption_text": self._caption_text(item),
