@@ -66,6 +66,7 @@ class IngestionRun(Base):
     tables: Mapped[list["IngestionTable"]] = relationship(back_populates="ingestion_run")
     alignments: Mapped[list["AlignmentRecord"]] = relationship(back_populates="ingestion_run")
     canonical_snippets: Mapped[list["CanonicalSnippet"]] = relationship(back_populates="ingestion_run")
+    review_decisions: Mapped[list["ReviewDecision"]] = relationship(back_populates="ingestion_run")
     evaluations: Mapped[list["EvaluationRecord"]] = relationship(back_populates="ingestion_run")
     snapshots: Mapped[list["SnapshotRecord"]] = relationship(back_populates="ingestion_run")
 
@@ -152,6 +153,24 @@ class CanonicalSnippet(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
     ingestion_run: Mapped[IngestionRun] = relationship(back_populates="canonical_snippets")
+
+
+class ReviewDecision(Base):
+    __tablename__ = "review_decisions"
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("review"))
+    ingestion_run_id: Mapped[str] = mapped_column(ForeignKey("ingestion_runs.id"), index=True)
+    candidate_id: Mapped[str] = mapped_column(String(128), index=True)
+    fragment_id: Mapped[str] = mapped_column(String(128), index=True)
+    node_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    decision_status: Mapped[str] = mapped_column(String(32), index=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    requested_by: Mapped[str] = mapped_column(String(80), default="system")
+    status: Mapped[str] = mapped_column(String(24), default="active", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    ingestion_run: Mapped[IngestionRun] = relationship(back_populates="review_decisions")
 
 
 class EvaluationRecord(Base):

@@ -202,6 +202,8 @@ class ParityScaffoldTests(unittest.TestCase):
             fragments=fragments,
             alignments=alignments,
             canonical_snippets=[],
+            xml_validation={"warnings": [], "errors": []},
+            pdf_validation={"warnings": [], "errors": []},
         )
 
         self.assertEqual(workspace["mode"], "focused")
@@ -209,6 +211,95 @@ class ParityScaffoldTests(unittest.TestCase):
         self.assertEqual(workspace["alignment_displayed"], 6)
         self.assertEqual(len(workspace["pdf_fragments"]), 6)
         self.assertEqual(len(workspace["xml_nodes"]), 2)
+
+    def test_review_workspace_emits_stable_review_units(self) -> None:
+        xml_nodes = [
+            XmlNode(
+                node_id="node_a",
+                clause_id="node_a",
+                text="Accessible means suitable for use by a person.",
+                path="/definition[@id='node_a']",
+            )
+        ]
+        fragments = [
+            PdfFragment(
+                fragment_id="frag_1",
+                page=1,
+                text="Accessible means suitable for use.",
+                bbox=[0.0, 0.0, 1.0, 1.0],
+            )
+        ]
+        alignments = [
+            {
+                "fragment_id": "frag_1",
+                "node_id": "node_a",
+                "confidence": 0.91,
+                "matched": True,
+                "page": 1,
+                "bbox": [0.0, 0.0, 1.0, 1.0],
+            }
+        ]
+
+        workspace = self.service._build_review_workspace(
+            pdf_name="schedule-1-definitions.pdf",
+            xml_name="schedule-1-definitions.xml",
+            xml_nodes=xml_nodes,
+            fragments=fragments,
+            alignments=alignments,
+            canonical_snippets=[],
+            xml_validation={"warnings": [], "errors": []},
+            pdf_validation={"warnings": [], "errors": []},
+        )
+
+        self.assertEqual(len(workspace["review_units"]), 1)
+        review_unit = workspace["review_units"][0]
+        self.assertEqual(review_unit["candidate_id"], "candidate:frag_1")
+        self.assertEqual(review_unit["candidate_type"], "definition")
+        self.assertEqual(review_unit["base_status"], "mismatch")
+        self.assertEqual(review_unit["fragment_id"], "frag_1")
+        self.assertEqual(review_unit["node_id"], "node_a")
+        self.assertIn("XML-only terms", review_unit["issues"][0])
+
+    def test_review_workspace_classifies_table_reference_rows_as_table(self) -> None:
+        xml_nodes = [
+            XmlNode(
+                node_id="table_ref_1__row_1",
+                clause_id="table_ref_1__row_1",
+                text="J3D11a Maximum conductance ratio Climate zone: 2 Maximum ratio: 16.95",
+                path="/table-reference[@id='table_ref_1']/tbody/row[1]",
+            )
+        ]
+        fragments = [
+            PdfFragment(
+                fragment_id="docling_tbl_30__row_1",
+                page=12,
+                text="Climate zone: 2 Maximum ratio: 16.95",
+                bbox=[0.0, 0.0, 1.0, 1.0],
+            )
+        ]
+        alignments = [
+            {
+                "fragment_id": "docling_tbl_30__row_1",
+                "node_id": "table_ref_1__row_1",
+                "confidence": 0.93,
+                "matched": True,
+                "page": 12,
+                "bbox": [0.0, 0.0, 1.0, 1.0],
+            }
+        ]
+
+        workspace = self.service._build_review_workspace(
+            pdf_name="NCC 2022 - Vol 1 - Parts J2 and J3 - Energy Efficiency.pdf",
+            xml_name="table-J3D11a-maximum-conductance-to-solar-heat-gain-ratio.xml",
+            xml_nodes=xml_nodes,
+            fragments=fragments,
+            alignments=alignments,
+            canonical_snippets=[],
+            xml_validation={"warnings": [], "errors": []},
+            pdf_validation={"warnings": [], "errors": []},
+        )
+
+        self.assertEqual(workspace["review_units"][0]["candidate_type"], "table")
 
     def test_validate_xml_adds_synthesized_table_row_nodes(self) -> None:
         xml_bytes = b"""<?xml version="1.0" encoding="UTF-8"?>
@@ -426,6 +517,8 @@ class ParityScaffoldTests(unittest.TestCase):
             fragments=fragments,
             alignments=alignments,
             canonical_snippets=[],
+            xml_validation={"warnings": [], "errors": []},
+            pdf_validation={"warnings": [], "errors": []},
         )
 
         self.assertEqual(workspace["mode"], "focused")

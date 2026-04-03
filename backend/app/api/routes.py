@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 
 from app.core.database import session_scope
 from app.models.validation import (
@@ -8,6 +9,9 @@ from app.models.validation import (
     IngestionRunListResponse,
     InvalidationResponse,
     PurgeSummaryResponse,
+    ReviewDecisionListResponse,
+    ReviewDecisionRecord,
+    ReviewDecisionRequest,
 )
 from app.services.ingestion import IngestionService
 from app.services.retention import RetentionService
@@ -79,6 +83,34 @@ def list_ingestion_runs() -> IngestionRunListResponse:
     return IngestionRunListResponse(runs=runs)
 
 
+@router.get("/ingestions/runs/{run_id}", response_model=IngestionResponse)
+def load_ingestion_run(run_id: str) -> IngestionResponse:
+    try:
+        with session_scope() as session:
+            payload = retention_service.load_run_payload(session, run_id=run_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Failed to load ingestion run: {exc}") from exc
+    return IngestionResponse.model_validate(payload)
+
+
+@router.get("/ingestions/runs/{run_id}/pdf")
+def load_ingestion_run_pdf(run_id: str) -> FileResponse:
+    try:
+        with session_scope() as session:
+            pdf_path, media_type, file_name = retention_service.resolve_run_pdf(session, run_id=run_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Failed to load retained PDF: {exc}") from exc
+    return FileResponse(path=pdf_path, media_type=media_type, filename=file_name)
+
+
 @router.post("/ingestions/runs/{run_id}/invalidate", response_model=InvalidationResponse)
 def invalidate_ingestion_run(run_id: str) -> InvalidationResponse:
     try:
@@ -96,6 +128,41 @@ def invalidate_ingestion_run(run_id: str) -> InvalidationResponse:
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"Failed to invalidate run: {exc}") from exc
     return InvalidationResponse.model_validate(payload)
+
+
+@router.get("/ingestions/runs/{run_id}/review-decisions", response_model=ReviewDecisionListResponse)
+def list_review_decisions(run_id: str) -> ReviewDecisionListResponse:
+    try:
+        with session_scope() as session:
+            decisions = retention_service.list_review_decisions(session, run_id=run_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Failed to load review decisions: {exc}") from exc
+    return ReviewDecisionListResponse(decisions=decisions)
+
+
+@router.post("/ingestions/runs/{run_id}/review-decisions", response_model=ReviewDecisionRecord)
+def save_review_decision(run_id: str, payload: ReviewDecisionRequest) -> ReviewDecisionRecord:
+    try:
+        with session_scope() as session:
+            record = retention_service.save_review_decision(
+                session,
+                run_id=run_id,
+                candidate_id=payload.candidate_id,
+                fragment_id=payload.fragment_id,
+                node_id=payload.node_id,
+                decision_status=payload.decision_status,
+                note=payload.note,
+                requested_by="api_user",
+            )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Failed to save review decision: {exc}") from exc
+    return ReviewDecisionRecord.model_validate(record)
 
 
 @router.get("/purge/runs/{run_id}/dry-run", response_model=PurgeSummaryResponse)

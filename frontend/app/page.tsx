@@ -10,6 +10,7 @@ type IngestionResponse = {
     ingestion_run_id?: string | null;
     ingestion_run_status?: string | null;
     document_family_id?: string | null;
+    created_at?: string | null;
     pdf_source_document_id?: string | null;
     xml_source_document_id?: string | null;
     xml_status: string;
@@ -75,6 +76,24 @@ type IngestionResponse = {
       clause_id?: string;
       fragment_id?: string;
     }[];
+    review_units?: {
+      candidate_id: string;
+      title: string;
+      candidate_type: string;
+      confidence: number;
+      base_status: string;
+      matched: boolean;
+      page?: number | null;
+      fragment_id: string;
+      node_id?: string | null;
+      xml_path: string;
+      xml_text: string;
+      pdf_text: string;
+      bbox: number[];
+      issues: string[];
+      xml_only_terms: string[];
+      pdf_only_terms: string[];
+    }[];
     alignment_total?: number;
     alignment_displayed?: number;
   };
@@ -104,7 +123,28 @@ type PurgeSummary = {
   raw_inputs_retained: boolean;
 };
 
+type PurgeDialogState = {
+  targetType: "run" | "family";
+  targetId: string;
+  label: string;
+  summary: PurgeSummary;
+};
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+
+function formatDateTime(value: string | null | undefined): string {
+  if (!value) {
+    return "n/a";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(parsed);
+}
 
 export default function HomePage() {
   const [pdfFile, setPdfFile] = useState<File | null>(null);
@@ -116,6 +156,11 @@ export default function HomePage() {
   const [runLoading, setRunLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [purgePreview, setPurgePreview] = useState<PurgeSummary | null>(null);
+  const [purgeDialog, setPurgeDialog] = useState<PurgeDialogState | null>(null);
+  const [purgeDialogLoading, setPurgeDialogLoading] = useState(false);
+  const [workspaceLoadingRunId, setWorkspaceLoadingRunId] = useState<string | null>(null);
+  const [showInactiveRuns, setShowInactiveRuns] = useState(false);
+  const [hiddenRunIds, setHiddenRunIds] = useState<string[]>([]);
   const [validationStartedAt, setValidationStartedAt] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -129,6 +174,42 @@ export default function HomePage() {
     }
     return `XML: ${response.summary.xml_status} | PDF: ${response.summary.pdf_status} | Can Progress: ${response.summary.can_progress}`;
   }, [loading, pdfFile, response, xmlFile]);
+
+  const activeRunCount = useMemo(
+    () => runs.filter((run) => run.status === "active").length,
+    [runs]
+  );
+
+  const inactiveRuns = useMemo(
+    () => runs.filter((run) => ["invalidated", "purged"].includes(run.status)),
+    [runs]
+  );
+
+  const manuallyHiddenRuns = useMemo(
+    () => inactiveRuns.filter((run) => hiddenRunIds.includes(run.ingestion_run_id)),
+    [hiddenRunIds, inactiveRuns]
+  );
+
+  const visibleRuns = useMemo(
+    () =>
+      runs.filter((run) => {
+        if (run.status === "active") {
+          return true;
+        }
+        if (!["invalidated", "purged"].includes(run.status)) {
+          return true;
+        }
+        if (!showInactiveRuns) {
+          return false;
+        }
+        return !hiddenRunIds.includes(run.ingestion_run_id);
+      }),
+    [hiddenRunIds, runs, showInactiveRuns]
+  );
+
+  const latestRun = runs[0] ?? null;
+  const loadedRunId = response?.summary.ingestion_run_id ?? null;
+  const retainedPdfUrl = loadedRunId ? `${API_BASE_URL}/api/ingestions/runs/${loadedRunId}/pdf` : null;
 
   useEffect(() => {
     void refreshRuns();
@@ -194,23 +275,6 @@ export default function HomePage() {
     }
   }
 
-  async function purgeRun(runId: string) {
-    setActionError(null);
-    try {
-      const result = await fetch(`${API_BASE_URL}/api/purge/runs/${runId}`, {
-        method: "POST",
-      });
-      if (!result.ok) {
-        const payload = await result.json().catch(() => ({}));
-        throw new Error(payload.detail ?? "Failed to purge run.");
-      }
-      setPurgePreview((await result.json()) as PurgeSummary);
-      await refreshRuns();
-    } catch (purgeError) {
-      setActionError(purgeError instanceof Error ? purgeError.message : "Unknown error");
-    }
-  }
-
   async function previewFamilyPurge(sourceDocumentId: string) {
     setActionError(null);
     try {
@@ -225,20 +289,99 @@ export default function HomePage() {
     }
   }
 
-  async function purgeFamily(sourceDocumentId: string) {
+  async function prepareRunPurge(run: RunRecord) {
     setActionError(null);
+    setPurgeDialogLoading(true);
     try {
-      const result = await fetch(`${API_BASE_URL}/api/purge/source-documents/${sourceDocumentId}`, {
-        method: "POST",
-      });
+      const result = await fetch(`${API_BASE_URL}/api/purge/runs/${run.ingestion_run_id}/dry-run`);
       if (!result.ok) {
         const payload = await result.json().catch(() => ({}));
-        throw new Error(payload.detail ?? "Failed to purge source document family.");
+        throw new Error(payload.detail ?? "Failed to preview purge.");
       }
-      setPurgePreview((await result.json()) as PurgeSummary);
+      const summary = (await result.json()) as PurgeSummary;
+      setPurgeDialog({
+        targetType: "run",
+        targetId: run.ingestion_run_id,
+        label: run.document_family_id,
+        summary,
+      });
+    } catch (previewError) {
+      setActionError(previewError instanceof Error ? previewError.message : "Unknown error");
+    } finally {
+      setPurgeDialogLoading(false);
+    }
+  }
+
+  async function prepareFamilyPurge(run: RunRecord) {
+    setActionError(null);
+    setPurgeDialogLoading(true);
+    try {
+      const result = await fetch(`${API_BASE_URL}/api/purge/source-documents/${run.pdf_source_document_id}/dry-run`);
+      if (!result.ok) {
+        const payload = await result.json().catch(() => ({}));
+        throw new Error(payload.detail ?? "Failed to preview family purge.");
+      }
+      const summary = (await result.json()) as PurgeSummary;
+      setPurgeDialog({
+        targetType: "family",
+        targetId: run.pdf_source_document_id,
+        label: run.document_family_id,
+        summary,
+      });
+    } catch (previewError) {
+      setActionError(previewError instanceof Error ? previewError.message : "Unknown error");
+    } finally {
+      setPurgeDialogLoading(false);
+    }
+  }
+
+  async function confirmPurge() {
+    if (!purgeDialog) {
+      return;
+    }
+
+    setActionError(null);
+    setPurgeDialogLoading(true);
+    try {
+      const result =
+        purgeDialog.targetType === "run"
+          ? await fetch(`${API_BASE_URL}/api/purge/runs/${purgeDialog.targetId}`, { method: "POST" })
+          : await fetch(`${API_BASE_URL}/api/purge/source-documents/${purgeDialog.targetId}`, {
+              method: "POST",
+            });
+      if (!result.ok) {
+        const payload = await result.json().catch(() => ({}));
+        throw new Error(payload.detail ?? "Failed to purge target.");
+      }
+      const payload = (await result.json()) as PurgeSummary;
+
+      setPurgePreview(payload);
+      setPurgeDialog(null);
       await refreshRuns();
     } catch (purgeError) {
       setActionError(purgeError instanceof Error ? purgeError.message : "Unknown error");
+    } finally {
+      setPurgeDialogLoading(false);
+    }
+  }
+
+  async function loadWorkspace(runId: string) {
+    setActionError(null);
+    setWorkspaceLoadingRunId(runId);
+    try {
+      const result = await fetch(`${API_BASE_URL}/api/ingestions/runs/${runId}`);
+      if (!result.ok) {
+        const payload = await result.json().catch(() => ({}));
+        throw new Error(payload.detail ?? "Failed to load retained workspace.");
+      }
+      const payload = (await result.json()) as IngestionResponse;
+      setResponse(payload);
+      setPdfFile(null);
+      setXmlFile(null);
+    } catch (loadError) {
+      setActionError(loadError instanceof Error ? loadError.message : "Unknown error");
+    } finally {
+      setWorkspaceLoadingRunId(null);
     }
   }
 
@@ -251,7 +394,6 @@ export default function HomePage() {
 
     setLoading(true);
     setError(null);
-    setResponse(null);
     setValidationStartedAt(Date.now());
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -292,44 +434,116 @@ export default function HomePage() {
     abortControllerRef.current?.abort();
   }
 
+  function hideRun(runId: string) {
+    setHiddenRunIds((current) => (current.includes(runId) ? current : [...current, runId]));
+  }
+
+  function unhideRun(runId: string) {
+    setHiddenRunIds((current) => current.filter((id) => id !== runId));
+  }
+
+  function restoreHiddenRuns() {
+    setHiddenRunIds([]);
+  }
+
   return (
     <main>
-      <section className="panel">
-        <h1>NCC Ingestion Console</h1>
-        <p>
-            Run the hardened XML and PDF contracts together, inspect review candidates, and check whether
-            the paired document can progress toward candidate-backed semantic processing.
-        </p>
-        <p>{summaryText}</p>
+      <section className="panel hero-panel">
+        <div className="hero-grid">
+          <div className="hero-copy">
+            <span className="eyebrow">NCC document operations</span>
+            <h1>NCC Ingestion Console</h1>
+            <p className="hero-lead">
+              Run the hardened XML and PDF contracts together, inspect candidate-backed review evidence,
+              and manage retained ingestion runs from a single operator console.
+            </p>
+            <p className="muted">{summaryText}</p>
+          </div>
+          <div className="hero-stats" aria-label="Console overview">
+            <div className="summary-card">
+              <strong>Active Runs</strong>
+              <span>{activeRunCount}</span>
+            </div>
+            <div className="summary-card">
+              <strong>Current Pair</strong>
+              <span>{pdfFile && xmlFile ? "Ready" : "Awaiting files"}</span>
+            </div>
+            <div className="summary-card">
+              <strong>Latest Family</strong>
+              <span>{latestRun?.document_family_id ?? "No runs yet"}</span>
+              <span className="summary-subtext">{formatDateTime(latestRun?.created_at)}</span>
+            </div>
+          </div>
+        </div>
       </section>
 
-      <section className="panel">
-        <form className="grid" onSubmit={onSubmit} aria-busy={loading}>
+      <section className="panel intake-panel">
+        <div className="section-header">
           <div>
-            <label htmlFor="pdf">PDF document</label>
-            <input
-              id="pdf"
-              type="file"
-              accept=".pdf"
-              disabled={loading}
-              onChange={(event) => setPdfFile(event.target.files?.[0] ?? null)}
-            />
+            <span className="eyebrow">Validate pair</span>
+            <h2>Load a PDF and XML source</h2>
+            <p className="muted">
+              Start a new ingestion run, then review the candidate workspace and structured validation output
+              below.
+            </p>
           </div>
-          <div>
-            <label htmlFor="xml">XML source</label>
-            <input
-              id="xml"
-              type="file"
-              accept=".xml"
-              disabled={loading}
-              onChange={(event) => setXmlFile(event.target.files?.[0] ?? null)}
-            />
-          </div>
-          <button type="submit" disabled={loading}>
-            {loading ? "Validating..." : "Validate ingestion"}
-          </button>
-          {error ? <p style={{ color: "#fca5a5" }}>{error}</p> : null}
-        </form>
+        </div>
+        <div className="intake-layout">
+          <form className="grid intake-form" onSubmit={onSubmit} aria-busy={loading}>
+            <div className="field-shell">
+              <label htmlFor="pdf">PDF document</label>
+              <input
+                id="pdf"
+                type="file"
+                accept=".pdf"
+                disabled={loading}
+                onChange={(event) => setPdfFile(event.target.files?.[0] ?? null)}
+              />
+            </div>
+            <div className="field-shell">
+              <label htmlFor="xml">XML source</label>
+              <input
+                id="xml"
+                type="file"
+                accept=".xml"
+                disabled={loading}
+                onChange={(event) => setXmlFile(event.target.files?.[0] ?? null)}
+              />
+            </div>
+            <div className="action-row">
+              <button type="submit" disabled={loading}>
+                {loading ? "Validating..." : "Validate ingestion"}
+              </button>
+              {loading ? (
+                <button type="button" className="button-secondary" onClick={cancelValidation}>
+                  Cancel validation
+                </button>
+              ) : null}
+            </div>
+            {error ? (
+              <p className="alert alert-error" role="alert">
+                {error}
+              </p>
+            ) : null}
+          </form>
+          <aside className="intake-sidebar panel-muted">
+            <h3>Run readiness</h3>
+            <div className="detail-list">
+              <div>
+                <strong>PDF</strong>: {pdfFile?.name ?? "Not selected"}
+              </div>
+              <div>
+                <strong>XML</strong>: {xmlFile?.name ?? "Not selected"}
+              </div>
+              <div>
+                <strong>Latest response</strong>: {response ? response.summary.pdf_status : "No response yet"}
+              </div>
+              <div>
+                <strong>Run timestamp</strong>: {formatDateTime(response?.summary.created_at)}
+              </div>
+            </div>
+          </aside>
+        </div>
         {loading ? (
           <div className="validation-progress" aria-live="polite">
             <div className="validation-progress-header">
@@ -360,14 +574,9 @@ export default function HomePage() {
                   <strong>Status</strong>: Waiting for the validation response from the backend.
                 </div>
                 <div>
-                  <strong>Previous results</strong>: Hidden until the new request completes.
+                  <strong>Previous results</strong>: {response ? "Still visible below for comparison." : "No earlier run loaded."}
                 </div>
               </div>
-            </div>
-            <div className="action-row" style={{ marginBottom: 0 }}>
-              <button type="button" onClick={cancelValidation}>
-                Cancel validation
-              </button>
             </div>
           </div>
         ) : null}
@@ -375,42 +584,174 @@ export default function HomePage() {
 
       {response ? (
         <>
-          <CandidateReviewWorkspace response={response} pdfFile={pdfFile} />
-          <div className="grid">
+          <section className="section-header">
+            <div>
+              <span className="eyebrow">Review output</span>
+              <h2>Current validation and candidate review</h2>
+              <p className="muted">
+                Loaded run {response.summary.ingestion_run_id ?? "n/a"} recorded{" "}
+                {formatDateTime(response.summary.created_at)}.
+              </p>
+            </div>
+          </section>
+          <CandidateReviewWorkspace
+            response={response}
+            pdfFile={pdfFile}
+            apiBaseUrl={API_BASE_URL}
+            retainedPdfUrl={retainedPdfUrl}
+          />
+          <div className="grid results-grid">
             <ValidationViewer title="XML Validation" result={response.results.xml_validation} />
             <ValidationViewer title="PDF Validation" result={response.results.pdf_validation} />
             <section className="panel">
-              <h2>Raw Metrics</h2>
-              <pre>{JSON.stringify(response.raw_metrics, null, 2)}</pre>
+              <div className="section-header compact">
+                <div>
+                  <h2>Raw Metrics</h2>
+                  <p className="muted">Reference diagnostics for debugging and schema-level inspection.</p>
+                </div>
+              </div>
+              <details className="detail-disclosure" open>
+                <summary>Open raw metrics JSON</summary>
+                <pre>{JSON.stringify(response.raw_metrics, null, 2)}</pre>
+              </details>
             </section>
           </div>
         </>
-      ) : null}
+      ) : (
+        <section className="panel">
+          <div className="section-header compact">
+            <div>
+              <span className="eyebrow">Review output</span>
+              <h2>No workspace loaded</h2>
+              <p className="muted">
+                Validate a new PDF/XML pair above, or reopen a retained run from the retention list below using
+                `Load workspace`.
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="panel">
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+        <div className="section-header">
           <div>
+            <span className="eyebrow">Retention</span>
             <h2>Retention Controls</h2>
-            <p>Invalidate a bad run first, then preview or execute a lineage-based purge.</p>
+            <p className="muted">
+              Retention keeps ingestion runs available for review after validation. Use the controls below based
+              on whether you are organizing the console, marking a run invalid, or removing retained derived
+              records.
+            </p>
           </div>
-          <button type="button" onClick={() => void refreshRuns()} disabled={runLoading}>
+          <button type="button" className="button-secondary" onClick={() => void refreshRuns()} disabled={runLoading}>
             {runLoading ? "Refreshing..." : "Refresh runs"}
           </button>
         </div>
-        {actionError ? <p style={{ color: "#fca5a5" }}>{actionError}</p> : null}
-        <div className="grid">
-          {runs.map((run) => (
-            <div key={run.ingestion_run_id} className="panel" style={{ marginBottom: 0 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+        <div className="retention-toolbar">
+          <div className="retention-toggle-group" role="toolbar" aria-label="Retention visibility controls">
+            <button
+              type="button"
+              className="button-secondary"
+              aria-pressed={showInactiveRuns}
+              onClick={() => setShowInactiveRuns((current) => !current)}
+            >
+              {showInactiveRuns ? "Hide non-active runs" : `Show non-active runs (${inactiveRuns.length})`}
+            </button>
+            {manuallyHiddenRuns.length ? (
+              <button type="button" className="button-secondary" onClick={restoreHiddenRuns}>
+                Unhide all ({manuallyHiddenRuns.length})
+              </button>
+            ) : null}
+          </div>
+          <p className="muted retention-toolbar-note">
+            Active runs are always visible. Invalidated and purged runs stay hidden until you choose to reveal
+            them.
+          </p>
+        </div>
+        <div className="grid retention-guide">
+          <div className="summary-card">
+            <strong>Hide</strong>
+            <span>UI only</span>
+            <span className="summary-subtext">Removes non-active runs from this session view only.</span>
+          </div>
+          <div className="summary-card">
+            <strong>Invalidate</strong>
+            <span>Backend status change</span>
+            <span className="summary-subtext">Marks a run invalid while keeping retained evidence available.</span>
+          </div>
+          <div className="summary-card">
+            <strong>Purge</strong>
+            <span>Destructive cleanup</span>
+            <span className="summary-subtext">Deletes retained derived lineage after preview and confirmation.</span>
+          </div>
+        </div>
+        {manuallyHiddenRuns.length ? (
+          <details className="detail-disclosure retention-hidden-summary">
+            <summary>Hidden items in this session ({manuallyHiddenRuns.length})</summary>
+            <div className="grid retention-hidden-list">
+              {manuallyHiddenRuns.map((run) => (
+                <div key={run.ingestion_run_id} className="retention-hidden-item">
+                  <div className="retention-hidden-meta">
+                    <div>
+                      <strong>{run.document_family_id}</strong>
+                      <p className="muted">{run.ingestion_run_id}</p>
+                    </div>
+                    <span
+                      className={`status ${
+                        run.status === "active" ? "pass" : run.status === "invalidated" ? "warn" : "fail"
+                      }`}
+                    >
+                      {run.status}
+                    </span>
+                  </div>
+                  <div className="action-row">
+                    <button type="button" className="button-secondary" onClick={() => unhideRun(run.ingestion_run_id)}>
+                      Unhide
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </details>
+        ) : null}
+        {actionError ? (
+          <p className="alert alert-error" role="alert">
+            {actionError}
+          </p>
+        ) : null}
+        <div className="grid retention-grid">
+          {!runs.length ? (
+            <div className="empty-state">
+              No ingestion runs yet. Validate a PDF and XML pair above to create the first retained run.
+            </div>
+          ) : null}
+          {runs.length > 0 && !visibleRuns.length ? (
+            <div className="empty-state">
+              No retention items are visible right now. Reveal non-active runs or unhide hidden items to see
+              more.
+            </div>
+          ) : null}
+          {visibleRuns.map((run) => (
+            <div
+              key={run.ingestion_run_id}
+              className={`panel retention-card ${loadedRunId === run.ingestion_run_id ? "retention-card-loaded" : ""}`}
+            >
+              <div className="workspace-header">
                 <div>
                   <h3>{run.document_family_id}</h3>
-                  <p>{run.ingestion_run_id}</p>
+                  <p className="muted">{run.ingestion_run_id}</p>
                 </div>
-                <span className={`status ${run.status === "active" ? "pass" : run.status === "invalidated" ? "warn" : "fail"}`}>
-                  {run.status}
-                </span>
+                <div className="retention-status-stack">
+                  {loadedRunId === run.ingestion_run_id ? <span className="status pass">loaded</span> : null}
+                  <span className={`status ${run.status === "active" ? "pass" : run.status === "invalidated" ? "warn" : "fail"}`}>
+                    {run.status}
+                  </span>
+                </div>
               </div>
               <div className="detail-list">
+                <div>
+                  <strong>Run Created</strong>: {formatDateTime(run.created_at)}
+                </div>
                 <div>
                   <strong>Can Progress</strong>: {String(run.can_progress)}
                 </div>
@@ -426,20 +767,33 @@ export default function HomePage() {
                   </div>
                 ) : null}
               </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
-                <button type="button" onClick={() => void invalidateRun(run.ingestion_run_id)} disabled={run.status !== "active"}>
+              <div className="action-row">
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={() => void loadWorkspace(run.ingestion_run_id)}
+                  disabled={run.status === "purged" || workspaceLoadingRunId === run.ingestion_run_id}
+                >
+                  {workspaceLoadingRunId === run.ingestion_run_id ? "Loading..." : loadedRunId === run.ingestion_run_id ? "Loaded workspace" : "Load workspace"}
+                </button>
+                <button type="button" className="button-secondary" onClick={() => void invalidateRun(run.ingestion_run_id)} disabled={run.status !== "active"}>
                   Invalidate
                 </button>
-                <button type="button" onClick={() => void previewRunPurge(run.ingestion_run_id)}>
+                {run.status !== "active" ? (
+                  <button type="button" className="button-secondary" onClick={() => hideRun(run.ingestion_run_id)}>
+                    Hide
+                  </button>
+                ) : null}
+                <button type="button" className="button-secondary" onClick={() => void previewRunPurge(run.ingestion_run_id)}>
                   Dry-run purge
                 </button>
-                <button type="button" onClick={() => void purgeRun(run.ingestion_run_id)}>
+                <button type="button" className="button-danger" onClick={() => void prepareRunPurge(run)} disabled={purgeDialogLoading}>
                   Purge run
                 </button>
-                <button type="button" onClick={() => void previewFamilyPurge(run.pdf_source_document_id)}>
+                <button type="button" className="button-secondary" onClick={() => void previewFamilyPurge(run.pdf_source_document_id)}>
                   Dry-run family purge
                 </button>
-                <button type="button" onClick={() => void purgeFamily(run.pdf_source_document_id)}>
+                <button type="button" className="button-danger" onClick={() => void prepareFamilyPurge(run)} disabled={purgeDialogLoading}>
                   Purge family
                 </button>
               </div>
@@ -447,12 +801,49 @@ export default function HomePage() {
           ))}
         </div>
         {purgePreview ? (
-          <>
-            <h3>Purge Preview</h3>
+          <details className="detail-disclosure">
+            <summary>Latest purge summary</summary>
             <pre>{JSON.stringify(purgePreview, null, 2)}</pre>
-          </>
+          </details>
         ) : null}
       </section>
+
+      {purgeDialog ? (
+        <div className="dialog-backdrop" role="presentation">
+          <section className="dialog" role="dialog" aria-modal="true" aria-labelledby="purge-dialog-title">
+            <span className="eyebrow">Destructive action</span>
+            <h2 id="purge-dialog-title">
+              Confirm {purgeDialog.targetType === "run" ? "run purge" : "family purge"}
+            </h2>
+            <p>
+              You are about to purge lineage records for <strong>{purgeDialog.label}</strong>. Raw inputs are
+              retained, but derived records listed below will be marked purged.
+            </p>
+            <div className="grid two-column">
+              <div className="summary-card">
+                <strong>Target</strong>
+                <span>{purgeDialog.summary.target_id}</span>
+              </div>
+              <div className="summary-card">
+                <strong>Affected runs</strong>
+                <span>{purgeDialog.summary.run_ids.length}</span>
+              </div>
+            </div>
+            <details className="detail-disclosure" open>
+              <summary>Preview purge scope</summary>
+              <pre>{JSON.stringify(purgeDialog.summary, null, 2)}</pre>
+            </details>
+            <div className="dialog-actions">
+              <button type="button" className="button-secondary" onClick={() => setPurgeDialog(null)} disabled={purgeDialogLoading}>
+                Cancel
+              </button>
+              <button type="button" className="button-danger" onClick={() => void confirmPurge()} disabled={purgeDialogLoading}>
+                {purgeDialogLoading ? "Purging..." : "Confirm purge"}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }

@@ -1,6 +1,6 @@
 # PDF Ingestion Validation Contract
 ## NCC PDF Ingestion Constraint Manual
-### Version 1.5.0
+### Version 1.6.0
 
 ---
 
@@ -233,6 +233,9 @@ Companion ingestion responses may additionally surface a transitional review pay
 - `lineage.pdf_fragments`
 - `lineage.alignments`
 - `lineage.canonical_snippets`
+- `review_workspace.review_units`
+- `summary.ingestion_run_id`
+- `summary.created_at`
 
 Current-state expectation for lineage-oriented review payloads:
 - the review payload exists to support candidate review and traceability before the first-class candidate runtime is fully implemented
@@ -240,10 +243,15 @@ Current-state expectation for lineage-oriented review payloads:
 - focused narrow-artifact review may preferentially surface row-level XML nodes and row-level PDF fragments when those matches exist
 - `document_family_id` may be truncated and suffixed with a deterministic hash when needed to stay within persistence limits
 - storage-safe identifier shortening must not make the family identifier nondeterministic for the same PDF/XML pair
+- retained runs may be reloaded through an explicit run-detail API such as `GET /api/ingestions/runs/{run_id}`
+- the reloaded run payload should restore validation outputs, lineage, review workspace state, and persisted reviewer decisions without recomputing extraction at request time
 
 Current-state expectation for UI validation feedback:
 - the UI may show in-flight validation progress, selected file names, elapsed time, and request-cancel affordances while the backend request is still running
 - temporary progress feedback is operational UI state, not a contract-level validation outcome
+- after a refresh, the UI may reopen a retained workspace from persisted run data rather than forcing a fresh validation request
+- when a retained PDF is still present in storage, the UI may restore the embedded PDF preview through a dedicated file endpoint such as `GET /api/ingestions/runs/{run_id}/pdf`
+- retained PDF preview restoration should preserve page-level candidate navigation, while exact in-page highlighting remains optional follow-on behavior
 
 Current-state expectation for `table_validation`:
 - `table_id`, extraction counts, status, and confidence are required for emitted table entries

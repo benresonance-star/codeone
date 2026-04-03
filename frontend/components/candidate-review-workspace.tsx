@@ -46,6 +46,30 @@ type ReviewStatus =
   | "paused"
   | "ambiguous";
 
+type ReviewUnit = {
+  candidate_id: string;
+  title: string;
+  candidate_type: string;
+  confidence: number;
+  base_status: ReviewStatus | string;
+  matched: boolean;
+  page?: number | null;
+  fragment_id: string;
+  node_id?: string | null;
+  xml_path: string;
+  xml_text: string;
+  pdf_text: string;
+  bbox: number[];
+  issues: string[];
+  xml_only_terms: string[];
+  pdf_only_terms: string[];
+};
+
+type ReviewDecision = {
+  candidate_id: string;
+  decision_status: ReviewStatus;
+};
+
 type CandidateRecord = {
   id: string;
   title: string;
@@ -67,7 +91,9 @@ type CandidateRecord = {
 
 type IngestionResponseLike = {
   summary?: {
+    ingestion_run_id?: string | null;
     document_family_id?: string | null;
+    created_at?: string | null;
     can_progress?: boolean;
   };
   results?: {
@@ -93,6 +119,7 @@ type IngestionResponseLike = {
     pdf_fragments?: PdfFragment[];
     alignments?: AlignmentRecord[];
     canonical_snippets?: CanonicalSnippet[];
+    review_units?: ReviewUnit[];
     alignment_total?: number;
     alignment_displayed?: number;
   };
@@ -101,6 +128,8 @@ type IngestionResponseLike = {
 type CandidateReviewWorkspaceProps = {
   response: IngestionResponseLike;
   pdfFile: File | null;
+  apiBaseUrl: string;
+  retainedPdfUrl: string | null;
 };
 
 type FilterKey = "review" | "all" | "approved" | "rejected";
@@ -151,14 +180,14 @@ function detectCandidateType(xmlPath: string, xmlText: string): string {
   const normalizedPath = xmlPath.toLowerCase();
   const normalizedText = xmlText.toLowerCase();
 
+  if (normalizedPath.includes("table")) {
+    return "table";
+  }
   if (normalizedPath.includes("xref") || normalizedPath.includes("reference")) {
     return "reference";
   }
   if (normalizedPath.includes("definition") || normalizedText.includes(" means ")) {
     return "definition";
-  }
-  if (normalizedPath.includes("table")) {
-    return "table";
   }
   return "rule";
 }
@@ -240,7 +269,100 @@ function renderHighlightedText(text: string, emphasisTerms: string[], className:
     });
 }
 
-function buildCandidates(response: IngestionResponseLike): CandidateRecord[] {
+function formatWorkspaceLabel(value: string | null | undefined): string {
+  if (!value) {
+    return "n/a";
+  }
+  return value.replace(/_/g, " ");
+}
+
+function formatDateTime(value: string | null | undefined): string {
+  if (!value) {
+    return "n/a";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(parsed);
+}
+
+function summarizePages(values: Array<number | null | undefined>): string {
+  const pages = Array.from(new Set(values.filter((value): value is number => typeof value === "number" && value > 0))).sort(
+    (left, right) => left - right
+  );
+
+  if (!pages.length) {
+    return "n/a";
+  }
+  if (pages.length === 1) {
+    return `Page ${pages[0]} only`;
+  }
+  const isContiguous = pages.every((page, index) => index === 0 || page === pages[index - 1] + 1);
+  if (isContiguous) {
+    return `Pages ${pages[0]}-${pages[pages.length - 1]}`;
+  }
+  if (pages.length <= 4) {
+    return `Pages ${pages.join(", ")}`;
+  }
+  return `Pages ${pages[0]}, ${pages[1]}, ... ${pages[pages.length - 1]}`;
+}
+
+function describeCandidateStatus(candidate: CandidateRecord): string {
+  switch (candidate.baseStatus) {
+    case "approved":
+      return "This candidate is already approved and promoted into the approved-snippet path.";
+    case "match":
+      return "This candidate is aligned cleanly enough to read as a match, but it has not been promoted into the approved snippet set.";
+    case "mismatch":
+      return "This candidate aligned to an XML node, but text differences were detected and it still needs operator review.";
+    case "review required":
+      return "This candidate did not meet the current auto-pass threshold and needs manual review before it can be trusted.";
+    default:
+      return "This candidate is still in the review workflow and needs operator attention.";
+  }
+}
+
+function mapReviewUnitToCandidate(unit: ReviewUnit): CandidateRecord {
+  return {
+    id: unit.candidate_id,
+    title: unit.title,
+    candidateType: unit.candidate_type,
+    confidence: unit.confidence,
+    baseStatus: normalizeReviewStatus(unit.base_status),
+    matched: unit.matched,
+    page: unit.page ?? null,
+    fragmentId: unit.fragment_id,
+    nodeId: unit.node_id ?? null,
+    xmlPath: unit.xml_path,
+    xmlText: unit.xml_text,
+    pdfText: unit.pdf_text,
+    bbox: unit.bbox ?? [],
+    issues: unit.issues ?? [],
+    xmlOnlyTerms: unit.xml_only_terms ?? [],
+    pdfOnlyTerms: unit.pdf_only_terms ?? [],
+  };
+}
+
+function normalizeReviewStatus(value: ReviewStatus | string): ReviewStatus {
+  switch (value) {
+    case "match":
+    case "mismatch":
+    case "review required":
+    case "approved":
+    case "rejected":
+    case "paused":
+    case "ambiguous":
+      return value;
+    default:
+      return "review required";
+  }
+}
+
+function buildLegacyCandidates(response: IngestionResponseLike): CandidateRecord[] {
   const workspace = response.review_workspace ?? response.lineage;
   const xmlNodes = workspace?.xml_nodes ?? [];
   const pdfFragments = workspace?.pdf_fragments ?? [];
@@ -274,60 +396,125 @@ function buildCandidates(response: IngestionResponseLike): CandidateRecord[] {
   }
 
   return alignments.reduce<CandidateRecord[]>((candidates, alignment) => {
-      const fragment = fragmentById.get(alignment.fragment_id);
-      if (!fragment) {
-        return candidates;
-      }
-
-      const node = alignment.node_id ? xmlById.get(alignment.node_id) : undefined;
-      const xmlText = node?.text ?? "";
-      const pdfText = fragment.text ?? "";
-      const { xmlOnlyTerms, pdfOnlyTerms } = compareTexts(xmlText, pdfText);
-      const hasLinkedIssue =
-        linkedIssues.has(`fragment:${fragment.fragment_id}`) ||
-        (alignment.node_id ? linkedIssues.has(`node:${alignment.node_id}`) : false);
-      const approved = Boolean(alignment.node_id && approvedPairs.has(`${fragment.fragment_id}:${alignment.node_id}`));
-      const issues = buildEvidenceAlerts(alignment, xmlOnlyTerms, pdfOnlyTerms, hasLinkedIssue);
-      const baseStatus = deriveBaseStatus(alignment, issues, approved);
-
-      candidates.push({
-        id: `candidate:${fragment.fragment_id}`,
-        title: formatTitle(xmlText, pdfText, fragment.fragment_id),
-        candidateType: detectCandidateType(node?.path ?? "", xmlText),
-        confidence: alignment.confidence,
-        baseStatus,
-        matched: alignment.matched,
-        page: alignment.page ?? fragment.page ?? null,
-        fragmentId: fragment.fragment_id,
-        nodeId: alignment.node_id ?? null,
-        xmlPath: node?.path ?? "No XML node linked yet",
-        xmlText,
-        pdfText,
-        bbox: alignment.bbox ?? fragment.bbox ?? [],
-        issues,
-        xmlOnlyTerms,
-        pdfOnlyTerms,
-      } satisfies CandidateRecord);
-
+    const fragment = fragmentById.get(alignment.fragment_id);
+    if (!fragment) {
       return candidates;
-    }, []);
+    }
+
+    const node = alignment.node_id ? xmlById.get(alignment.node_id) : undefined;
+    const xmlText = node?.text ?? "";
+    const pdfText = fragment.text ?? "";
+    const { xmlOnlyTerms, pdfOnlyTerms } = compareTexts(xmlText, pdfText);
+    const hasLinkedIssue =
+      linkedIssues.has(`fragment:${fragment.fragment_id}`) ||
+      (alignment.node_id ? linkedIssues.has(`node:${alignment.node_id}`) : false);
+    const approved = Boolean(alignment.node_id && approvedPairs.has(`${fragment.fragment_id}:${alignment.node_id}`));
+    const issues = buildEvidenceAlerts(alignment, xmlOnlyTerms, pdfOnlyTerms, hasLinkedIssue);
+    const baseStatus = deriveBaseStatus(alignment, issues, approved);
+
+    candidates.push({
+      id: `candidate:${fragment.fragment_id}`,
+      title: formatTitle(xmlText, pdfText, fragment.fragment_id),
+      candidateType: detectCandidateType(node?.path ?? "", xmlText),
+      confidence: alignment.confidence,
+      baseStatus,
+      matched: alignment.matched,
+      page: alignment.page ?? fragment.page ?? null,
+      fragmentId: fragment.fragment_id,
+      nodeId: alignment.node_id ?? null,
+      xmlPath: node?.path ?? "No XML node linked yet",
+      xmlText,
+      pdfText,
+      bbox: alignment.bbox ?? fragment.bbox ?? [],
+      issues,
+      xmlOnlyTerms,
+      pdfOnlyTerms,
+    });
+
+    return candidates;
+  }, []);
 }
 
-export function CandidateReviewWorkspace({ response, pdfFile }: CandidateReviewWorkspaceProps) {
+function buildCandidates(response: IngestionResponseLike): CandidateRecord[] {
+  const explicitUnits = response.review_workspace?.review_units ?? [];
+  if (explicitUnits.length > 0) {
+    return explicitUnits.map(mapReviewUnitToCandidate);
+  }
+  return buildLegacyCandidates(response);
+}
+
+export function CandidateReviewWorkspace({
+  response,
+  pdfFile,
+  apiBaseUrl,
+  retainedPdfUrl,
+}: CandidateReviewWorkspaceProps) {
   const [filter, setFilter] = useState<FilterKey>("review");
   const [statusOverrides, setStatusOverrides] = useState<Record<string, ReviewStatus>>({});
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [decisionsLoading, setDecisionsLoading] = useState(false);
+  const [savingCandidateId, setSavingCandidateId] = useState<string | null>(null);
+
+  const runId = response.summary?.ingestion_run_id ?? null;
+  const decisionsPersisted = Boolean(runId);
+  const workspaceMode = response.review_workspace?.mode ?? null;
+  const workspaceReason = response.review_workspace?.reason ?? null;
+  const alignmentDisplayed = response.review_workspace?.alignment_displayed ?? 0;
+  const alignmentTotal = response.review_workspace?.alignment_total ?? 0;
 
   useEffect(() => {
-    if (!pdfFile) {
-      setPdfUrl(null);
+    if (pdfFile) {
+      const nextUrl = URL.createObjectURL(pdfFile);
+      setPdfUrl(nextUrl);
+      return () => URL.revokeObjectURL(nextUrl);
+    }
+    setPdfUrl(retainedPdfUrl);
+    return undefined;
+  }, [pdfFile, retainedPdfUrl]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setStatusOverrides({});
+    setDecisionError(null);
+
+    if (!runId) {
       return undefined;
     }
-    const nextUrl = URL.createObjectURL(pdfFile);
-    setPdfUrl(nextUrl);
-    return () => URL.revokeObjectURL(nextUrl);
-  }, [pdfFile]);
+
+    const loadDecisions = async () => {
+      setDecisionsLoading(true);
+      try {
+        const result = await fetch(`${apiBaseUrl}/api/ingestions/runs/${runId}/review-decisions`);
+        if (!result.ok) {
+          const payload = await result.json().catch(() => ({}));
+          throw new Error(payload.detail ?? "Failed to load saved review decisions.");
+        }
+        const payload = (await result.json()) as { decisions?: ReviewDecision[] };
+        if (cancelled) {
+          return;
+        }
+        const nextOverrides = Object.fromEntries(
+          (payload.decisions ?? []).map((decision) => [decision.candidate_id, decision.decision_status])
+        ) as Record<string, ReviewStatus>;
+        setStatusOverrides(nextOverrides);
+      } catch (loadError) {
+        if (!cancelled) {
+          setDecisionError(loadError instanceof Error ? loadError.message : "Unknown error");
+        }
+      } finally {
+        if (!cancelled) {
+          setDecisionsLoading(false);
+        }
+      }
+    };
+
+    void loadDecisions();
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBaseUrl, runId]);
 
   const candidates = useMemo(() => buildCandidates(response), [response]);
   const candidatesWithStatus = useMemo(
@@ -367,11 +554,20 @@ export function CandidateReviewWorkspace({ response, pdfFile }: CandidateReviewW
   const selectedCandidate =
     filteredCandidates.find((candidate) => candidate.id === selectedCandidateId) ?? filteredCandidates[0] ?? null;
 
+  const selectedQueueIndex = useMemo(() => {
+    if (!selectedCandidate) {
+      return null;
+    }
+    const index = filteredCandidates.findIndex((candidate) => candidate.id === selectedCandidate.id);
+    return index >= 0 ? index + 1 : null;
+  }, [filteredCandidates, selectedCandidate]);
+
   const counts = useMemo(
     () => ({
       review: candidatesWithStatus.filter((candidate) =>
         ["review required", "mismatch", "paused", "ambiguous"].includes(candidate.displayStatus)
       ).length,
+      match: candidatesWithStatus.filter((candidate) => candidate.displayStatus === "match").length,
       approved: candidatesWithStatus.filter((candidate) => candidate.displayStatus === "approved").length,
       rejected: candidatesWithStatus.filter((candidate) => candidate.displayStatus === "rejected").length,
       all: candidatesWithStatus.length,
@@ -379,14 +575,72 @@ export function CandidateReviewWorkspace({ response, pdfFile }: CandidateReviewW
     [candidatesWithStatus]
   );
 
-  function updateStatus(nextStatus: ReviewStatus) {
+  const candidatePageSummary = useMemo(
+    () => summarizePages(candidates.map((candidate) => candidate.page)),
+    [candidates]
+  );
+
+  const scopeSummary = useMemo(() => {
+    if (!candidates.length) {
+      return "No candidate pages are available yet.";
+    }
+    if (candidatePageSummary.endsWith("only")) {
+      return `The current candidate set is drawing evidence from ${candidatePageSummary.toLowerCase()}. This reflects the active reviewable fragment set, not necessarily the entire PDF.`;
+    }
+    return `The current candidate set spans ${candidatePageSummary.toLowerCase()}.`;
+  }, [candidatePageSummary, candidates]);
+
+  const hasScopedSubset = alignmentTotal > alignmentDisplayed && alignmentDisplayed > 0;
+
+  async function updateStatus(nextStatus: ReviewStatus) {
     if (!selectedCandidate) {
       return;
     }
+
+    const candidateId = selectedCandidate.id;
+    const previousStatus = statusOverrides[candidateId];
+    setDecisionError(null);
     setStatusOverrides((current) => ({
       ...current,
-      [selectedCandidate.id]: nextStatus,
+      [candidateId]: nextStatus,
     }));
+
+    if (!runId) {
+      return;
+    }
+
+    setSavingCandidateId(candidateId);
+    try {
+      const result = await fetch(`${apiBaseUrl}/api/ingestions/runs/${runId}/review-decisions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          candidate_id: candidateId,
+          fragment_id: selectedCandidate.fragmentId,
+          node_id: selectedCandidate.nodeId,
+          decision_status: nextStatus,
+        }),
+      });
+      if (!result.ok) {
+        const payload = await result.json().catch(() => ({}));
+        throw new Error(payload.detail ?? "Failed to save review decision.");
+      }
+    } catch (saveError) {
+      setStatusOverrides((current) => {
+        const next = { ...current };
+        if (previousStatus) {
+          next[candidateId] = previousStatus;
+        } else {
+          delete next[candidateId];
+        }
+        return next;
+      });
+      setDecisionError(saveError instanceof Error ? saveError.message : "Unknown error");
+    } finally {
+      setSavingCandidateId(null);
+    }
   }
 
   return (
@@ -395,9 +649,13 @@ export function CandidateReviewWorkspace({ response, pdfFile }: CandidateReviewW
         <div>
           <h2>Candidate Review Workspace</h2>
           <p>
-            Transitional review workspace derived from current alignment output. This supports early
-            human-in-the-loop testing before the full backend candidate runtime exists.
+            Transitional review workspace backed by explicit review units from the backend, with lightweight
+            persisted reviewer decisions for early human-in-the-loop testing.
           </p>
+          <p className="muted">
+            Mode: {formatWorkspaceLabel(workspaceMode)} | Reason: {formatWorkspaceLabel(workspaceReason)}
+          </p>
+          <p className="muted">Run recorded {formatDateTime(response.summary?.created_at)}.</p>
         </div>
         <span className={`status ${response.summary?.can_progress ? "pass" : "warn"}`}>
           {response.summary?.can_progress ? "Can Progress" : "Review Flow Active"}
@@ -410,8 +668,22 @@ export function CandidateReviewWorkspace({ response, pdfFile }: CandidateReviewW
           <span>{response.summary?.document_family_id ?? "n/a"}</span>
         </div>
         <div className="summary-card">
+          <strong>Workspace Mode</strong>
+          <span>{formatWorkspaceLabel(workspaceMode)}</span>
+        </div>
+        <div className="summary-card">
+          <strong>Queue Scope</strong>
+          <span>
+            {alignmentDisplayed} of {alignmentTotal || candidates.length}
+          </span>
+        </div>
+        <div className="summary-card">
           <strong>Review Queue</strong>
           <span>{counts.review}</span>
+        </div>
+        <div className="summary-card">
+          <strong>Matched</strong>
+          <span>{counts.match}</span>
         </div>
         <div className="summary-card">
           <strong>Approved</strong>
@@ -421,14 +693,53 @@ export function CandidateReviewWorkspace({ response, pdfFile }: CandidateReviewW
           <strong>Rejected</strong>
           <span>{counts.rejected}</span>
         </div>
+        <div className="summary-card">
+          <strong>Candidate Pages</strong>
+          <span>{candidatePageSummary}</span>
+        </div>
       </div>
 
-      <div className="filter-row">
+      {decisionsLoading ? <p className="muted">Loading persisted reviewer decisions...</p> : null}
+      <p className="muted">
+        {decisionsPersisted
+          ? `Reviewer decisions persist to ingestion run ${runId}.`
+          : "Reviewer decisions are local-only until the backend returns an ingestion run id."}
+      </p>
+      {decisionError ? (
+        <p className="alert alert-error" role="alert">
+          {decisionError}
+        </p>
+      ) : null}
+      <div className="panel-muted workspace-explainer">
+        <p>
+          <strong>Current review scope</strong>: {scopeSummary}
+        </p>
+        <p>
+          <strong>Outcome guide</strong>: Review Queue means the candidate still needs attention. Matched means it
+          aligned cleanly but is not yet in the approved snippet set. Approved means it is already in the
+          approved snippet path.
+        </p>
+        {hasScopedSubset ? (
+          <p className="muted">
+            This workspace is showing {alignmentDisplayed} reviewable candidates out of {alignmentTotal} total
+            alignments, so you are looking at a narrowed review slice rather than every extracted fragment.
+          </p>
+        ) : null}
+        {!counts.approved ? (
+          <p className="muted">
+            No approved candidates are visible in this run yet. A candidate can still be a clean match without
+            appearing in the approved-snippet section.
+          </p>
+        ) : null}
+      </div>
+
+      <div className="filter-row" role="toolbar" aria-label="Candidate filters">
         {(Object.keys(FILTER_LABELS) as FilterKey[]).map((key) => (
           <button
             key={key}
             type="button"
             className={`filter-chip ${filter === key ? "active" : ""}`}
+            aria-pressed={filter === key}
             onClick={() => setFilter(key)}
           >
             {FILTER_LABELS[key]}
@@ -444,6 +755,7 @@ export function CandidateReviewWorkspace({ response, pdfFile }: CandidateReviewW
                 key={candidate.id}
                 type="button"
                 className={`candidate-list-item ${selectedCandidate?.id === candidate.id ? "selected" : ""}`}
+                title={candidate.title}
                 onClick={() => setSelectedCandidateId(candidate.id)}
               >
                 <div className="candidate-list-top">
@@ -473,6 +785,11 @@ export function CandidateReviewWorkspace({ response, pdfFile }: CandidateReviewW
                       Type: {selectedCandidate.candidateType} | Fragment: {selectedCandidate.fragmentId} | Node:{" "}
                       {selectedCandidate.nodeId ?? "unlinked"}
                     </p>
+                    <p className="muted">
+                      Queue item {selectedQueueIndex ?? "n/a"} of {filteredCandidates.length} in{" "}
+                      {FILTER_LABELS[filter]}.
+                    </p>
+                    <p className="muted">{describeCandidateStatus(selectedCandidate)}</p>
                   </div>
                   <span className={statusClass(selectedCandidate.displayStatus)}>
                     {selectedCandidate.displayStatus}
@@ -480,22 +797,51 @@ export function CandidateReviewWorkspace({ response, pdfFile }: CandidateReviewW
                 </div>
 
                 <div className="action-row">
-                  <button type="button" onClick={() => updateStatus("approved")}>
+                  <button
+                    type="button"
+                    disabled={!decisionsPersisted || savingCandidateId === selectedCandidate.id}
+                    onClick={() => void updateStatus("approved")}
+                  >
                     Approve
                   </button>
-                  <button type="button" onClick={() => updateStatus("rejected")}>
+                  <button
+                    type="button"
+                    disabled={!decisionsPersisted || savingCandidateId === selectedCandidate.id}
+                    onClick={() => void updateStatus("rejected")}
+                  >
                     Reject
                   </button>
-                  <button type="button" onClick={() => updateStatus("paused")}>
+                  <button
+                    type="button"
+                    disabled={!decisionsPersisted || savingCandidateId === selectedCandidate.id}
+                    onClick={() => void updateStatus("paused")}
+                  >
                     Pause
                   </button>
-                  <button type="button" onClick={() => updateStatus("ambiguous")}>
+                  <button
+                    type="button"
+                    disabled={!decisionsPersisted || savingCandidateId === selectedCandidate.id}
+                    onClick={() => void updateStatus("ambiguous")}
+                  >
                     Mark Ambiguous
                   </button>
-                  <button type="button" onClick={() => updateStatus(selectedCandidate.baseStatus)}>
-                    Reset
+                  <button
+                    type="button"
+                    disabled={!decisionsPersisted || savingCandidateId === selectedCandidate.id}
+                    onClick={() => void updateStatus(selectedCandidate.baseStatus)}
+                  >
+                    Revert to suggested status
                   </button>
                 </div>
+
+                {savingCandidateId === selectedCandidate.id ? (
+                  <p className="muted">Saving reviewer decision...</p>
+                ) : null}
+                {!decisionsPersisted ? (
+                  <p className="muted">
+                    Decision actions are disabled until this result is associated with a persisted ingestion run.
+                  </p>
+                ) : null}
 
                 <div className="grid two-column">
                   <div className="evidence-panel">
@@ -557,8 +903,8 @@ export function CandidateReviewWorkspace({ response, pdfFile }: CandidateReviewW
                     <h4>Review Issues</h4>
                     {selectedCandidate.issues.length ? (
                       <ul className="issue-list">
-                        {selectedCandidate.issues.map((issue) => (
-                          <li key={issue}>{issue}</li>
+                        {selectedCandidate.issues.map((issue, index) => (
+                          <li key={`${selectedCandidate.id}-${index}`}>{issue}</li>
                         ))}
                       </ul>
                     ) : (
@@ -571,17 +917,20 @@ export function CandidateReviewWorkspace({ response, pdfFile }: CandidateReviewW
               <section className="panel subsection">
                 <h3>Original PDF Preview</h3>
                 <p className="muted">
-                  The original uploaded PDF is shown here for early review testing. Precise page jumping and
-                  bbox highlighting are follow-on work.
+                  The preview jumps to the selected candidate page. Precise fragment highlighting inside the page
+                  is still follow-on work.
                 </p>
                 {pdfUrl ? (
                   <iframe
                     className="pdf-frame"
                     src={`${pdfUrl}#page=${selectedCandidate.page ?? 1}`}
-                    title="Uploaded PDF preview"
+                    title="Embedded PDF preview"
                   />
                 ) : (
-                  <p className="muted">Upload a PDF to enable the embedded preview.</p>
+                  <p className="muted">
+                    The retained PDF preview is not available for this run right now. Upload the PDF again in
+                    this browser session to restore the embedded preview.
+                  </p>
                 )}
               </section>
             </>

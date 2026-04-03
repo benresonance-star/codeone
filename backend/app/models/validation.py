@@ -14,6 +14,7 @@ class ValidationSummary(BaseModel):
     ingestion_run_id: str | None = None
     ingestion_run_status: str | None = None
     document_family_id: str | None = None
+    created_at: str | None = None
     pdf_source_document_id: str | None = None
     xml_source_document_id: str | None = None
     xml_status: str
@@ -56,6 +57,32 @@ class InvalidationResponse(BaseModel):
     status: str
     invalidated_reason: str | None = None
     invalidated_at: str | None = None
+
+
+class ReviewDecisionRecord(BaseModel):
+    id: str
+    ingestion_run_id: str
+    candidate_id: str
+    fragment_id: str
+    node_id: str | None = None
+    decision_status: str
+    note: str | None = None
+    requested_by: str
+    status: str
+    created_at: str
+    updated_at: str
+
+
+class ReviewDecisionRequest(BaseModel):
+    candidate_id: str
+    fragment_id: str
+    node_id: str | None = None
+    decision_status: str
+    note: str | None = None
+
+
+class ReviewDecisionListResponse(BaseModel):
+    decisions: list[ReviewDecisionRecord] = Field(default_factory=list)
 
 
 class PurgeSummaryResponse(BaseModel):

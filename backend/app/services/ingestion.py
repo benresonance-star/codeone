@@ -114,6 +114,8 @@ class IngestionService:
             fragments=pdf_context["fragments"],
             alignments=pdf_context["alignments"],
             canonical_snippets=canonical_snippets,
+            xml_validation=xml_context["result"],
+            pdf_validation=pdf_context["result"],
         )
 
         return {
@@ -1536,6 +1538,8 @@ class IngestionService:
         fragments: list[PdfFragment],
         alignments: list[dict[str, Any]],
         canonical_snippets: list[dict[str, Any]],
+        xml_validation: dict[str, Any],
+        pdf_validation: dict[str, Any],
     ) -> dict[str, Any]:
         workspace_mode = "full"
         workspace_reason = "default_full_lineage_review"
@@ -1548,18 +1552,29 @@ class IngestionService:
 
         review_fragment_ids = {item["fragment_id"] for item in review_alignments}
         review_node_ids = {item["node_id"] for item in review_alignments if item.get("node_id")}
+        review_xml_nodes = [node for node in xml_nodes if node.node_id in review_node_ids] if review_node_ids else []
+        review_fragments = [fragment for fragment in fragments if fragment.fragment_id in review_fragment_ids]
+        review_snippets = [
+            snippet
+            for snippet in canonical_snippets
+            if snippet.get("fragment_id") in review_fragment_ids
+        ]
 
         return {
             "mode": workspace_mode,
             "reason": workspace_reason,
-            "xml_nodes": [node for node in xml_nodes if node.node_id in review_node_ids] if review_node_ids else [],
-            "pdf_fragments": [fragment for fragment in fragments if fragment.fragment_id in review_fragment_ids],
+            "xml_nodes": review_xml_nodes,
+            "pdf_fragments": review_fragments,
             "alignments": review_alignments,
-            "canonical_snippets": [
-                snippet
-                for snippet in canonical_snippets
-                if snippet.get("fragment_id") in review_fragment_ids
-            ],
+            "canonical_snippets": review_snippets,
+            "review_units": self._build_review_units(
+                xml_nodes=review_xml_nodes,
+                fragments=review_fragments,
+                alignments=review_alignments,
+                canonical_snippets=review_snippets,
+                xml_validation=xml_validation,
+                pdf_validation=pdf_validation,
+            ),
             "alignment_total": len(alignments),
             "alignment_displayed": len(review_alignments),
         }
@@ -1610,6 +1625,157 @@ class IngestionService:
         if row_selected:
             return row_selected
         return selected
+
+    def _build_review_units(
+        self,
+        *,
+        xml_nodes: list[XmlNode],
+        fragments: list[PdfFragment],
+        alignments: list[dict[str, Any]],
+        canonical_snippets: list[dict[str, Any]],
+        xml_validation: dict[str, Any],
+        pdf_validation: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        xml_by_id = {node.node_id: node for node in xml_nodes}
+        fragment_by_id = {fragment.fragment_id: fragment for fragment in fragments}
+        approved_pairs = {
+            (str(snippet.get("fragment_id")), str(snippet.get("clause_id")))
+            for snippet in canonical_snippets
+            if snippet.get("fragment_id") and snippet.get("clause_id")
+        }
+        linked_issues = self._linked_review_issue_keys(xml_validation, pdf_validation)
+
+        review_units: list[dict[str, Any]] = []
+        for alignment in alignments:
+            fragment_id = str(alignment.get("fragment_id") or "")
+            fragment = fragment_by_id.get(fragment_id)
+            if fragment is None:
+                continue
+
+            node_id = str(alignment.get("node_id") or "") or None
+            node = xml_by_id.get(node_id) if node_id else None
+            xml_text = node.text if node else ""
+            pdf_text = fragment.text
+            xml_only_terms, pdf_only_terms = self._review_term_deltas(xml_text, pdf_text)
+            has_linked_issue = f"fragment:{fragment.fragment_id}" in linked_issues or (
+                bool(node_id) and f"node:{node_id}" in linked_issues
+            )
+            approved = bool(node_id and (fragment.fragment_id, node_id) in approved_pairs)
+            issues = self._build_review_issues(
+                alignment=alignment,
+                xml_only_terms=xml_only_terms,
+                pdf_only_terms=pdf_only_terms,
+                linked_issue=has_linked_issue,
+            )
+            base_status = self._derive_review_base_status(
+                alignment=alignment,
+                issues=issues,
+                approved=approved,
+            )
+
+            review_units.append(
+                {
+                    "candidate_id": f"candidate:{fragment.fragment_id}",
+                    "title": self._review_title(xml_text, pdf_text, fragment.fragment_id),
+                    "candidate_type": self._review_candidate_type(node.path if node else "", xml_text),
+                    "confidence": float(alignment.get("confidence", 0.0)),
+                    "base_status": base_status,
+                    "matched": bool(alignment.get("matched")),
+                    "page": alignment.get("page", fragment.page),
+                    "fragment_id": fragment.fragment_id,
+                    "node_id": node_id,
+                    "xml_path": node.path if node else "No XML node linked yet",
+                    "xml_text": xml_text,
+                    "pdf_text": pdf_text,
+                    "bbox": alignment.get("bbox", fragment.bbox),
+                    "issues": issues,
+                    "xml_only_terms": xml_only_terms,
+                    "pdf_only_terms": pdf_only_terms,
+                }
+            )
+        return review_units
+
+    def _linked_review_issue_keys(
+        self,
+        xml_validation: dict[str, Any],
+        pdf_validation: dict[str, Any],
+    ) -> set[str]:
+        linked_issues: set[str] = set()
+        for item in [
+            *(xml_validation.get("warnings") or []),
+            *(xml_validation.get("errors") or []),
+            *(pdf_validation.get("warnings") or []),
+            *(pdf_validation.get("errors") or []),
+        ]:
+            if not isinstance(item, dict):
+                continue
+            fragment_id = item.get("fragment_id")
+            node_id = item.get("node_id") or item.get("xml_node")
+            if fragment_id:
+                linked_issues.add(f"fragment:{fragment_id}")
+            if node_id:
+                linked_issues.add(f"node:{node_id}")
+        return linked_issues
+
+    def _review_term_deltas(self, xml_text: str, pdf_text: str) -> tuple[list[str], list[str]]:
+        xml_terms = {token for token in normalize_text(xml_text).split() if token}
+        pdf_terms = {token for token in normalize_text(pdf_text).split() if token}
+        return sorted(xml_terms - pdf_terms)[:10], sorted(pdf_terms - xml_terms)[:10]
+
+    def _review_candidate_type(self, xml_path: str, xml_text: str) -> str:
+        normalized_path = xml_path.lower()
+        normalized_text = xml_text.lower()
+        if "table" in normalized_path:
+            return "table"
+        if "xref" in normalized_path or "reference" in normalized_path:
+            return "reference"
+        if "definition" in normalized_path or " means " in normalized_text:
+            return "definition"
+        return "rule"
+
+    def _review_title(self, xml_text: str, pdf_text: str, fragment_id: str) -> str:
+        source = clean_text(xml_text) or clean_text(pdf_text)
+        return source[:96] if source else fragment_id
+
+    def _build_review_issues(
+        self,
+        *,
+        alignment: dict[str, Any],
+        xml_only_terms: list[str],
+        pdf_only_terms: list[str],
+        linked_issue: bool,
+    ) -> list[str]:
+        issues: list[str] = []
+        if not alignment.get("matched") or not alignment.get("node_id"):
+            issues.append("No XML clause met the alignment threshold for this fragment.")
+        if float(alignment.get("confidence", 0.0)) < 0.9:
+            issues.append("Alignment confidence is below the temporary auto-pass threshold.")
+        if linked_issue:
+            issues.append("Validation warnings or errors reference this candidate.")
+        if xml_only_terms:
+            issues.append(f"XML-only terms detected: {', '.join(xml_only_terms[:4])}.")
+        if pdf_only_terms:
+            issues.append(f"PDF-only terms detected: {', '.join(pdf_only_terms[:4])}.")
+        return issues
+
+    def _derive_review_base_status(
+        self,
+        *,
+        alignment: dict[str, Any],
+        issues: list[str],
+        approved: bool,
+    ) -> str:
+        if approved:
+            return "approved"
+        if (
+            not alignment.get("matched")
+            or not alignment.get("node_id")
+            or float(alignment.get("confidence", 0.0)) < 0.85
+        ):
+            return "review required"
+        if any("XML-only" in issue or "PDF-only" in issue for issue in issues):
+            return "mismatch"
+        return "match"
 
     def _build_canonical_snippets(
         self,
