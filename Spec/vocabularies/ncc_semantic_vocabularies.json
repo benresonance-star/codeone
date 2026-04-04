@@ -1,0 +1,160 @@
+{
+  "version": "1.0.0",
+  "candidate_types": [
+    "volume",
+    "part",
+    "section",
+    "heading",
+    "subheading",
+    "clause",
+    "subclause",
+    "paragraph",
+    "list_item",
+    "table",
+    "table_row",
+    "table_cell",
+    "note",
+    "footnote",
+    "definition",
+    "cross_reference",
+    "glossary_entry",
+    "callout"
+  ],
+  "relationship_types": {
+    "structural": [
+      "parent_of",
+      "child_of",
+      "next_sibling_of",
+      "contained_in",
+      "header_scopes",
+      "table_contains_row",
+      "row_contains_cell",
+      "row_header_scopes_cell",
+      "table_header_scopes_column"
+    ],
+    "referential": [
+      "references_clause",
+      "references_table",
+      "references_definition",
+      "incorporates_by_reference"
+    ],
+    "semantic": [
+      "uses_defined_term",
+      "uses_term_plainly",
+      "defines",
+      "term_scopes_candidate"
+    ],
+    "normative": [
+      "requires",
+      "permits",
+      "prohibits",
+      "excepts",
+      "qualifies",
+      "conditions",
+      "applies_to",
+      "excludes",
+      "alternative_to"
+    ],
+    "table_scope": [
+      "note_applies_to_table",
+      "note_applies_to_row",
+      "footnote_modifies_cell"
+    ]
+  },
+  "scope_dimensions": [
+    "edition",
+    "jurisdiction",
+    "location",
+    "climate_zone",
+    "building_class",
+    "building_use_context",
+    "compliance_path",
+    "building_element",
+    "construction_form",
+    "framing_type",
+    "material_context",
+    "overlay_context",
+    "exception_context"
+  ],
+  "scope_authorities": [
+    "explicit_user",
+    "explicit_system_default",
+    "derived_from_corpus",
+    "derived_from_mapping",
+    "assumed_for_partial_answer",
+    "unresolved"
+  ],
+  "query_intents": [
+    "direct_normative_value",
+    "direct_normative_summary",
+    "comparison",
+    "applicability_check",
+    "exception_lookup",
+    "definition_lookup",
+    "follow_up_filter",
+    "scope_confirmation"
+  ],
+  "answer_statuses": [
+    "accepted",
+    "accepted_with_assumptions",
+    "requires_scope_confirmation",
+    "insufficient_grounding",
+    "conflict_present"
+  ],
+  "answer_families": [
+    "direct_normative_value",
+    "scoped_summary",
+    "comparison",
+    "follow_up_filtered",
+    "insufficient_scope"
+  ],
+  "evidence_authority_classes": [
+    "xml_authoritative",
+    "pdf_grounded",
+    "mapping_authoritative",
+    "overlay_authoritative",
+    "heuristic",
+    "manual_override"
+  ],
+  "review_reason_codes": [
+    "candidate_boundary_ambiguity",
+    "text_mismatch",
+    "structure_mismatch",
+    "scope_leakage_risk",
+    "definition_ambiguity",
+    "relationship_conflict",
+    "missing_evidence",
+    "unresolved_reference",
+    "overlay_target_missing",
+    "query_scope_missing",
+    "query_conflict_present"
+  ],
+  "note_normative_effect_classes": [
+    "informational",
+    "interpretive",
+    "qualifying",
+    "exception_like",
+    "unknown"
+  ],
+  "overlay_operations": [
+    "replace",
+    "insert_after",
+    "insert_before",
+    "narrow_scope",
+    "broaden_scope",
+    "exempt",
+    "annotate_only"
+  ],
+  "assumption_impact_levels": [
+    "low",
+    "medium",
+    "high",
+    "critical"
+  ],
+  "conflict_severity_levels": [
+    "low",
+    "medium",
+    "high",
+    "critical"
+  ]
+}

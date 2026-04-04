@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "Spec/schemas/evidence_trace.schema.json",
+  "title": "EvidenceTrace",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "trace_id",
+    "candidate_ids",
+    "relationship_ids",
+    "span_ids",
+    "source_locators",
+    "authority_class"
+  ],
+  "properties": {
+    "trace_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "candidate_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "relationship_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "span_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "source_locators": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "authority_class": {
+      "type": "string",
+      "enum": [
+        "xml_authoritative",
+        "pdf_grounded",
+        "mapping_authoritative",
+        "overlay_authoritative",
+        "heuristic",
+        "manual_override"
+      ]
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}

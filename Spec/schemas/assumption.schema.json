@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "Spec/schemas/assumption.schema.json",
+  "title": "Assumption",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "assumption_id",
+    "scope_dimension",
+    "assumed_value",
+    "reason",
+    "impact_level"
+  ],
+  "properties": {
+    "assumption_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scope_dimension": {
+      "type": "string",
+      "enum": [
+        "edition",
+        "jurisdiction",
+        "location",
+        "climate_zone",
+        "building_class",
+        "building_use_context",
+        "compliance_path",
+        "building_element",
+        "construction_form",
+        "framing_type",
+        "material_context",
+        "overlay_context",
+        "exception_context"
+      ]
+    },
+    "assumed_value": {
+      "type": [
+        "string",
+        "number",
+        "boolean",
+        "null"
+      ]
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "impact_level": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    }
+  }
+}

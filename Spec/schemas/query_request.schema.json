@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "Spec/schemas/query_request.schema.json",
+  "title": "QueryRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "question",
+    "user_type",
+    "preferred_format"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "question": {
+      "type": "string",
+      "minLength": 1
+    },
+    "user_type": {
+      "type": "string",
+      "enum": [
+        "human",
+        "agent",
+        "system"
+      ]
+    },
+    "preferred_format": {
+      "type": "string",
+      "enum": [
+        "concise",
+        "detailed",
+        "structured"
+      ]
+    },
+    "requested_edition": {
+      "type": "string"
+    },
+    "requested_jurisdiction": {
+      "type": "string"
+    },
+    "expected_answer_family": {
+      "type": "string",
+      "enum": [
+        "direct_normative_value",
+        "scoped_summary",
+        "comparison",
+        "follow_up_filtered",
+        "insufficient_scope"
+      ]
+    },
+    "intent_hint": {
+      "type": "string",
+      "enum": [
+        "direct_normative_value",
+        "direct_normative_summary",
+        "comparison",
+        "applicability_check",
+        "exception_lookup",
+        "definition_lookup",
+        "follow_up_filter",
+        "scope_confirmation"
+      ]
+    },
+    "prior_scope_id": {
+      "type": "string"
+    }
+  }
+}

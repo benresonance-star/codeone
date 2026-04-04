@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "Spec/schemas/resolved_query_scope.schema.json",
+  "title": "ResolvedQueryScope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "scope_id",
+    "edition",
+    "jurisdiction",
+    "location",
+    "climate_zone",
+    "building_class",
+    "compliance_path",
+    "building_element",
+    "assumptions"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "scope_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "edition": {
+      "$ref": "#/$defs/resolvedField"
+    },
+    "jurisdiction": {
+      "$ref": "#/$defs/resolvedField"
+    },
+    "location": {
+      "$ref": "#/$defs/resolvedField"
+    },
+    "climate_zone": {
+      "$ref": "#/$defs/resolvedField"
+    },
+    "building_class": {
+      "$ref": "#/$defs/resolvedField"
+    },
+    "building_use_context": {
+      "$ref": "#/$defs/resolvedField"
+    },
+    "compliance_path": {
+      "$ref": "#/$defs/resolvedField"
+    },
+    "building_element": {
+      "$ref": "#/$defs/resolvedField"
+    },
+    "construction_form": {
+      "$ref": "#/$defs/resolvedField"
+    },
+    "framing_type": {
+      "$ref": "#/$defs/resolvedField"
+    },
+    "material_context": {
+      "$ref": "#/$defs/resolvedField"
+    },
+    "overlay_context": {
+      "$ref": "#/$defs/resolvedField"
+    },
+    "exception_context": {
+      "$ref": "#/$defs/resolvedField"
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "$ref": "assumption.schema.json"
+      }
+    }
+  },
+  "$defs": {
+    "resolvedField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "authority",
+        "provenance"
+      ],
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "number",
+            "boolean",
+            "null"
+          ]
+        },
+        "authority": {
+          "type": "string",
+          "enum": [
+            "explicit_user",
+            "explicit_system_default",
+            "derived_from_corpus",
+            "derived_from_mapping",
+            "assumed_for_partial_answer",
+            "unresolved"
+          ]
+        },
+        "provenance": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "resolution_notes": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

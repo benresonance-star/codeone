@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "Spec/schemas/conflict.schema.json",
+  "title": "Conflict",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "conflict_id",
+    "conflict_type",
+    "severity",
+    "summary"
+  ],
+  "properties": {
+    "conflict_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "conflict_type": {
+      "type": "string",
+      "enum": [
+        "scope_conflict",
+        "relationship_conflict",
+        "overlay_conflict",
+        "insufficient_grounding",
+        "multiple_governing_paths"
+      ]
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "candidate_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "relationship_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "resolution_required": {
+      "type": "boolean",
+      "default": true
+    }
+  }
+}

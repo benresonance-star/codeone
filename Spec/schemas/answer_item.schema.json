@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "Spec/schemas/answer_item.schema.json",
+  "title": "AnswerItem",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "answer_item_id",
+    "answer_family",
+    "element",
+    "requirement",
+    "condition_summary",
+    "source_candidate_ids",
+    "relationship_ids",
+    "evidence_traces"
+  ],
+  "properties": {
+    "answer_item_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "answer_family": {
+      "type": "string",
+      "enum": [
+        "direct_normative_value",
+        "scoped_summary",
+        "comparison",
+        "follow_up_filtered",
+        "insufficient_scope"
+      ]
+    },
+    "element": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requirement": {
+      "type": "string",
+      "minLength": 1
+    },
+    "condition_summary": {
+      "type": "string"
+    },
+    "source_candidate_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "relationship_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "definition_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "overlay_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "evidence_traces": {
+      "type": "array",
+      "items": {
+        "$ref": "evidence_trace.schema.json"
+      },
+      "minItems": 1
+    }
+  }
+}

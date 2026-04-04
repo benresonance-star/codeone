@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "Spec/schemas/query_result.schema.json",
+  "title": "QueryResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "query_id",
+    "status",
+    "scope",
+    "answer_items",
+    "assumptions",
+    "conflicts",
+    "definitions_used",
+    "exceptions_considered",
+    "confidence"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "query_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "accepted",
+        "accepted_with_assumptions",
+        "requires_scope_confirmation",
+        "insufficient_grounding",
+        "conflict_present"
+      ]
+    },
+    "scope": {
+      "$ref": "resolved_query_scope.schema.json"
+    },
+    "answer_items": {
+      "type": "array",
+      "items": {
+        "$ref": "answer_item.schema.json"
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "$ref": "assumption.schema.json"
+      }
+    },
+    "conflicts": {
+      "type": "array",
+      "items": {
+        "$ref": "conflict.schema.json"
+      }
+    },
+    "definitions_used": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "exceptions_considered": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "human_summary": {
+      "type": "string"
+    }
+  }
+}
