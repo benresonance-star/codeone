@@ -9,6 +9,7 @@
     "query_id",
     "status",
     "scope",
+    "replay_context",
     "answer_items",
     "assumptions",
     "conflicts",
@@ -37,6 +38,9 @@
     },
     "scope": {
       "$ref": "resolved_query_scope.schema.json"
+    },
+    "replay_context": {
+      "$ref": "#/$defs/replayContext"
     },
     "answer_items": {
       "type": "array",
@@ -73,8 +77,47 @@
       "minimum": 0,
       "maximum": 1
     },
+    "trace_completeness_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
     "human_summary": {
       "type": "string"
+    }
+  },
+  "$defs": {
+    "replayContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "corpus_build_id",
+        "mapping_pack_version",
+        "policy_version"
+      ],
+      "properties": {
+        "corpus_build_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mapping_pack_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "overlay_bundle_id": {
+          "type": "string"
+        },
+        "conversation_id": {
+          "type": "string"
+        },
+        "prior_query_id": {
+          "type": "string"
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
     }
   }
 }

@@ -34,6 +34,17 @@ Plain text retrieval alone is not sufficient for normative answers.
 - `QueryResult` validated by `Spec/schemas/query_result.schema.json`
 - optional human-readable answer derived from the machine result
 
+## Query Contract Inputs
+The normalized query request may carry multi-turn safety context including:
+- `conversation_id`
+- `prior_query_id`
+- `prior_scope_id`
+- `prior_answer_item_ids`
+- `followup_mode`
+- `require_scope_contradiction_check`
+
+Those fields are required whenever follow-up behavior depends on earlier answers rather than only the current utterance.
+
 ## Query Flow
 
 ### Stage 1. Query interpretation
@@ -61,6 +72,7 @@ The system must synthesize one or more `AnswerItem` objects from the governing p
 ### Stage 5. Result assembly
 The system must assemble:
 - top-level status
+- replay context
 - answer items
 - assumptions
 - conflicts
@@ -93,6 +105,8 @@ The query layer may emit one or more answer items, but each item must belong to 
 - Must emit assumptions as structured objects, not prose-only notes.
 - Must emit conflicts when contradictions or insufficient grounding affect answer safety.
 - Must preserve baseline and overlay provenance where overlays apply.
+- Must attach deterministic replay context to the final machine result.
+- Must use ordered trace steps for answer replay, not only unordered ID buckets.
 
 ## Governing Path Discovery Rules
 The governing path must be built in this order:
@@ -111,6 +125,37 @@ If a normative answer depends on a table:
 - row and column inheritance must be explicit in the answer trace
 - note and footnote precedence must be applied before an answer item is accepted
 - if multiple construction branches remain plausible, the result must not collapse them into a single value
+
+If a note or callout routes interpretation to a clause or secondary table, that multi-hop dependency must appear in the evidence trace as ordered steps.
+
+## Replay And Trace Rules
+Every `QueryResult` must carry replay context sufficient to reproduce the answer against the same corpus state.
+
+### Required replay context
+- `corpus_build_id`
+- `mapping_pack_version`
+- `policy_version`
+- `overlay_bundle_id` when overlays materially affect the result
+- `conversation_id` and `prior_query_id` when the answer depends on follow-up context
+
+### Required trace-step behavior
+Each evidence trace must record ordered steps for the governing path, including the applicable subset of:
+- scope mapping
+- governing clause
+- governing table
+- selected row
+- selected cell
+- note or callout
+- overlay
+- exception
+- supporting definition
+- final constraint
+
+### Answer-family-specific minimum trace
+- `direct_normative_value` must trace to the governing clause, governing table when applicable, and final selected row/cell or equivalent constraint object.
+- `comparison` must preserve distinct trace paths for each compared branch.
+- `follow_up_filtered` must show both the inherited answer reference and the refreshed governing path used to validate the filter.
+- `insufficient_scope` must still include the attempted governing path up to the point of failure.
 
 ## Answer Status Rules
 
@@ -155,6 +200,12 @@ Follow-up queries may reuse earlier `AnswerItem` or `ResolvedQueryScope` outputs
 - the inherited scope remains valid
 - no newly supplied scope contradicts the prior state
 
+When `require_scope_contradiction_check` is true, contradiction detection is mandatory before any prior answer item may be reused.
+
+If a follow-up question changes compliance path, location, building class, construction form, or overlay context, the engine must rebuild the governing path before returning filtered results.
+
+If a query implies a Performance Solution or hybrid compliance intent, the engine must not silently fall back to DTS-only answer construction.
+
 ## Flagship Example: Melbourne / Class 2 / R-Value
 For the question "In a Class 2 building in Melbourne what are the required R-Values?":
 
@@ -180,12 +231,14 @@ The top-level machine result must validate against:
 The machine result must contain:
 - `status`
 - `scope`
+- `replay_context`
 - `answer_items`
 - `assumptions`
 - `conflicts`
 - `definitions_used`
 - `exceptions_considered`
 - `confidence`
+- `trace_completeness_score`
 
 ## Reliability Hand-Off
 The query layer is not release-ready unless it passes the query and audit gates defined in:

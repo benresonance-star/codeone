@@ -22,6 +22,9 @@ No release may claim high-reliability query support unless it passes both:
 
 Fixture correctness without corpus coverage is insufficient.
 
+All thresholds in this document are owned by policy version:
+- `ncc_query_reliability_policy_v1`
+
 ## Reliability Layers
 
 | Layer | Focus |
@@ -111,14 +114,35 @@ Allowed when:
 ### Controlled beta
 Allowed when:
 - flagship fixtures pass
-- false definitive answer rate is low
-- query-critical corpus coverage crosses the beta threshold set by engineering policy
+- false definitive answer rate is at or below `0.02`
+- query-critical corpus coverage meets the beta thresholds in this document
 
 ### High-reliability production
 Allowed only when:
-- flagship query families pass at target precision
-- query-critical coverage metrics are at or above release threshold
-- answer replay and contradiction visibility are stable
+- flagship query families meet the production thresholds in this document
+- query-critical coverage metrics are at or above production release threshold
+- answer replay and contradiction visibility meet the production gates in this document
+
+## Default Threshold Table
+
+| Metric | Controlled beta | High-reliability production |
+|---|---|---|
+| `false_definitive_answer_rate` | `<= 0.02` | `<= 0.005` |
+| `accepted_answer_precision` | `>= 0.95` | `>= 0.99` |
+| `accepted_with_assumptions_precision` | `>= 0.90` | `>= 0.97` |
+| `requires_scope_confirmation_precision` | `>= 0.90` | `>= 0.97` |
+| `insufficient_grounding_precision` | `>= 0.90` | `>= 0.97` |
+| `trace_completeness_on_accepted` | `>= 0.98` | `= 1.00` |
+| `answer_to_source_replay_success_rate` | `>= 0.98` | `= 1.00` |
+| `coverage_xrefs_query_critical` | `>= 0.97` | `>= 0.995` |
+| `coverage_notes_query_critical` | `>= 0.97` | `>= 0.995` |
+| `coverage_tables_query_critical` | `>= 0.97` | `>= 0.995` |
+| `coverage_scope_mappings` | `>= 0.95` | `>= 0.99` |
+| `coverage_overlays_query_critical` | `>= 0.95` | `>= 0.99` |
+| `unresolved_essential_scope_rate_flagship_family` | `<= 0.10` | `<= 0.02` |
+| `overlay_conflict_visibility_seeded` | `>= 0.95` | `= 1.00` |
+
+If a separate policy file is introduced later, it must preserve a versioned name and every `QueryResult.replay_context.policy_version` must identify the active threshold policy.
 
 ## Flagship Query Scenario
 The system must support a real flagship scenario rooted in actual NCC structure:
@@ -151,14 +175,21 @@ The scenario must be replayable across:
 - The system must not emit `accepted` when climate zone is unresolved and changes table selection.
 - The system must not emit `accepted` when construction form is unresolved and changes the governing row/cell.
 - The system must not silently ignore a table note that narrows a selected row or cell.
+- The system must not emit `accepted` for a Performance-style or hybrid-path query from a DTS-only path without explicit limitation handling.
+- The system must not emit `accepted` when a follow-up query contradicts inherited scope and the governing path has not been rebuilt.
+- The system must not emit `accepted` when a building-class synonym mapping remains materially ambiguous.
 
 ### Coverage regression tests
 - A release must fail if xref resolution or note-attachment coverage regresses in a query-critical family beyond the tolerated threshold.
 - A release must fail if a new overlay source is introduced without overlay target resolution metrics.
+- A release must fail if `trace_completeness_on_accepted` drops below the threshold for the declared release class.
+- A release must fail if `coverage_scope_mappings` drops below the threshold for a supported flagship query family.
 
 ### Audit tests
 - Every accepted answer must replay from answer item to candidate IDs to relationship IDs to span IDs to source locators.
 - Every accepted_with_assumptions answer must replay the same way plus list structured assumptions.
+- Every follow-up answer must preserve replay context linking the current answer to the prior query or prior scope when inherited context is used.
+- Every conflict-present result must identify the affected answer item or trace path.
 
 ## Required Reporting Object
 Each evaluation run must emit a structured report containing:
@@ -168,6 +199,9 @@ Each evaluation run must emit a structured report containing:
 - false definitive answer counts
 - unresolved scope counts by family
 - contradiction visibility counts
+- trace completeness metrics
+- release class evaluated
+- policy version used
 
 ## Reliability Anti-Patterns
 The system must be treated as unreliable if it exhibits any of the following:
@@ -177,6 +211,8 @@ The system must be treated as unreliable if it exhibits any of the following:
 - accepted answers where a high-impact assumption is present only in prose
 - accepted answers that cannot replay to source locators
 - release dashboards that report fixture success but omit corpus coverage
+- accepted answers whose trace completeness is below the required threshold for the release class
+- accepted answers that reuse prior scope without an explicit contradiction check when follow-up context is present
 
 ## Dependencies
 This specification depends on:

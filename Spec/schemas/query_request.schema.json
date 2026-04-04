@@ -41,6 +41,12 @@
     "requested_jurisdiction": {
       "type": "string"
     },
+    "conversation_id": {
+      "type": "string"
+    },
+    "prior_query_id": {
+      "type": "string"
+    },
     "expected_answer_family": {
       "type": "string",
       "enum": [
@@ -66,6 +72,25 @@
     },
     "prior_scope_id": {
       "type": "string"
+    },
+    "prior_answer_item_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "followup_mode": {
+      "type": "string",
+      "enum": [
+        "none",
+        "inherit_scope",
+        "filter_prior_answer",
+        "restate_with_changed_scope"
+      ]
+    },
+    "require_scope_contradiction_check": {
+      "type": "boolean",
+      "default": false
     }
   }
 }

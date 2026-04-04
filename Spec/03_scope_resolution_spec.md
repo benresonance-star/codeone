@@ -144,6 +144,15 @@ Each scope field must include:
 - provenance
 - resolution_notes where needed
 
+When a scope is produced inside a multi-turn workflow, the surrounding query contract should also carry:
+- `conversation_id`
+- `prior_query_id`
+- `prior_scope_id`
+- `prior_answer_item_ids` when follow-up filtering depends on prior results
+
+Those follow-up fields are defined in:
+- `Spec/schemas/query_request.schema.json`
+
 ## Required Mapping Families
 The scope layer depends on canonical mapping objects for:
 - location to jurisdiction
@@ -198,6 +207,32 @@ Follow-up questions may inherit prior scope only when:
 
 Implicit conversational carryover without a stored scope object is prohibited for normative answers.
 
+### Follow-up contradiction checks
+When a query includes any of:
+- `prior_scope_id`
+- `prior_answer_item_ids`
+- `followup_mode != none`
+
+the system must compare newly supplied scope cues against the inherited scope before answer construction.
+
+If a contradiction changes governing clause, table, row, cell, or overlay selection, the engine must:
+- rebuild scope explicitly
+- invalidate unsafe inherited branches
+- emit `requires_scope_confirmation`, `accepted_with_assumptions`, or `conflict_present` as appropriate
+
+### Follow-up mode rules
+- `inherit_scope` is allowed only when no material contradiction is detected.
+- `filter_prior_answer` is allowed only when referenced prior answer items remain compatible with the refreshed scope.
+- `restate_with_changed_scope` requires a fresh governing-path build and must not reuse old answer items without revalidation.
+
+### Ambiguity and synonym traps
+The scope layer must treat the following as dominant-risk refusal cases:
+- a location string that maps to more than one materially different jurisdiction or climate path
+- a plain-language building description that maps to more than one plausible NCC class path
+- a follow-up query that narrows one scope dimension while silently contradicting another inherited one
+
+These cases must be exercised through golden fixtures, not only through prose examples.
+
 ## Non-Goals
 This layer does not:
 - resolve candidate graph edges
@@ -221,3 +256,4 @@ must update:
 - `Spec/06_query_resolution_spec.md`
 - `Spec/schemas/resolved_query_scope.schema.json`
 - `Spec/schemas/query_result.schema.json`
+- `Spec/schemas/query_request.schema.json`

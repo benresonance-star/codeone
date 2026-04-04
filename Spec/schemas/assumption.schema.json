@@ -54,6 +54,18 @@
         "high",
         "critical"
       ]
+    },
+    "applies_to_answer_item_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "applies_to_trace_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     }
   }
 }

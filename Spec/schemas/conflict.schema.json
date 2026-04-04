@@ -50,6 +50,39 @@
         "type": "string"
       }
     },
+    "affected_scope_dimensions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "edition",
+          "jurisdiction",
+          "location",
+          "climate_zone",
+          "building_class",
+          "building_use_context",
+          "compliance_path",
+          "building_element",
+          "construction_form",
+          "framing_type",
+          "material_context",
+          "overlay_context",
+          "exception_context"
+        ]
+      }
+    },
+    "applies_to_answer_item_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "evidence_trace_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "resolution_required": {
       "type": "boolean",
       "default": true

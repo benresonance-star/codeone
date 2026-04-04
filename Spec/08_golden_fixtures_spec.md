@@ -111,6 +111,55 @@ Purpose:
 Must prove:
 - override changes publication state without deleting prior assertions or traces
 
+### F9. Jurisdiction and climate ambiguity
+Purpose:
+- ensure ambiguous location mapping fails safely
+
+Must prove:
+- a single place-name query that could map to multiple jurisdictions or climate-zone paths does not produce a definitive normative answer
+- the result either requests scope confirmation or returns explicitly separated candidate scopes
+
+### F10. Performance-vs-DTS path trap
+Purpose:
+- prevent silent fallback from Performance-style questions to DTS-only answers
+
+Must prove:
+- Performance or hybrid-path intent is detected
+- DTS-only material is not presented as an `accepted` answer for a Performance path without an explicit limitation or refusal
+
+### F11. Follow-up contradiction
+Purpose:
+- prevent unsafe reuse of prior conversation scope
+
+Must prove:
+- a follow-up query that contradicts stored scope forces contradiction detection, scope refresh, or confirmation
+- previously inherited answer items are not reused silently when new scope changes the governing path
+
+### F12. Overlay conflict and precedence
+Purpose:
+- validate baseline-versus-overlay ordering and honest conflict handling
+
+Must prove:
+- overlay application order is explicit
+- baseline and overlay traces remain separately visible
+- unresolved overlay conflicts downgrade the result status
+
+### F13. Building-class synonym trap
+Purpose:
+- prevent unsafe mapping from plain-language occupancy terms to NCC classes
+
+Must prove:
+- ambiguous plain-language building descriptions do not get silently promoted into a definitive `building_class`
+- the engine requests confirmation or returns an explicitly provisional result
+
+### F14. Multi-hop note-to-clause-to-table routing
+Purpose:
+- validate real multi-hop governing paths
+
+Must prove:
+- a note or callout can route interpretation from a selected table cell to a clause and then to a secondary governing table
+- the final answer trace preserves that full dependency chain
+
 ## Real Flagship Fixture Requirements
 The flagship fixture must not be a purely synthetic happy-path example. It must represent a real NCC-shaped query path.
 
@@ -124,6 +173,18 @@ The flagship fixture must not be a purely synthetic happy-path example. It must 
 - row and cell structure sufficient to distinguish at least two construction branches
 - at least one note or callout that affects interpretation
 - one optional exception or overlay branch
+
+### Required NCC-shaped source characteristics
+The flagship fixture must mirror real NCC document complexity rather than an oversimplified synthetic table:
+- publisher-local or remapped xref structure
+- clause-to-table routing similar to energy-efficiency provisions
+- table-local note or desc-note structure
+- at least one state-variation or overlay-like branch when relevant
+
+Representative source shapes should be taken from files such as:
+- `Spec/NCC 2022/XMLs/13-2-3-roofs and ceilings.xml`
+- `Spec/NCC 2022/XMLs/table-3-climate-zones-for-thermal-design.xml`
+- `Spec/NCC 2022/XMLs/D3D24-doorways-and-doors.xml`
 
 ### Required query
 - "What are the required minimum R-Values for a Class 2 building in Melbourne?"
@@ -167,6 +228,77 @@ This variant must include:
 Expected result:
 - `requires_scope_confirmation` or `accepted_with_assumptions`
 
+## Additional Dominant-Risk Fixture Requirements
+
+### Ambiguity fixture
+Fixture ID:
+- `fixture_location_ambiguity_01`
+
+Must include:
+- one place name or project description that admits more than one mapping path
+- explicit expected candidate scopes
+
+Expected result:
+- `requires_scope_confirmation` or a deliberately split provisional response
+
+### Performance path fixture
+Fixture ID:
+- `fixture_performance_path_trap_01`
+
+Must include:
+- one query whose wording indicates Performance Solution or hybrid compliance intent
+- one DTS candidate path that would look plausible but is not sufficient
+
+Expected result:
+- no silent DTS `accepted` answer
+
+### Follow-up contradiction fixture
+Fixture ID:
+- `fixture_followup_scope_contradiction_01`
+
+Must include:
+- one initial accepted or provisional answer
+- one follow-up query that changes or contradicts a previously inherited scope dimension
+
+Expected result:
+- contradiction surfaced explicitly
+- prior scope inheritance re-evaluated before answer construction
+
+### Overlay precedence fixture
+Fixture ID:
+- `fixture_overlay_precedence_01`
+
+Must include:
+- one baseline rule
+- one overlay or replacement branch
+- one unresolved or competing precedence scenario
+
+Expected result:
+- baseline and overlay traces visible independently
+- unresolved precedence downgrades top-level result status
+
+### Building-class synonym fixture
+Fixture ID:
+- `fixture_building_class_synonym_trap_01`
+
+Must include:
+- one plain-language building description that plausibly maps to more than one NCC class path
+
+Expected result:
+- no silent class promotion without confirmation or explicit assumption
+
+### Multi-hop routing fixture
+Fixture ID:
+- `fixture_multihop_note_clause_table_01`
+
+Must include:
+- a table selection
+- a note or callout that redirects interpretation to a clause
+- a secondary clause or table dependency
+
+Expected result:
+- answer trace contains the full multi-hop path
+
 ## Coverage Metadata
 Each fixture must include metadata fields such as:
 - `fixture_id`
@@ -183,6 +315,8 @@ Each fixture must include metadata fields such as:
 4. Keep ambiguity explicit rather than implied.
 5. Include note and overlay behavior where they materially affect the answer.
 6. Prefer actual NCC-shaped structures for flagship fixtures over oversimplified synthetic examples.
+7. For query-critical fixtures, include enough structure to test replay from answer item to source locator.
+8. When a fixture depends on stored prior context, expected outputs must include the prior scope or prior answer references used by the query contract.
 
 ## Minimum Initial Build Order
 1. `fixture_clean_clause_01`
@@ -193,7 +327,13 @@ Each fixture must include metadata fields such as:
 6. `fixture_contradiction_01`
 7. `fixture_rvalue_query_real_01`
 8. `fixture_rvalue_query_branching_01`
-9. `fixture_override_01`
+9. `fixture_location_ambiguity_01`
+10. `fixture_performance_path_trap_01`
+11. `fixture_followup_scope_contradiction_01`
+12. `fixture_overlay_precedence_01`
+13. `fixture_building_class_synonym_trap_01`
+14. `fixture_multihop_note_clause_table_01`
+15. `fixture_override_01`
 
 ## Release Requirement
 The system is not considered ready for serious user-facing NCC query support unless the real R-Value fixture family passes honestly.
@@ -204,6 +344,8 @@ Passing means:
 - correct branch handling
 - complete answer trace
 - no silent guessing
+
+The system is not considered high-trust unless the ambiguity, follow-up contradiction, overlay precedence, and Performance-path trap fixtures also pass honestly.
 
 ## Dependencies
 These fixtures must align with:
