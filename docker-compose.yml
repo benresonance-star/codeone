@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+      args:
+        BACKEND_REQUIREMENTS_FILE: ${BACKEND_REQUIREMENTS_FILE:-requirements.txt}
     ports:
       - "8000:8000"
     environment:
@@ -13,6 +15,7 @@ services:
       DOCLING_FORCE_BACKEND_TEXT: "true"
     volumes:
       - runtime-data:/app/runtime-data
+      - ./data/schema-registry:/app/data/schema-registry
     depends_on:
       - postgres
       - redis

@@ -116,6 +116,14 @@ class RetentionService:
                 "xml_semantic_units": lineage.get("xml_semantic_units", []),
                 "pdf_evidence_packets": lineage.get("pdf_evidence_packets", []),
                 "candidate_objects": lineage.get("candidate_objects", []),
+                "candidate_relations": lineage.get("candidate_relations", []),
+                "reconciliation_records": lineage.get("reconciliation_records", []),
+                "graph_edges": lineage.get("graph_edges", []),
+                "enrichment_summary": lineage.get("enrichment_summary", {}),
+                "candidate_quality": lineage.get("candidate_quality", {}),
+                "graph_readiness": lineage.get("graph_readiness", {}),
+                "foundational_baseline_corpus": lineage.get("foundational_baseline_corpus", {}),
+                "schema_runtime": lineage.get("schema_runtime", payload.get("raw_metrics", {}).get("xml", {}).get("schema_runtime", {})),
             },
         )
 
@@ -180,6 +188,7 @@ class RetentionService:
         candidate_runtime = (
             evaluation_payload.get("candidate_runtime", {}) if isinstance(evaluation_payload, dict) else {}
         )
+        schema_runtime = candidate_runtime.get("schema_runtime") if isinstance(candidate_runtime, dict) else {}
         semantic_units = candidate_runtime.get("xml_semantic_units") or xml_context.get("semantic_units") or []
 
         pdf_tables = self._table_payloads(session, run_id, "pdf")
@@ -196,11 +205,49 @@ class RetentionService:
             semantic_units=semantic_units,
             pdf_evidence_packets=pdf_evidence_packets,
         )
+        xml_metrics = xml_context.get("metrics") or {}
+
+        def _needs_enrichment_restore(_cr: dict[str, Any], cands: list[dict[str, Any]]) -> bool:
+            if not cands:
+                return False
+            return not all(isinstance(c, dict) and "classification" in c for c in cands)
+
+        candidate_relations: list[dict[str, Any]] = list(candidate_runtime.get("candidate_relations") or [])
+        reconciliation_records: list[dict[str, Any]] = list(candidate_runtime.get("reconciliation_records") or [])
+        graph_edges: list[dict[str, Any]] = list(candidate_runtime.get("graph_edges") or [])
+        enrichment_summary: dict[str, Any] = dict(candidate_runtime.get("enrichment_summary") or {})
+
+        if _needs_enrichment_restore(candidate_runtime, candidate_objects):
+            (
+                candidate_objects,
+                candidate_relations,
+                reconciliation_records,
+                graph_edges,
+                enrichment_summary,
+            ) = ingestion_service._apply_semantic_enrichment(
+                xml_bytes=xml_bytes,
+                xml_metrics=xml_metrics,
+                semantic_units=semantic_units,
+                pdf_evidence_packets=pdf_evidence_packets,
+                candidate_objects=candidate_objects,
+            )
+
         canonical_snippet_records = self._load_canonical_snippet_records(session, run_id)
         canonical_snippets = ingestion_service._build_canonical_snippets(
             can_progress=bool(canonical_snippet_records),
             candidates=candidate_objects,
         )
+        graph_edges = [
+            edge
+            for edge in graph_edges
+            if edge.get("edge_type") != "candidate_to_canonical_snippet"
+        ]
+        graph_edges = ingestion_service._append_snippet_promotion_edges(
+            graph_edges=graph_edges,
+            candidates=candidate_objects,
+            canonical_snippets=canonical_snippets,
+        )
+        enrichment_summary = {**enrichment_summary, "graph_edge_count": len(graph_edges)}
         review_workspace = ingestion_service._build_review_workspace(
             pdf_name=pdf_document.file_name,
             xml_name=xml_document.file_name,
@@ -213,7 +260,53 @@ class RetentionService:
             canonical_snippets=canonical_snippets,
             xml_validation=xml_validation,
             pdf_validation=pdf_validation,
+            xml_bytes=xml_bytes,
+            xml_metrics=xml_metrics,
+            candidate_relations=candidate_relations,
+            reconciliation_records=reconciliation_records,
+            graph_edges=graph_edges,
+            enrichment_summary=enrichment_summary,
         )
+
+        stored_quality = candidate_runtime.get("candidate_quality") if isinstance(candidate_runtime, dict) else {}
+        stored_graph = candidate_runtime.get("graph_readiness") if isinstance(candidate_runtime, dict) else {}
+        stored_baseline = candidate_runtime.get("foundational_baseline_corpus") if isinstance(candidate_runtime, dict) else {}
+        foundational_baseline_corpus = (
+            stored_baseline
+            if isinstance(stored_baseline, dict) and stored_baseline.get("items") is not None
+            else ingestion_service._build_foundational_baseline_corpus_slice(
+                semantic_units=semantic_units,
+                candidate_objects=candidate_objects,
+            )
+        )
+        candidate_quality = (
+            stored_quality
+            if isinstance(stored_quality, dict) and stored_quality.get("schema_version")
+            else ingestion_service._build_candidate_quality_metrics(
+                semantic_units=semantic_units,
+                pdf_evidence_packets=pdf_evidence_packets,
+                candidate_objects=candidate_objects,
+                review_units=review_workspace["review_units"],
+                canonical_snippets=canonical_snippets,
+                foundational_baseline_corpus=foundational_baseline_corpus,
+            )
+        )
+        graph_readiness = (
+            stored_graph
+            if isinstance(stored_graph, dict) and stored_graph.get("gates")
+            else ingestion_service._build_graph_readiness_summary(
+                enrichment_summary=enrichment_summary,
+                xml_validation=xml_validation,
+                pdf_validation=pdf_validation,
+                candidate_quality=candidate_quality,
+            )
+        )
+        review_workspace = {
+            **review_workspace,
+            "candidate_quality": candidate_quality,
+            "graph_readiness": graph_readiness,
+            "foundational_baseline_corpus": foundational_baseline_corpus,
+        }
 
         return {
             "summary": {
@@ -228,6 +321,17 @@ class RetentionService:
                 "can_progress": run.can_progress,
                 "paired_document_id": pdf_validation.get("document", {}).get("paired_xml_doc_id")
                 or xml_validation.get("document", {}).get("paired_pdf_doc_id"),
+                "schema_family_id": xml_validation.get("document", {}).get("schema_family_id"),
+                "schema_family_version": xml_validation.get("document", {}).get("schema_family_version"),
+                "schema_registry_version": (
+                    xml_validation.get("document", {}).get("schema_registry_version")
+                    or (schema_runtime.get("registry_version") if isinstance(schema_runtime, dict) else None)
+                ),
+                "schema_normalizer_version": (
+                    xml_validation.get("document", {}).get("schema_normalizer_version")
+                    or (schema_runtime.get("normalizer_version") if isinstance(schema_runtime, dict) else None)
+                ),
+                "schema_recheck_status": "fresh",
                 "document_strategy": document_strategy if isinstance(document_strategy, dict) else {},
                 "parity_summary": parity_scaffold.get("summary", {}) if isinstance(parity_scaffold, dict) else {},
             },
@@ -249,9 +353,17 @@ class RetentionService:
                 "parity_scaffold": parity_scaffold if isinstance(parity_scaffold, dict) else {},
                 "pdf_evidence_packets": pdf_evidence_packets,
                 "candidate_objects": candidate_objects,
+                "candidate_relations": candidate_relations,
+                "reconciliation_records": reconciliation_records,
+                "graph_edges": graph_edges,
+                "enrichment_summary": enrichment_summary,
                 "canonical_snippets": canonical_snippets,
                 "pdf_tables": pdf_tables,
                 "xml_tables": xml_tables,
+                "candidate_quality": candidate_quality,
+                "graph_readiness": graph_readiness,
+                "foundational_baseline_corpus": foundational_baseline_corpus,
+                "schema_runtime": schema_runtime if isinstance(schema_runtime, dict) else {},
             },
             "review_workspace": review_workspace,
         }
@@ -634,6 +746,18 @@ class RetentionService:
                     "candidate_runtime_summary": {
                         "semantic_units": len(candidate_runtime.get("xml_semantic_units", [])),
                         "candidate_objects": len(candidate_runtime.get("candidate_objects", [])),
+                        "graph_edges": len(candidate_runtime.get("graph_edges", [])),
+                        "candidate_relations": len(candidate_runtime.get("candidate_relations", [])),
+                        "reconciliation_records": len(candidate_runtime.get("reconciliation_records", [])),
+                        "review_units_echo": int(
+                            (candidate_runtime.get("candidate_quality") or {}).get("review_unit_count") or 0
+                        ),
+                        "promoted_snippets_echo": int(
+                            (candidate_runtime.get("candidate_quality") or {}).get("promoted_snippet_count") or 0
+                        ),
+                        "graph_ready": bool((candidate_runtime.get("graph_readiness") or {}).get("ready_for_graph_handoff")),
+                        "schema_family_id": (candidate_runtime.get("schema_runtime") or {}).get("schema_family_id"),
+                        "schema_registry_version": (candidate_runtime.get("schema_runtime") or {}).get("registry_version"),
                     },
                 },
                 created_at=now_utc(),
@@ -753,11 +877,35 @@ class RetentionService:
         }
 
     def _serialize_xml_node(self, node: XmlNode) -> dict[str, Any]:
+        context_descriptor = node.context_descriptor
         return {
             "node_id": node.node_id,
             "clause_id": node.clause_id,
             "text": node.text,
             "path": node.path,
+            "full_path": context_descriptor.full_path if context_descriptor is not None else node.path,
+            "parent_node_id": context_descriptor.parent_node_id if context_descriptor is not None else None,
+            "root_node_id": context_descriptor.root_node_id if context_descriptor is not None else None,
+            "ancestor_node_ids": list(context_descriptor.ancestor_node_ids) if context_descriptor is not None else [],
+            "ancestor_tags": list(context_descriptor.ancestor_tags) if context_descriptor is not None else [],
+            "context_path_signature": context_descriptor.context_path_signature if context_descriptor is not None else None,
+            "context_titles": list(context_descriptor.context_titles) if context_descriptor is not None else [],
+            "context_descriptor": {
+                "node_id": context_descriptor.node_id,
+                "full_path": context_descriptor.full_path,
+                "context_path_signature": context_descriptor.context_path_signature,
+                "parent_node_id": context_descriptor.parent_node_id,
+                "root_node_id": context_descriptor.root_node_id,
+                "ancestor_node_ids": list(context_descriptor.ancestor_node_ids),
+                "ancestor_tags": list(context_descriptor.ancestor_tags),
+                "nearest_structural_parent_id": context_descriptor.nearest_structural_parent_id,
+                "nearest_structural_parent_tag": context_descriptor.nearest_structural_parent_tag,
+                "context_titles": list(context_descriptor.context_titles),
+                "depth": context_descriptor.depth,
+                "sibling_index": context_descriptor.sibling_index,
+            }
+            if context_descriptor is not None
+            else None,
         }
 
     def _rebuild_pdf_metrics(self, pdf_validation: dict[str, Any], document_strategy: dict[str, Any]) -> dict[str, Any]:

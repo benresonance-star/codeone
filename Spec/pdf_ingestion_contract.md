@@ -1,6 +1,6 @@
 # PDF Ingestion Validation Contract
 ## NCC PDF Ingestion Constraint Manual
-### Version 1.9.0
+### Version 1.11.0
 
 ---
 
@@ -36,8 +36,11 @@ The PDF must therefore be suitable for:
 Current staged runtime model:
 - XML semantic units define the candidate inventory
 - PDF evidence packets are gathered against those XML semantic units
-- candidate objects reconcile XML structure and PDF evidence
-- review units are UI-facing projections of candidate objects
+- a `CandidateObject` engine reconciles XML structure and PDF evidence
+- a `CandidateRelation` engine extracts explicit XML links plus text-resolved, text-unresolved, and layout-inferred dependencies over the same candidate inventory
+- a reconciliation stage compares object and relation outputs and emits reviewable reconciliation records before any staged-authority relation classes can affect promotion
+- **Clause Semantic Enrichment** attaches optional semantic metadata to those same candidate records (explicit relations, glossary links, applicability conditions, implicit relation candidates, graph edges, enrichment hints) after extraction and before or alongside validation; it does not replace candidate identity or validation state
+- review units are UI-facing projections of candidate objects (and may surface enrichment fields when present)
 - canonical snippets may only be promoted from validated candidates
 
 If PDF validation fails, the system must stop before candidate extraction and semantic compilation.
@@ -235,23 +238,33 @@ Companion ingestion metadata may additionally surface:
 - runtime notes explaining whether text-first or table-aware extraction was used
 - candidate-stage readiness notes while the schema remains backward-compatible
 
+Companion ingestion responses may additionally surface **candidate robustness** payloads (additive, backward-compatible): `lineage.candidate_quality` (unit/evidence/candidate/review/snippet/baseline coverage counts), `lineage.graph_readiness` (inspectable gates and `ready_for_graph_handoff`), and `lineage.foundational_baseline_corpus` (deterministic baseline slice for glossary/title/interpretive categories). The same keys may appear on `review_workspace` for UI tabs. Graph-readiness gates are conservative and deterministic; they do not override PDF or XML validation outcomes. See `Spec/Candidate_Extraction_Layer.md` section 14 for authority vs heuristic enrichment markers on candidates.
+
 Companion ingestion responses may additionally surface a candidate-first review payload for UI review workspaces, including:
 - `lineage.xml_nodes`
 - `lineage.xml_semantic_units`
 - `lineage.pdf_fragments`
 - `lineage.alignments`
 - `lineage.pdf_evidence_packets`
-- `lineage.candidate_objects`
+- `lineage.candidate_objects` (each object may include `semantic_enrichment` and/or top-level `candidate_relations`, `reconciliation_records`, `graph_edges`, and `enrichment_hints` mirrors per `Spec/Candidate_Extraction_Layer.md`)
 - `lineage.canonical_snippets`
+- `lineage.candidate_relations` (optional aggregate list of explicit cross-candidate relations for the run, when emitted)
+- `lineage.reconciliation_records` (optional aggregate list of object-vs-relation reconciliation outcomes for the run)
+- `lineage.graph_edges` (optional aggregate edge list for graph-oriented consumers)
 - `review_workspace.candidates`
 - `review_workspace.review_units`
+- `review_workspace.candidate_relations` (optional workspace-level projection)
+- `review_workspace.reconciliation_records` (optional workspace-level projection)
+- `review_workspace.graph_edges` (optional workspace-level projection)
 - `summary.ingestion_run_id`
 - `summary.created_at`
+- `summary.enrichment_drift_advisory` (optional human-readable advisory when enrichment could diverge from stored validation state; not a blocking gate)
 
 Current-state expectation for lineage-oriented review payloads:
 - the runtime should treat XML semantic units as the primary candidate inventory, even when legacy alignment fields are still surfaced for compatibility
 - PDF evidence should be gathered per XML semantic unit rather than treating fragments as long-term candidate identity
-- candidate objects should be retained as first-class lineage payloads and review-workspace payloads
+- candidate objects and candidate relations should be retained as first-class lineage payloads and review-workspace payloads
+- reconciliation records should make any object-vs-relation gaps, contradictions, or unresolved dependencies inspectable rather than burying them inside enrichment notes
 - review units should be derived from candidate objects rather than emitted directly from fragment alignments
 - the payload may operate in `full` or `focused` mode depending on XML artifact type and fragment volume
 - focused narrow-artifact review may preferentially surface row-level XML nodes and row-level PDF fragments when those matches exist
@@ -268,10 +281,25 @@ Current-state expectation for lineage-oriented review payloads:
   and `candidate_needs_review` for the subset still requiring human review
 - `candidate_total` should reflect semantic-unit-seeded candidate objects, not just surviving fragment alignments
 - candidate identifiers should be stable and semantic-unit-led rather than using fragment ids as the long-term primary identity
+- relation identifiers should be stable across lineage, workspace, and persisted review payloads for the same ingestion run
 - `document_family_id` may be truncated and suffixed with a deterministic hash when needed to stay within persistence limits
 - storage-safe identifier shortening must not make the family identifier nondeterministic for the same PDF/XML pair
 - retained runs may be reloaded through an explicit run-detail API such as `GET /api/ingestions/runs/{run_id}`
 - the reloaded run payload should restore validation outputs, XML semantic units, PDF evidence packets, candidate objects, review workspace state, and persisted reviewer decisions without recomputing extraction at request time
+- when semantic enrichment is present, run payloads should preserve `semantic_enrichment` (or equivalent fields) on candidates and any emitted `candidate_relations` / `graph_edges` so downstream graph tooling and review UIs see a consistent candidate-first envelope
+- candidate relations should surface relation authority and resolution metadata such as:
+  - `relation_authority`
+  - `target_locator`
+  - `resolution_status`
+  - `confidence`
+  - `evidence_spans`
+- reconciliation records should surface at least:
+  - `classification`
+  - `promotion_effect`
+  - `review_required`
+- staged-authority behavior should default to review visibility first: relation findings may create review items immediately, while only explicitly promoted relation classes may become promotion-relevant
+
+**Enrichment drift risk (advisory):** Runtime stages, agents, and UI layers must not treat enrichment-only structures as a substitute for validated candidate state. Enrichment is advisory for workflow gates: validated candidate records and their validation outcomes remain authoritative for promotion. Operators and implementers should heed optional `summary.enrichment_drift_advisory` (or equivalent notes) when enrichment proposals could conflict with rejected, ambiguous, or not-yet-validated candidates. This advisory does **not** add a new hard blocking rule to PDF or candidate validation; it guards against accidental divergence from the candidate-first architecture.
 
 Current-state expectation for UI validation feedback:
 - the UI may show in-flight validation progress, selected file names, elapsed time, and request-cancel affordances while the backend request is still running
@@ -294,6 +322,7 @@ Future robust implementations to plan for:
 - explicit candidate-stage gate fields in the validation schema
 - candidate promotion evidence that records which validated candidates produced canonical snippets
 - explicit semantic-unit and evidence-packet schemas when the companion ingestion payloads are promoted from compatibility payloads to fully contract-bound runtime objects
+- relation-class-specific escalation rules so clause references, exceptions, normative notes, and applicability dependencies can move from advisory to promotion-relevant on a controlled basis
 
 ---
 

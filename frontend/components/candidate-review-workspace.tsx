@@ -2,6 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import {
+  filterCandidatesByRelationState,
+  mapCandidateObjectToCandidate,
+  mapReviewUnitToCandidate,
+  sortCandidates,
+} from "../lib/candidate-review-workspace-logic";
+
 type ValidationItem = {
   fragment_id?: string;
   node_id?: string;
@@ -14,6 +21,13 @@ type XmlNode = {
   clause_id: string;
   text: string;
   path: string;
+  full_path?: string;
+  parent_node_id?: string | null;
+  root_node_id?: string | null;
+  ancestor_node_ids?: string[];
+  ancestor_tags?: string[];
+  context_path_signature?: string | null;
+  context_titles?: string[];
 };
 
 type PdfFragment = {
@@ -37,6 +51,82 @@ type CanonicalSnippet = {
   fragment_id?: string;
   content?: string;
   confidence?: number;
+};
+
+/** Mirrors Spec/Candidate_Extraction_Layer.md semantic_enrichment and pdf_ingestion_contract optional mirrors. */
+type GlossaryLinkRef = {
+  term_id?: string | null;
+  label?: string;
+  ref?: string | null;
+};
+
+type ExplicitCandidateRelation = {
+  relation_id?: string;
+  relation_kind?: string;
+  relation_authority?: string;
+  direction?: "outbound" | "inbound" | "undirected" | string;
+  source_candidate_id?: string | null;
+  source_semantic_unit_id?: string | null;
+  source_node_id?: string | null;
+  target_candidate_id?: string | null;
+  target_semantic_unit_id?: string | null;
+  target_node_id?: string | null;
+  target_locator?: string | null;
+  resolution_status?: string;
+  resolved?: boolean;
+  blocking?: boolean;
+  raw_value?: string;
+  confidence?: number;
+  provenance?: {
+    source_authority?: string;
+    source_fields?: string[];
+    evidence_fragment_ids?: string[];
+    evidence_spans?: string[];
+  };
+  evidence_fragment_ids?: string[];
+  evidence_spans?: string[];
+};
+
+type ImplicitRelationCandidate = {
+  suggested_relation_kind?: string;
+  target_candidate_id?: string | null;
+  target_semantic_unit_id?: string | null;
+  confidence?: number;
+  rationale?: string | null;
+};
+
+type GraphEdgePayload = {
+  edge_id?: string;
+  from_id?: string;
+  to_id?: string;
+  edge_kind?: string;
+  metadata?: Record<string, unknown>;
+};
+
+type SemanticEnrichment = {
+  enrichment_run_id?: string | null;
+  enrichment_version?: string | null;
+  glossary_links?: GlossaryLinkRef[];
+  applicability_conditions?: string[];
+  candidate_relations?: ExplicitCandidateRelation[];
+  implicit_relation_candidates?: ImplicitRelationCandidate[];
+  graph_edges?: GraphEdgePayload[];
+  field_authority?: Record<string, string>;
+  per_field_counts?: Record<string, number>;
+  enrichment_hints?: {
+    notes?: string | null;
+    tags?: string[];
+  };
+};
+
+type ReconciliationRecord = {
+  reconciliation_id?: string;
+  source_candidate_ids?: string[];
+  source_relation_ids?: string[];
+  classification?: string;
+  promotion_effect?: string;
+  review_required?: boolean;
+  notes?: string | null;
 };
 
 type ReviewStatus =
@@ -65,6 +155,13 @@ type ReviewUnit = {
   fragment_id: string;
   node_id?: string | null;
   xml_path: string;
+  xml_full_path?: string;
+  xml_parent_node_id?: string | null;
+  xml_root_node_id?: string | null;
+  xml_ancestor_node_ids?: string[];
+  xml_ancestor_tags?: string[];
+  xml_context_path_signature?: string | null;
+  xml_context_descriptor?: Record<string, unknown> | null;
   xml_text: string;
   pdf_text: string;
   bbox: number[];
@@ -74,6 +171,11 @@ type ReviewUnit = {
   raw_xml_only_terms?: string[];
   raw_pdf_only_terms?: string[];
   ignored_structural_terms?: string[];
+  semantic_enrichment?: SemanticEnrichment;
+  candidate_relations?: ExplicitCandidateRelation[];
+  reconciliation_records?: ReconciliationRecord[];
+  graph_edges?: GraphEdgePayload[];
+  enrichment_hints?: SemanticEnrichment["enrichment_hints"];
 };
 
 type ReviewDecision = {
@@ -89,6 +191,13 @@ type CandidateObject = {
   xml_structural_class?: string;
   candidate_semantic_class?: string;
   xml_path?: string;
+  xml_full_path?: string;
+  xml_parent_node_id?: string | null;
+  xml_root_node_id?: string | null;
+  xml_ancestor_node_ids?: string[];
+  xml_ancestor_tags?: string[];
+  xml_context_path_signature?: string | null;
+  xml_context_descriptor?: Record<string, unknown> | null;
   xml_text?: string;
   confidence?: {
     overall?: number;
@@ -119,6 +228,13 @@ type CandidateObject = {
     raw_pdf_only_terms?: string[];
     ignored_structural_terms?: string[];
   };
+
+  semantic_enrichment?: SemanticEnrichment;
+  candidate_relations?: ExplicitCandidateRelation[];
+  reconciliation_records?: ReconciliationRecord[];
+  graph_edges?: GraphEdgePayload[];
+  enrichment_hints?: SemanticEnrichment["enrichment_hints"];
+  depends_on?: string[];
 };
 
 type CandidateRecord = {
@@ -138,6 +254,13 @@ type CandidateRecord = {
   fragmentId: string;
   nodeId: string | null;
   xmlPath: string;
+  xmlFullPath: string;
+  xmlParentNodeId: string | null;
+  xmlRootNodeId: string | null;
+  xmlAncestorNodeIds: string[];
+  xmlAncestorTags: string[];
+  xmlContextPathSignature: string | null;
+  xmlContextDescriptor: Record<string, unknown> | null;
   xmlText: string;
   pdfText: string;
   bbox: number[];
@@ -147,11 +270,24 @@ type CandidateRecord = {
   rawXmlOnlyTerms: string[];
   rawPdfOnlyTerms: string[];
   ignoredStructuralTerms: string[];
+  candidateRelations: ExplicitCandidateRelation[];
+  reconciliationRecords: ReconciliationRecord[];
+  graphEdges: GraphEdgePayload[];
+  semanticEnrichment: SemanticEnrichment | null;
+  enrichmentHints: SemanticEnrichment["enrichment_hints"] | null;
+  dependsOn: string[];
 };
 
 type CandidateWithDisplayStatus = CandidateRecord & {
   displayStatus: ReviewStatus;
 };
+
+type ContextFilter =
+  | {
+      mode: "parent" | "root";
+      value: string;
+    }
+  | null;
 
 type ComparisonRow = {
   label: string;
@@ -164,6 +300,7 @@ type IngestionResponseLike = {
     document_family_id?: string | null;
     created_at?: string | null;
     can_progress?: boolean;
+    enrichment_drift_advisory?: string | null;
   };
   results?: {
     xml_validation?: {
@@ -183,6 +320,9 @@ type IngestionResponseLike = {
     pdf_evidence_packets?: Array<Record<string, unknown>>;
     candidate_objects?: CandidateObject[];
     canonical_snippets?: CanonicalSnippet[];
+    candidate_relations?: ExplicitCandidateRelation[];
+    reconciliation_records?: ReconciliationRecord[];
+    graph_edges?: GraphEdgePayload[];
   };
   review_workspace?: {
     mode?: string;
@@ -199,6 +339,10 @@ type IngestionResponseLike = {
     candidate_total?: number;
     candidate_surfaced?: number;
     candidate_needs_review?: number;
+    candidate_relations?: ExplicitCandidateRelation[];
+    reconciliation_records?: ReconciliationRecord[];
+    graph_edges?: GraphEdgePayload[];
+    enrichment_counts?: Record<string, number>;
   };
 };
 
@@ -210,7 +354,15 @@ type CandidateReviewWorkspaceProps = {
 };
 
 type FilterKey = "review" | "all" | "approved" | "rejected";
-type SortKey = "priority" | "confidence_desc" | "confidence_asc" | "issue_class" | "source_emphasis";
+type RelationFilterKey = "all" | "review_required" | "resolved" | "xml_explicit";
+type SortKey =
+  | "priority"
+  | "confidence_desc"
+  | "confidence_asc"
+  | "issue_class"
+  | "source_emphasis"
+  | "relation_review"
+  | "relation_authority";
 
 const FILTER_LABELS: Record<FilterKey, string> = {
   review: "Review Queue",
@@ -219,12 +371,21 @@ const FILTER_LABELS: Record<FilterKey, string> = {
   rejected: "Rejected",
 };
 
+const RELATION_FILTER_LABELS: Record<RelationFilterKey, string> = {
+  all: "All relation states",
+  review_required: "Needs dependency review",
+  resolved: "Has resolved dependencies",
+  xml_explicit: "XML-explicit only",
+};
+
 const SORT_LABELS: Record<SortKey, string> = {
   priority: "Priority",
   confidence_desc: "Confidence (high to low)",
   confidence_asc: "Confidence (low to high)",
   issue_class: "Mismatch / Error Type",
   source_emphasis: "PDF / XML Source",
+  relation_review: "Dependency Review Priority",
+  relation_authority: "Relation Authority",
 };
 
 const CANDIDATE_PAGE_SIZE = 8;
@@ -267,102 +428,6 @@ function deriveReviewSourceEmphasis(xmlOnlyTerms: string[], pdfOnlyTerms: string
     return "pdf";
   }
   return "balanced";
-}
-
-function issueClassPriority(value: string): number {
-  switch (value) {
-    case "unmatched":
-      return 0;
-    case "validation":
-      return 1;
-    case "low_confidence":
-      return 2;
-    case "mixed_mismatch":
-      return 3;
-    case "xml_mismatch":
-      return 4;
-    case "pdf_mismatch":
-      return 5;
-    default:
-      return 6;
-  }
-}
-
-function sourceEmphasisPriority(value: string): number {
-  switch (value) {
-    case "mixed":
-      return 0;
-    case "xml":
-      return 1;
-    case "pdf":
-      return 2;
-    default:
-      return 3;
-  }
-}
-
-function statusPriority(value: ReviewStatus): number {
-  switch (value) {
-    case "review required":
-      return 0;
-    case "mismatch":
-      return 1;
-    case "ambiguous":
-      return 2;
-    case "paused":
-      return 3;
-    case "match":
-      return 4;
-    case "approved":
-      return 5;
-    case "rejected":
-      return 6;
-    default:
-      return 7;
-  }
-}
-
-function sortCandidates(candidates: CandidateWithDisplayStatus[], sortKey: SortKey): CandidateWithDisplayStatus[] {
-  const sorted = [...candidates];
-  sorted.sort((left, right) => {
-    if (sortKey === "confidence_desc") {
-      return (
-        right.confidence - left.confidence ||
-        statusPriority(left.displayStatus) - statusPriority(right.displayStatus) ||
-        left.title.localeCompare(right.title)
-      );
-    }
-    if (sortKey === "confidence_asc") {
-      return (
-        left.confidence - right.confidence ||
-        statusPriority(left.displayStatus) - statusPriority(right.displayStatus) ||
-        left.title.localeCompare(right.title)
-      );
-    }
-    if (sortKey === "issue_class") {
-      return (
-        issueClassPriority(left.reviewIssueClass) - issueClassPriority(right.reviewIssueClass) ||
-        statusPriority(left.displayStatus) - statusPriority(right.displayStatus) ||
-        left.confidence - right.confidence ||
-        left.title.localeCompare(right.title)
-      );
-    }
-    if (sortKey === "source_emphasis") {
-      return (
-        sourceEmphasisPriority(left.reviewSourceEmphasis) - sourceEmphasisPriority(right.reviewSourceEmphasis) ||
-        statusPriority(left.displayStatus) - statusPriority(right.displayStatus) ||
-        left.confidence - right.confidence ||
-        left.title.localeCompare(right.title)
-      );
-    }
-    return (
-      statusPriority(left.displayStatus) - statusPriority(right.displayStatus) ||
-      issueClassPriority(left.reviewIssueClass) - issueClassPriority(right.reviewIssueClass) ||
-      left.confidence - right.confidence ||
-      left.title.localeCompare(right.title)
-    );
-  });
-  return sorted;
 }
 
 function cleanText(value: string | null | undefined): string {
@@ -509,6 +574,59 @@ function formatWorkspaceLabel(value: string | null | undefined): string {
   return value.replace(/_/g, " ");
 }
 
+function dedupeByKey<T>(items: T[], keyBuilder: (item: T) => string): T[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = keyBuilder(item);
+    if (!key || seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function formatRelationLabel(value: string | null | undefined): string {
+  if (!value) {
+    return "n/a";
+  }
+  return value.replace(/_/g, " ");
+}
+
+function relationTone(value: string | null | undefined): "authoritative" | "review" | "neutral" {
+  if (!value) {
+    return "neutral";
+  }
+  if (value === "xml_explicit" || value === "xml_authoritative") {
+    return "authoritative";
+  }
+  if (value.includes("unresolved") || value.includes("review") || value.includes("heuristic")) {
+    return "review";
+  }
+  return "neutral";
+}
+
+function relationStatusTone(value: string | null | undefined): "pass" | "warn" | "fail" {
+  if (!value) {
+    return "warn";
+  }
+  if (value === "resolved" || value === "match") {
+    return "pass";
+  }
+  if (value === "unresolved" || value === "ambiguous" || value === "review_required" || value === "review required") {
+    return "warn";
+  }
+  return "fail";
+}
+
+function truncateText(value: string | null | undefined, limit = 140): string {
+  const text = cleanText(value);
+  if (!text) {
+    return "n/a";
+  }
+  return text.length > limit ? `${text.slice(0, limit - 1)}...` : text;
+}
+
 function formatDateTime(value: string | null | undefined): string {
   if (!value) {
     return "n/a";
@@ -573,6 +691,24 @@ function formatList(values: string[]): string {
   return values.join(", ");
 }
 
+function summarizeXmlLineage(candidate: CandidateWithDisplayStatus): string {
+  if (candidate.xmlAncestorTags.length) {
+    return [...candidate.xmlAncestorTags, candidate.candidateType].join(" > ");
+  }
+  return candidate.xmlContextPathSignature ?? candidate.xmlFullPath ?? candidate.xmlPath;
+}
+
+function summarizeSidebarXmlContext(candidate: CandidateWithDisplayStatus): string {
+  const contextParts = [
+    candidate.xmlParentNodeId ? `Parent ${candidate.xmlParentNodeId}` : null,
+    candidate.xmlRootNodeId ? `Root ${candidate.xmlRootNodeId}` : null,
+  ].filter(Boolean);
+  if (contextParts.length) {
+    return contextParts.join(" | ");
+  }
+  return candidate.xmlContextPathSignature ?? candidate.xmlPath;
+}
+
 function buildCandidateJson(candidate: CandidateWithDisplayStatus): Record<string, unknown> {
   return {
     candidateId: candidate.id,
@@ -593,12 +729,25 @@ function buildCandidateJson(candidate: CandidateWithDisplayStatus): Record<strin
     page: candidate.page,
     bbox: candidate.bbox,
     xmlPath: candidate.xmlPath,
+    xmlFullPath: candidate.xmlFullPath,
+    xmlParentNodeId: candidate.xmlParentNodeId,
+    xmlRootNodeId: candidate.xmlRootNodeId,
+    xmlAncestorNodeIds: candidate.xmlAncestorNodeIds,
+    xmlAncestorTags: candidate.xmlAncestorTags,
+    xmlContextPathSignature: candidate.xmlContextPathSignature,
+    xmlContextDescriptor: candidate.xmlContextDescriptor,
     xmlOnlyTerms: candidate.xmlOnlyTerms,
     pdfOnlyTerms: candidate.pdfOnlyTerms,
     rawXmlOnlyTerms: candidate.rawXmlOnlyTerms,
     rawPdfOnlyTerms: candidate.rawPdfOnlyTerms,
     ignoredStructuralTerms: candidate.ignoredStructuralTerms,
     issues: candidate.issues,
+    dependsOn: candidate.dependsOn,
+    candidateRelations: candidate.candidateRelations,
+    reconciliationRecords: candidate.reconciliationRecords,
+    graphEdges: candidate.graphEdges,
+    semanticEnrichment: candidate.semanticEnrichment,
+    enrichmentHints: candidate.enrichmentHints,
   };
 }
 
@@ -625,82 +774,6 @@ function renderComparisonRows(rows: ComparisonRow[]) {
       ))}
     </div>
   );
-}
-
-function mapReviewUnitToCandidate(unit: ReviewUnit): CandidateRecord {
-  return {
-    id: unit.candidate_id,
-    title: unit.title,
-    candidateType: unit.candidate_type,
-    xmlStructuralClass: unit.xml_structural_class ?? unit.candidate_type,
-    pdfEvidenceClass: unit.pdf_evidence_class ?? "unknown",
-    candidateSemanticClass: unit.candidate_semantic_class ?? unit.candidate_type,
-    reviewIssueClass: unit.review_issue_class ?? "clean_match",
-    reviewSourceEmphasis: unit.review_source_emphasis ?? "balanced",
-    confidence: unit.confidence,
-    baseStatus: normalizeReviewStatus(unit.base_status),
-    needsHumanReview: unit.needs_human_review ?? false,
-    matched: unit.matched,
-    page: unit.page ?? null,
-    fragmentId: unit.fragment_id,
-    nodeId: unit.node_id ?? null,
-    xmlPath: unit.xml_path,
-    xmlText: unit.xml_text,
-    pdfText: unit.pdf_text,
-    bbox: unit.bbox ?? [],
-    issues: unit.issues ?? [],
-    xmlOnlyTerms: unit.xml_only_terms ?? [],
-    pdfOnlyTerms: unit.pdf_only_terms ?? [],
-    rawXmlOnlyTerms: unit.raw_xml_only_terms ?? unit.xml_only_terms ?? [],
-    rawPdfOnlyTerms: unit.raw_pdf_only_terms ?? unit.pdf_only_terms ?? [],
-    ignoredStructuralTerms: unit.ignored_structural_terms ?? [],
-  };
-}
-
-function mapCandidateObjectToCandidate(candidate: CandidateObject): CandidateRecord {
-  const primaryEvidence = candidate.evidence?.[0];
-  return {
-    id: candidate.candidate_id,
-    title: candidate.title ?? candidate.candidate_id,
-    candidateType: candidate.candidate_type ?? candidate.candidate_semantic_class ?? "ambiguous",
-    xmlStructuralClass: candidate.xml_structural_class ?? candidate.candidate_type ?? "ambiguous",
-    pdfEvidenceClass: primaryEvidence?.pdf_evidence_class ?? "unknown",
-    candidateSemanticClass: candidate.candidate_semantic_class ?? candidate.candidate_type ?? "ambiguous",
-    reviewIssueClass: candidate.review?.issue_class ?? "clean_match",
-    reviewSourceEmphasis: candidate.review?.source_emphasis ?? "balanced",
-    confidence: candidate.confidence?.overall ?? primaryEvidence?.confidence ?? 0,
-    baseStatus: normalizeReviewStatus(candidate.review?.base_status ?? "review required"),
-    needsHumanReview: candidate.review?.needs_human_review ?? false,
-    matched: Boolean(primaryEvidence),
-    page: primaryEvidence?.page ?? null,
-    fragmentId: primaryEvidence?.fragment_id ?? `xml_only:${candidate.xml_node_id ?? candidate.candidate_id}`,
-    nodeId: candidate.xml_node_id ?? null,
-    xmlPath: candidate.xml_path ?? "No XML node linked yet",
-    xmlText: candidate.xml_text ?? "",
-    pdfText: primaryEvidence?.text ?? candidate.proposed?.content ?? "",
-    bbox: primaryEvidence?.bbox ?? [],
-    issues: candidate.review?.issues ?? [],
-    xmlOnlyTerms: candidate.review?.xml_only_terms ?? [],
-    pdfOnlyTerms: candidate.review?.pdf_only_terms ?? [],
-    rawXmlOnlyTerms: candidate.review?.raw_xml_only_terms ?? candidate.review?.xml_only_terms ?? [],
-    rawPdfOnlyTerms: candidate.review?.raw_pdf_only_terms ?? candidate.review?.pdf_only_terms ?? [],
-    ignoredStructuralTerms: candidate.review?.ignored_structural_terms ?? [],
-  };
-}
-
-function normalizeReviewStatus(value: ReviewStatus | string): ReviewStatus {
-  switch (value) {
-    case "match":
-    case "mismatch":
-    case "review required":
-    case "approved":
-    case "rejected":
-    case "paused":
-    case "ambiguous":
-      return value;
-    default:
-      return "review required";
-  }
 }
 
 function buildLegacyCandidates(response: IngestionResponseLike): CandidateRecord[] {
@@ -773,6 +846,13 @@ function buildLegacyCandidates(response: IngestionResponseLike): CandidateRecord
       fragmentId: fragment.fragment_id,
       nodeId: alignment.node_id ?? null,
       xmlPath: node?.path ?? "No XML node linked yet",
+      xmlFullPath: node?.full_path ?? node?.path ?? "No XML node linked yet",
+      xmlParentNodeId: node?.parent_node_id ?? null,
+      xmlRootNodeId: node?.root_node_id ?? null,
+      xmlAncestorNodeIds: node?.ancestor_node_ids ?? [],
+      xmlAncestorTags: node?.ancestor_tags ?? [],
+      xmlContextPathSignature: node?.context_path_signature ?? null,
+      xmlContextDescriptor: null,
       xmlText,
       pdfText,
       bbox: alignment.bbox ?? fragment.bbox ?? [],
@@ -782,6 +862,12 @@ function buildLegacyCandidates(response: IngestionResponseLike): CandidateRecord
       rawXmlOnlyTerms: xmlOnlyTerms,
       rawPdfOnlyTerms: pdfOnlyTerms,
       ignoredStructuralTerms: [],
+      candidateRelations: [],
+      reconciliationRecords: [],
+      graphEdges: [],
+      semanticEnrichment: null,
+      enrichmentHints: null,
+      dependsOn: [],
     });
 
     return candidates;
@@ -807,6 +893,8 @@ export function CandidateReviewWorkspace({
   onRelinkPdf,
 }: CandidateReviewWorkspaceProps) {
   const [filter, setFilter] = useState<FilterKey>("review");
+  const [relationFilter, setRelationFilter] = useState<RelationFilterKey>("all");
+  const [contextFilter, setContextFilter] = useState<ContextFilter>(null);
   const [sortKey, setSortKey] = useState<SortKey>("priority");
   const [currentPage, setCurrentPage] = useState(1);
   const [statusOverrides, setStatusOverrides] = useState<Record<string, ReviewStatus>>({});
@@ -825,6 +913,11 @@ export function CandidateReviewWorkspace({
   const candidateCreated = response.review_workspace?.candidate_total ?? alignmentTotal;
   const candidateSurfaced = response.review_workspace?.candidate_surfaced ?? alignmentDisplayed;
   const candidateNeedsReview = response.review_workspace?.candidate_needs_review ?? 0;
+  const workspaceRelationCount = response.review_workspace?.candidate_relations?.length ?? response.lineage?.candidate_relations?.length ?? 0;
+  const workspaceReconciliationCount =
+    response.review_workspace?.reconciliation_records?.length ?? response.lineage?.reconciliation_records?.length ?? 0;
+  const workspaceReviewReconciliationCount =
+    (response.review_workspace?.enrichment_counts?.review_required_reconciliations as number | undefined) ?? 0;
 
   useEffect(() => {
     if (pdfFile) {
@@ -890,7 +983,7 @@ export function CandidateReviewWorkspace({
     [candidates, statusOverrides]
   );
 
-  const filteredCandidates = useMemo(() => {
+  const statusFilteredCandidates = useMemo(() => {
     switch (filter) {
       case "approved":
         return candidatesWithStatus.filter((candidate) => candidate.displayStatus === "approved");
@@ -905,7 +998,25 @@ export function CandidateReviewWorkspace({
     }
   }, [candidatesWithStatus, filter]);
 
-  const sortedCandidates = useMemo(() => sortCandidates(filteredCandidates, sortKey), [filteredCandidates, sortKey]);
+  const filteredCandidates = useMemo(() => {
+    if (!contextFilter) {
+      return statusFilteredCandidates;
+    }
+    return statusFilteredCandidates.filter((candidate) =>
+      contextFilter.mode === "parent"
+        ? candidate.xmlParentNodeId === contextFilter.value
+        : candidate.xmlRootNodeId === contextFilter.value
+    );
+  }, [contextFilter, statusFilteredCandidates]);
+
+  const relationFilteredCandidates = useMemo(() => {
+    return filterCandidatesByRelationState(filteredCandidates, relationFilter);
+  }, [filteredCandidates, relationFilter]);
+
+  const sortedCandidates = useMemo(
+    () => sortCandidates(relationFilteredCandidates, sortKey),
+    [relationFilteredCandidates, sortKey]
+  );
   const totalPages = Math.max(1, Math.ceil(sortedCandidates.length / CANDIDATE_PAGE_SIZE));
   const currentPageSafe = Math.min(currentPage, totalPages);
   const paginatedCandidates = useMemo(
@@ -919,7 +1030,7 @@ export function CandidateReviewWorkspace({
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [filter, sortKey]);
+  }, [contextFilter, filter, relationFilter, sortKey]);
 
   useEffect(() => {
     if (!paginatedCandidates.length) {
@@ -939,6 +1050,84 @@ export function CandidateReviewWorkspace({
 
   const selectedCandidate =
     paginatedCandidates.find((candidate) => candidate.id === selectedCandidateId) ?? paginatedCandidates[0] ?? null;
+
+  const workspaceRelations = useMemo(
+    () => response.review_workspace?.candidate_relations ?? response.lineage?.candidate_relations ?? [],
+    [response]
+  );
+  const workspaceReconciliations = useMemo(
+    () => response.review_workspace?.reconciliation_records ?? response.lineage?.reconciliation_records ?? [],
+    [response]
+  );
+  const dependencyMix = useMemo(
+    () => ({
+      xmlExplicit: workspaceRelations.filter((relation) => relation.relation_authority === "xml_explicit").length,
+      textResolved: workspaceRelations.filter((relation) => relation.relation_authority === "text_resolved").length,
+      textUnresolved: workspaceRelations.filter((relation) => relation.relation_authority === "text_unresolved").length,
+      manualReview: workspaceRelations.filter((relation) => relation.relation_authority === "manual_review_required").length,
+      reconciliationReview: workspaceReconciliations.filter((record) => record.review_required).length,
+    }),
+    [workspaceReconciliations, workspaceRelations]
+  );
+
+  const selectedRelations = useMemo(() => {
+    if (!selectedCandidate) {
+      return [];
+    }
+    const localRelations = selectedCandidate.candidateRelations ?? [];
+    const scopedWorkspaceRelations = workspaceRelations.filter(
+      (relation) =>
+        relation.source_candidate_id === selectedCandidate.id ||
+        (selectedCandidate.nodeId && relation.source_node_id === selectedCandidate.nodeId)
+    );
+    return dedupeByKey([...localRelations, ...scopedWorkspaceRelations], (relation) =>
+      String(
+        relation.relation_id ??
+          `${relation.source_candidate_id ?? relation.source_node_id ?? "src"}:${relation.target_locator ?? relation.target_node_id ?? "tgt"}`
+      )
+    );
+  }, [selectedCandidate, workspaceRelations]);
+
+  const selectedReconciliations = useMemo(() => {
+    if (!selectedCandidate) {
+      return [];
+    }
+    const localRecords = selectedCandidate.reconciliationRecords ?? [];
+    const scopedWorkspaceRecords = workspaceReconciliations.filter((record) =>
+      (record.source_candidate_ids ?? []).includes(selectedCandidate.id)
+    );
+    return dedupeByKey([...localRecords, ...scopedWorkspaceRecords], (record) =>
+      String(record.reconciliation_id ?? JSON.stringify(record))
+    );
+  }, [selectedCandidate, workspaceReconciliations]);
+
+  const selectedRelationSummary = useMemo(
+    () => ({
+      total: selectedRelations.length,
+      authoritative: selectedRelations.filter((relation) => relation.relation_authority === "xml_explicit").length,
+      resolved: selectedRelations.filter((relation) => relation.resolution_status === "resolved").length,
+      review: selectedRelations.filter((relation) =>
+        ["unresolved", "ambiguous", "review_required", "review required"].includes(
+          relation.resolution_status ?? ""
+        )
+      ).length,
+    }),
+    [selectedRelations]
+  );
+
+  const parentContextCount = useMemo(() => {
+    if (!selectedCandidate?.xmlParentNodeId) {
+      return 0;
+    }
+    return candidatesWithStatus.filter((candidate) => candidate.xmlParentNodeId === selectedCandidate.xmlParentNodeId).length;
+  }, [candidatesWithStatus, selectedCandidate]);
+
+  const rootContextCount = useMemo(() => {
+    if (!selectedCandidate?.xmlRootNodeId) {
+      return 0;
+    }
+    return candidatesWithStatus.filter((candidate) => candidate.xmlRootNodeId === selectedCandidate.xmlRootNodeId).length;
+  }, [candidatesWithStatus, selectedCandidate]);
 
   const workspaceSnippets = useMemo(
     () => response.review_workspace?.canonical_snippets ?? response.lineage?.canonical_snippets ?? [],
@@ -987,12 +1176,15 @@ export function CandidateReviewWorkspace({
       },
       { label: "Display status", value: selectedCandidate.displayStatus },
       { label: "Base status", value: selectedCandidate.baseStatus },
+      { label: "Depends on", value: selectedCandidate.dependsOn.length ? selectedCandidate.dependsOn.join(", ") : "none" },
+      { label: "Relations", value: String(selectedRelationSummary.total) },
+      { label: "Reconciliation records", value: String(selectedReconciliations.length) },
       { label: "Matched", value: String(selectedCandidate.matched) },
       { label: "Confidence", value: selectedCandidate.confidence.toFixed(3) },
       { label: "Candidate page", value: selectedCandidate.page ? String(selectedCandidate.page) : "n/a" },
       { label: "BBox", value: formatBbox(selectedCandidate.bbox) },
     ];
-  }, [selectedCandidate, selectedSnippet]);
+  }, [selectedCandidate, selectedReconciliations.length, selectedRelationSummary.total, selectedSnippet]);
 
   const xmlComparisonRows = useMemo<ComparisonRow[]>(() => {
     if (!selectedCandidate) {
@@ -1000,6 +1192,11 @@ export function CandidateReviewWorkspace({
     }
     return [
       { label: "XML path", value: selectedCandidate.xmlPath },
+      { label: "Full XML path", value: selectedCandidate.xmlFullPath },
+      { label: "Context signature", value: selectedCandidate.xmlContextPathSignature ?? "n/a" },
+      { label: "Parent node", value: selectedCandidate.xmlParentNodeId ?? "n/a" },
+      { label: "Root node", value: selectedCandidate.xmlRootNodeId ?? "n/a" },
+      { label: "Ancestor tags", value: formatList(selectedCandidate.xmlAncestorTags) },
       { label: "Missing in PDF", value: formatList(selectedCandidate.xmlOnlyTerms) },
       { label: "Raw XML-only terms", value: formatList(selectedCandidate.rawXmlOnlyTerms) },
       { label: "XML text length", value: String(cleanText(selectedCandidate.xmlText).length) },
@@ -1194,7 +1391,58 @@ export function CandidateReviewWorkspace({
           <strong>Candidate Pages</strong>
           <span>{candidatePageSummary}</span>
         </div>
+        <div className="summary-card">
+          <strong>Relations Surfaced</strong>
+          <span>{workspaceRelationCount}</span>
+          <span className="summary-subtext">Run-level dependency ledger</span>
+        </div>
+        <div className="summary-card">
+          <strong>Reconciliation Records</strong>
+          <span>{workspaceReconciliationCount}</span>
+          <span className="summary-subtext">
+            {workspaceReviewReconciliationCount
+              ? `${workspaceReviewReconciliationCount} still need review`
+              : "No review escalations surfaced"}
+          </span>
+        </div>
       </div>
+
+      <section className="panel-muted dependency-diagnostics-strip">
+        <div className="dependency-diagnostics-copy">
+          <strong>Dependency diagnostics</strong>
+          <p className="muted">
+            This run blends authoritative XML relations with text-derived references. Use this strip to understand the
+            dependency mix before filtering the queue.
+          </p>
+        </div>
+        <div className="dependency-diagnostics-grid">
+          <div className="dependency-diagnostic-card dependency-diagnostic-card-authoritative">
+            <span className="dependency-diagnostic-label">XML explicit</span>
+            <strong>{dependencyMix.xmlExplicit}</strong>
+            <span className="summary-subtext">Authoritative structural links</span>
+          </div>
+          <div className="dependency-diagnostic-card dependency-diagnostic-card-resolved">
+            <span className="dependency-diagnostic-label">Text resolved</span>
+            <strong>{dependencyMix.textResolved}</strong>
+            <span className="summary-subtext">Prose references mapped to known targets</span>
+          </div>
+          <div className="dependency-diagnostic-card dependency-diagnostic-card-review">
+            <span className="dependency-diagnostic-label">Text unresolved</span>
+            <strong>{dependencyMix.textUnresolved}</strong>
+            <span className="summary-subtext">Ambiguous or unresolved prose dependencies</span>
+          </div>
+          <div className="dependency-diagnostic-card dependency-diagnostic-card-neutral">
+            <span className="dependency-diagnostic-label">Manual review</span>
+            <strong>{dependencyMix.manualReview}</strong>
+            <span className="summary-subtext">Explicitly review-routed relation records</span>
+          </div>
+          <div className="dependency-diagnostic-card dependency-diagnostic-card-review">
+            <span className="dependency-diagnostic-label">Reconciliation review</span>
+            <strong>{dependencyMix.reconciliationReview}</strong>
+            <span className="summary-subtext">Records still escalated for reviewer attention</span>
+          </div>
+        </div>
+      </section>
 
       {decisionsLoading ? <p className="muted">Loading persisted reviewer decisions...</p> : null}
       <p className="muted">
@@ -1249,6 +1497,16 @@ export function CandidateReviewWorkspace({
             {FILTER_LABELS[key]}
           </button>
         ))}
+        {contextFilter ? (
+          <button
+            type="button"
+            className="filter-chip active"
+            aria-pressed="true"
+            onClick={() => setContextFilter(null)}
+          >
+            Clear XML {contextFilter.mode} filter: {contextFilter.value}
+          </button>
+        ) : null}
       </div>
 
       <div className="workspace-layout">
@@ -1277,6 +1535,21 @@ export function CandidateReviewWorkspace({
               </select>
               <p className="muted candidate-sort-note">Active sort: {SORT_LABELS[sortKey]}.</p>
             </div>
+            <div className="candidate-sort-row">
+              <label htmlFor="relation-filter">Dependency filter</label>
+              <select
+                id="relation-filter"
+                value={relationFilter}
+                onChange={(event) => setRelationFilter(event.target.value as RelationFilterKey)}
+              >
+                {(Object.keys(RELATION_FILTER_LABELS) as RelationFilterKey[]).map((key) => (
+                  <option key={key} value={key}>
+                    {RELATION_FILTER_LABELS[key]}
+                  </option>
+                ))}
+              </select>
+              <p className="muted candidate-sort-note">Active dependency filter: {RELATION_FILTER_LABELS[relationFilter]}.</p>
+            </div>
           </div>
           {paginatedCandidates.length ? (
             paginatedCandidates.map((candidate) => (
@@ -1297,6 +1570,23 @@ export function CandidateReviewWorkspace({
                   <span>Confidence {candidate.confidence.toFixed(3)}</span>
                   <span>{candidate.reviewIssueClass.replace(/_/g, " ")}</span>
                   <span>{candidate.reviewSourceEmphasis}</span>
+                </div>
+                <div className="candidate-diagnostics-row">
+                  <span className="diagnostic-chip">
+                    {candidate.candidateRelations.length} relation{candidate.candidateRelations.length === 1 ? "" : "s"}
+                  </span>
+                  <span className="diagnostic-chip">
+                    {candidate.reconciliationRecords.length} reconciliation{candidate.reconciliationRecords.length === 1 ? "" : "s"}
+                  </span>
+                  {candidate.dependsOn.length ? (
+                    <span className="diagnostic-chip diagnostic-chip-accent">
+                      depends on {candidate.dependsOn.length}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="candidate-lineage-summary">
+                  <span className="candidate-lineage-breadcrumb">{summarizeXmlLineage(candidate)}</span>
+                  <span className="candidate-lineage-meta">{summarizeSidebarXmlContext(candidate)}</span>
                 </div>
               </button>
             ))
@@ -1346,6 +1636,22 @@ export function CandidateReviewWorkspace({
                       {FILTER_LABELS[filter]}.
                     </p>
                     <p className="muted">{describeCandidateStatus(selectedCandidate)}</p>
+                    <div className="candidate-context-cluster">
+                      <span className="candidate-context-chip">
+                        {parentContextCount > 1
+                          ? `${parentContextCount} candidates share parent ${selectedCandidate.xmlParentNodeId ?? "n/a"}`
+                          : selectedCandidate.xmlParentNodeId
+                            ? `Only candidate under parent ${selectedCandidate.xmlParentNodeId}`
+                            : "No parent lineage id available"}
+                      </span>
+                      <span className="candidate-context-chip">
+                        {rootContextCount > 1
+                          ? `${rootContextCount} candidates share root ${selectedCandidate.xmlRootNodeId ?? "n/a"}`
+                          : selectedCandidate.xmlRootNodeId
+                            ? `Only candidate under root ${selectedCandidate.xmlRootNodeId}`
+                            : "No root lineage id available"}
+                      </span>
+                    </div>
                   </div>
                   <span className={statusClass(selectedCandidate.displayStatus)}>
                     {selectedCandidate.displayStatus}
@@ -1398,6 +1704,188 @@ export function CandidateReviewWorkspace({
                     Decision actions are disabled until this result is associated with a persisted ingestion run.
                   </p>
                 ) : null}
+
+                <section className="panel-muted candidate-lineage-panel">
+                  <div className="section-header compact">
+                    <div>
+                      <h4>XML Context</h4>
+                      <p className="muted">
+                        Breadcrumbs and lineage keep this candidate anchored to its XML parent and root context.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="detail-list">
+                    <div>
+                      <strong>Context breadcrumb</strong>: {summarizeXmlLineage(selectedCandidate)}
+                    </div>
+                    <div>
+                      <strong>Ancestor node ids</strong>: {formatList(selectedCandidate.xmlAncestorNodeIds)}
+                    </div>
+                    <div>
+                      <strong>Full XML path</strong>:{" "}
+                      <code className="baseline-inline-code">{selectedCandidate.xmlFullPath}</code>
+                    </div>
+                  </div>
+                  <div className="action-row candidate-context-actions">
+                    <button
+                      type="button"
+                      className="button-secondary"
+                      disabled={!selectedCandidate.xmlParentNodeId}
+                      onClick={() =>
+                        selectedCandidate.xmlParentNodeId
+                          ? setContextFilter({ mode: "parent", value: selectedCandidate.xmlParentNodeId })
+                          : undefined
+                      }
+                    >
+                      Same parent ({parentContextCount || 0})
+                    </button>
+                    <button
+                      type="button"
+                      className="button-secondary"
+                      disabled={!selectedCandidate.xmlRootNodeId}
+                      onClick={() =>
+                        selectedCandidate.xmlRootNodeId
+                          ? setContextFilter({ mode: "root", value: selectedCandidate.xmlRootNodeId })
+                          : undefined
+                      }
+                    >
+                      Same root ({rootContextCount || 0})
+                    </button>
+                    {contextFilter ? (
+                      <button type="button" className="button-secondary" onClick={() => setContextFilter(null)}>
+                        Clear context filter
+                      </button>
+                    ) : null}
+                  </div>
+                </section>
+
+                <section className="panel-muted relation-ledger-panel">
+                  <div className="section-header compact">
+                    <div>
+                      <h4>Dependency and Reconciliation</h4>
+                      <p className="muted">
+                        A compact ledger of authoritative XML links, text-derived references, and review-stage
+                        reconciliation outcomes for this candidate.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="relation-summary-grid">
+                    <div className="summary-card relation-summary-card">
+                      <strong>Total relations</strong>
+                      <span>{selectedRelationSummary.total}</span>
+                      <span className="summary-subtext">All surfaced links for this candidate</span>
+                    </div>
+                    <div className="summary-card relation-summary-card">
+                      <strong>XML explicit</strong>
+                      <span>{selectedRelationSummary.authoritative}</span>
+                      <span className="summary-subtext">Authoritative structural references</span>
+                    </div>
+                    <div className="summary-card relation-summary-card">
+                      <strong>Resolved</strong>
+                      <span>{selectedRelationSummary.resolved}</span>
+                      <span className="summary-subtext">Targets mapped to known candidates</span>
+                    </div>
+                    <div className="summary-card relation-summary-card">
+                      <strong>Needs review</strong>
+                      <span>{selectedRelationSummary.review}</span>
+                      <span className="summary-subtext">Unresolved or ambiguous dependencies</span>
+                    </div>
+                  </div>
+                  <div className="comparison-grid relation-ledger-grid">
+                    <div className="evidence-panel relation-panel">
+                      <h4>Candidate Relations</h4>
+                      {selectedRelations.length ? (
+                        <div className="relation-card-list">
+                          {selectedRelations.map((relation) => (
+                            <article key={relation.relation_id ?? `${relation.source_candidate_id}-${relation.target_locator}`}>
+                              <div className="relation-card-header">
+                                <strong>{formatRelationLabel(relation.relation_kind)}</strong>
+                                <div className="relation-pill-row">
+                                  <span className={`relation-pill relation-pill-${relationTone(relation.relation_authority)}`}>
+                                    {formatRelationLabel(relation.relation_authority)}
+                                  </span>
+                                  <span className={`status ${relationStatusTone(relation.resolution_status)}`}>
+                                    {formatRelationLabel(relation.resolution_status)}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="comparison-field-list relation-field-list">
+                                <div className="comparison-field-row">
+                                  <strong>Target</strong>
+                                  <span>{relation.target_locator ?? relation.target_node_id ?? relation.target_candidate_id ?? "n/a"}</span>
+                                </div>
+                                <div className="comparison-field-row">
+                                  <strong>Target candidate</strong>
+                                  <span>{relation.target_candidate_id ?? "n/a"}</span>
+                                </div>
+                                <div className="comparison-field-row">
+                                  <strong>Confidence</strong>
+                                  <span>
+                                    {typeof relation.confidence === "number" ? relation.confidence.toFixed(3) : "n/a"}
+                                  </span>
+                                </div>
+                                <div className="comparison-field-row">
+                                  <strong>Provenance</strong>
+                                  <span>{formatRelationLabel(relation.provenance?.source_authority)}</span>
+                                </div>
+                              </div>
+                              <p className="relation-card-note">
+                                {truncateText(
+                                  relation.provenance?.evidence_spans?.[0] ?? relation.raw_value ?? relation.target_locator
+                                )}
+                              </p>
+                            </article>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="empty-state comparison-empty-state">
+                          No relation records are attached to this candidate yet.
+                        </div>
+                      )}
+                    </div>
+                    <div className="evidence-panel relation-panel">
+                      <h4>Reconciliation Records</h4>
+                      {selectedReconciliations.length ? (
+                        <div className="relation-card-list">
+                          {selectedReconciliations.map((record) => (
+                            <article
+                              key={record.reconciliation_id ?? JSON.stringify(record)}
+                              className={record.review_required ? "relation-card-review" : undefined}
+                            >
+                              <div className="relation-card-header">
+                                <strong>{formatRelationLabel(record.classification)}</strong>
+                                <div className="relation-pill-row">
+                                  <span className={`status ${record.review_required ? "warn" : "pass"}`}>
+                                    {record.review_required ? "review required" : "tracked"}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="comparison-field-list relation-field-list">
+                                <div className="comparison-field-row">
+                                  <strong>Promotion effect</strong>
+                                  <span>{formatRelationLabel(record.promotion_effect)}</span>
+                                </div>
+                                <div className="comparison-field-row">
+                                  <strong>Relation ids</strong>
+                                  <span>{record.source_relation_ids?.join(", ") ?? "n/a"}</span>
+                                </div>
+                                <div className="comparison-field-row">
+                                  <strong>Candidate ids</strong>
+                                  <span>{record.source_candidate_ids?.join(", ") ?? "n/a"}</span>
+                                </div>
+                              </div>
+                              <p className="relation-card-note">{truncateText(record.notes)}</p>
+                            </article>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="empty-state comparison-empty-state">
+                          No reconciliation records are surfaced for this candidate.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </section>
 
                 <section className="comparison-section">
                   <div className="section-header compact">

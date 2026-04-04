@@ -1,0 +1,12 @@
+{
+  "registry_version": "approved_tag_seed_v1",
+  "generated_at": "2026-04-04T03:15:40Z",
+  "normalizer_version": "1",
+  "families": [],
+  "family_count": 0,
+  "tags": [],
+  "tag_count": 0,
+  "export_mode": "runtime_exported_to_repo",
+  "repo_export_path": "data/schema-registry/approved_tag_schema_registry.json",
+  "exported_from_runtime_at": "2026-04-04T03:15:40Z"
+}

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from app.models.document_strategy import ExtractedPdf, ExtractedTable, StructuredBlock
 from app.services.document_strategy import DocumentStrategyRouter
@@ -45,6 +46,32 @@ class DocumentStrategyRouterTests(unittest.TestCase):
         self.assertEqual(decision.document_class, "clause_parity")
         self.assertEqual(decision.extractor_strategy, "docling")
         self.assertEqual(decision.extractor_options["docling_mode"], "tables")
+
+    def test_router_prefers_schema_family_for_glossary_entries(self) -> None:
+        decision = DocumentStrategyRouter().route(
+            pdf_name="unknown.pdf",
+            xml_name="entry.xml",
+            xml_schema_family_id="abcb_glossentry",
+        )
+
+        self.assertEqual(decision.document_class, "definitions_glossary")
+        self.assertIn("xml_schema_family:abcb_glossentry", decision.notes)
+
+    def test_runtime_strategy_falls_back_to_pdfplumber_when_docling_is_unavailable(self) -> None:
+        service = IngestionService()
+        strategy = DocumentStrategyRouter().route(
+            pdf_name="schedule-1-definitions.pdf",
+            xml_name="schedule-1-definitions.xml",
+        )
+
+        with patch.object(service.extractors["docling"], "is_available", return_value=False):
+            resolved = service._resolve_runtime_strategy(strategy)
+
+        self.assertEqual(strategy.extractor_strategy, "docling")
+        self.assertEqual(resolved.extractor_strategy, "pdfplumber")
+        self.assertEqual(resolved.extractor_options, {})
+        self.assertIn("docling_unavailable:fallback_to_pdfplumber", resolved.notes)
+        self.assertIn("runtime_extractor:pdfplumber", resolved.notes)
 
 
 class ParityScaffoldTests(unittest.TestCase):
@@ -403,6 +430,64 @@ class ParityScaffoldTests(unittest.TestCase):
         self.assertIn("unit:tbl_ref_1__row_1", unit_ids)
         self.assertIn("table", semantic_classes)
         self.assertIn("title", semantic_classes)
+
+    def test_validate_xml_recognizes_glossentry_family_and_avoids_child_duplicate_inventory(self) -> None:
+        xml_bytes = b"""<?xml version="1.0" encoding="UTF-8"?>
+<abcb-glossentry id="entry_1" outputclass="abcb-glossentry" edition="2022" volume="1" amendment="base" part="Schedule 1">
+  <glossterm id="term_1">Accessible</glossterm>
+  <glossdef outputclass="glossdef">
+    <p>Having features to enable use by people with a disability.</p>
+  </glossdef>
+</abcb-glossentry>
+"""
+
+        result = self.service._validate_xml(xml_bytes, "glossary-accessible.xml")
+
+        self.assertEqual(result["metrics"]["schema_family_id"], "abcb_glossentry")
+        self.assertTrue(result["metrics"]["schema_approved"])
+        self.assertFalse(result["metrics"]["unknown_schema_family"])
+        self.assertEqual(result["result"]["document"]["schema_family_id"], "abcb_glossentry")
+        self.assertEqual({unit["node_id"] for unit in result["semantic_units"]}, {"entry_1"})
+        unit = result["semantic_units"][0]
+        self.assertEqual(unit["semantic_class"], "definition")
+        self.assertEqual(unit["glossary_term"], "Accessible")
+        self.assertEqual(
+            unit["glossary_definition"],
+            "Having features to enable use by people with a disability.",
+        )
+
+        packets = self.service._build_pdf_evidence_packets(
+            semantic_units=result["semantic_units"],
+            fragments=[],
+            structured_blocks=[],
+            alignments=[],
+            xml_validation=result["result"],
+            pdf_validation={"warnings": [], "errors": []},
+        )
+        candidates = self.service._build_candidate_objects(
+            semantic_units=result["semantic_units"],
+            pdf_evidence_packets=packets,
+        )
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0]["glossary_term"], "Accessible")
+        self.assertEqual(
+            candidates[0]["glossary_definition"],
+            "Having features to enable use by people with a disability.",
+        )
+
+    def test_validate_xml_blocks_when_known_schema_family_is_missing_required_structure(self) -> None:
+        xml_bytes = b"""<?xml version="1.0" encoding="UTF-8"?>
+<abcb-glossentry id="entry_1" outputclass="abcb-glossentry" edition="2022" volume="1" amendment="base" part="Schedule 1">
+  <glossterm id="term_1">Accessible</glossterm>
+</abcb-glossentry>
+"""
+
+        result = self.service._validate_xml(xml_bytes, "glossary-accessible.xml")
+
+        schema_rule = next(rule for rule in result["result"]["rule_results"] if rule["rule_id"] == "X0_SCHEMA_FAMILY_MATCH")
+        self.assertEqual(schema_rule["status"], "FAIL")
+        self.assertEqual(result["result"]["overall_status"], "BLOCKED")
+        self.assertTrue(any(error["code"] == "XML_SCHEMA_REQUIRED_STRUCTURE" for error in result["result"]["errors"]))
 
     def test_canonical_snippets_promote_passed_candidates_only(self) -> None:
         candidates = [
@@ -765,6 +850,326 @@ class ParityScaffoldTests(unittest.TestCase):
 
         self.assertEqual(alignment_rule["status"], "PASS_WITH_WARNINGS")
         self.assertEqual(metadata_rule["status"], "PASS")
+
+
+class SemanticEnrichmentTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.service = IngestionService()
+
+    def test_unresolved_xref_gates_candidate_and_blocks_snippet_promotion(self) -> None:
+        xml_bytes = b"""<?xml version="1.0" encoding="UTF-8"?>
+<part id="part_x" outputclass="ncc-part" edition="2022" volume="1" amendment="base" section="X">
+  <num>X</num>
+  <title>Test part</title>
+  <clause id="clause_with_bad_ref">
+    <p>This clause references <xref href="#nonexistent_clause" id="xref_1">another clause</xref> for compliance and detail.</p>
+  </clause>
+</part>
+"""
+        xml_ctx = self.service._validate_xml(xml_bytes, "bench-clause.xml")
+        semantic_units = xml_ctx["semantic_units"]
+        fragments = [
+            PdfFragment(
+                fragment_id="frag_1",
+                page=1,
+                text="This clause references another clause for compliance and detail.",
+                bbox=[0.0, 0.0, 1.0, 1.0],
+            )
+        ]
+        alignments = [
+            {
+                "fragment_id": "frag_1",
+                "node_id": "clause_with_bad_ref",
+                "confidence": 0.95,
+                "matched": True,
+                "page": 1,
+                "bbox": [0.0, 0.0, 1.0, 1.0],
+            }
+        ]
+        packets = self.service._build_pdf_evidence_packets(
+            semantic_units=semantic_units,
+            fragments=fragments,
+            structured_blocks=[{"block_id": "frag_1", "block_type": "paragraph"}],
+            alignments=alignments,
+            xml_validation={"warnings": [], "errors": []},
+            pdf_validation={"warnings": [], "errors": []},
+        )
+        candidates = self.service._build_candidate_objects(semantic_units=semantic_units, pdf_evidence_packets=packets)
+        candidates, rels, reconciliations, edges, summary = self.service._apply_semantic_enrichment(
+            xml_bytes=xml_bytes,
+            xml_metrics=xml_ctx["metrics"],
+            semantic_units=semantic_units,
+            pdf_evidence_packets=packets,
+            candidate_objects=candidates,
+        )
+        cand = next(c for c in candidates if c.get("xml_node_id") == "clause_with_bad_ref")
+        self.assertTrue(any(r.get("blocking") for r in rels))
+        self.assertTrue(any(r.get("blocking") for r in (cand.get("explicit_relations") or [])))
+        self.assertEqual(cand.get("validation_state"), "requires_review")
+        snippets = self.service._build_canonical_snippets(can_progress=True, candidates=candidates)
+        self.assertEqual(snippets, [])
+        edge_types = {e.get("edge_type") for e in edges}
+        self.assertIn("relation_unresolved", edge_types)
+        self.assertGreaterEqual(summary.get("candidates_gated", 0), 1)
+        self.assertTrue(any(record.get("review_required") for record in reconciliations))
+
+    def test_glossary_links_and_applicability_extraction(self) -> None:
+        xml_bytes = b"""<?xml version="1.0" encoding="UTF-8"?>
+<part id="part_g" outputclass="ncc-part" edition="2022" volume="1" amendment="base" section="G">
+  <num>G</num>
+  <title>Glossary test</title>
+  <definition id="def_alpha"><p>Alpha means the first letter symbol.</p></definition>
+  <definition id="def_beta"><p>Beta means the second letter symbol.</p></definition>
+  <clause id="clause_use">
+    <p>Climate zone 3 applies where Class 2 buildings use Alpha and Beta together in NSW.</p>
+  </clause>
+</part>
+"""
+        xml_ctx = self.service._validate_xml(xml_bytes, "glossary-bench.xml")
+        semantic_units = xml_ctx["semantic_units"]
+        fragments = [
+            PdfFragment(
+                fragment_id="f_clause",
+                page=1,
+                text="Climate zone 3 applies where Class 2 buildings use Alpha and Beta together in NSW.",
+                bbox=[0.0, 0.0, 1.0, 1.0],
+            )
+        ]
+        alignments = [
+            {
+                "fragment_id": "f_clause",
+                "node_id": "clause_use",
+                "confidence": 0.94,
+                "matched": True,
+                "page": 1,
+                "bbox": [0.0, 0.0, 1.0, 1.0],
+            }
+        ]
+        packets = self.service._build_pdf_evidence_packets(
+            semantic_units=semantic_units,
+            fragments=fragments,
+            structured_blocks=[],
+            alignments=alignments,
+            xml_validation={"warnings": [], "errors": []},
+            pdf_validation={"warnings": [], "errors": []},
+        )
+        candidates = self.service._build_candidate_objects(semantic_units=semantic_units, pdf_evidence_packets=packets)
+        candidates, _rels, _reconciliations, edges, _summary = self.service._apply_semantic_enrichment(
+            xml_bytes=xml_bytes,
+            xml_metrics=xml_ctx["metrics"],
+            semantic_units=semantic_units,
+            pdf_evidence_packets=packets,
+            candidate_objects=candidates,
+        )
+        clause_cand = next(c for c in candidates if c.get("xml_node_id") == "clause_use")
+        se = clause_cand.get("semantic_enrichment") or {}
+        self.assertEqual((se.get("field_authority") or {}).get("explicit_relations"), "xml_authoritative")
+        self.assertEqual((se.get("field_authority") or {}).get("glossary_links"), "heuristic_glossary_match")
+        links = clause_cand.get("glossary_links") or []
+        self.assertGreaterEqual(len(links), 1)
+        terms = {link.get("term_normalized") for link in links}
+        self.assertTrue(terms & {"alpha", "beta"})
+        dims = {c.get("dimension") for c in (clause_cand.get("applicability_conditions") or [])}
+        self.assertTrue({"climate_zone", "building_class", "jurisdiction"} <= dims)
+        self.assertTrue(any(c.get("dimension") == "conditional_phrase" for c in (clause_cand.get("applicability_conditions") or [])))
+        self.assertTrue(any(e.get("edge_type") == "glossary_link" for e in edges))
+
+    def test_classification_object_round_trips_core_classes(self) -> None:
+        xml_bytes = b"""<?xml version="1.0" encoding="UTF-8"?>
+<part id="part_z" outputclass="ncc-part" edition="2022" volume="1" amendment="base" section="Z">
+  <num>Z</num>
+  <title>T</title>
+  <clause id="c1"><p>Standalone clause text for testing enrichment only.</p></clause>
+</part>
+"""
+        xml_ctx = self.service._validate_xml(xml_bytes, "cls-bench.xml")
+        semantic_units = xml_ctx["semantic_units"]
+        fragments = [
+            PdfFragment(fragment_id="fx", page=1, text="Standalone clause text for testing enrichment only.", bbox=[0, 0, 1, 1])
+        ]
+        alignments = [
+            {"fragment_id": "fx", "node_id": "c1", "confidence": 0.92, "matched": True, "page": 1, "bbox": [0, 0, 1, 1]}
+        ]
+        packets = self.service._build_pdf_evidence_packets(
+            semantic_units=semantic_units,
+            fragments=fragments,
+            structured_blocks=[],
+            alignments=alignments,
+            xml_validation={"warnings": [], "errors": []},
+            pdf_validation={"warnings": [], "errors": []},
+        )
+        candidates = self.service._build_candidate_objects(semantic_units=semantic_units, pdf_evidence_packets=packets)
+        candidates, _, _, _, _ = self.service._apply_semantic_enrichment(
+            xml_bytes=xml_bytes,
+            xml_metrics=xml_ctx["metrics"],
+            semantic_units=semantic_units,
+            pdf_evidence_packets=packets,
+            candidate_objects=candidates,
+        )
+        c0 = candidates[0]
+        cls_obj = c0.get("classification") or {}
+        self.assertEqual(cls_obj.get("xml_structural_class"), c0.get("xml_structural_class"))
+        self.assertEqual(cls_obj.get("candidate_semantic_class"), c0.get("candidate_semantic_class"))
+
+    def test_text_clause_reference_resolves_to_candidate_and_emits_reconciliation(self) -> None:
+        xml_bytes = b"""<?xml version="1.0" encoding="UTF-8"?>
+<part id="part_c" outputclass="ncc-part" edition="2022" volume="1" amendment="base" section="C">
+  <num>C</num>
+  <title>Test part</title>
+  <clause id="C3D15"><p>Division of public corridors greater than 40 m in length.</p></clause>
+  <clause id="clause_ref_source"><p>Refer to C3D15 for division of public corridors greater than 40 m in length.</p></clause>
+</part>
+"""
+        xml_ctx = self.service._validate_xml(xml_bytes, "bench-clause.xml")
+        semantic_units = xml_ctx["semantic_units"]
+        fragments = [
+            PdfFragment(
+                fragment_id="frag_ref",
+                page=1,
+                text="Refer to C3D15 for division of public corridors greater than 40 m in length.",
+                bbox=[0.0, 0.0, 1.0, 1.0],
+            )
+        ]
+        alignments = [
+            {
+                "fragment_id": "frag_ref",
+                "node_id": "clause_ref_source",
+                "confidence": 0.96,
+                "matched": True,
+                "page": 1,
+                "bbox": [0.0, 0.0, 1.0, 1.0],
+            }
+        ]
+        packets = self.service._build_pdf_evidence_packets(
+            semantic_units=semantic_units,
+            fragments=fragments,
+            structured_blocks=[],
+            alignments=alignments,
+            xml_validation={"warnings": [], "errors": []},
+            pdf_validation={"warnings": [], "errors": []},
+        )
+        candidates = self.service._build_candidate_objects(semantic_units=semantic_units, pdf_evidence_packets=packets)
+        candidates, rels, reconciliations, edges, summary = self.service._apply_semantic_enrichment(
+            xml_bytes=xml_bytes,
+            xml_metrics=xml_ctx["metrics"],
+            semantic_units=semantic_units,
+            pdf_evidence_packets=packets,
+            candidate_objects=candidates,
+        )
+
+        source_candidate = next(c for c in candidates if c.get("xml_node_id") == "clause_ref_source")
+        resolved_relation = next(
+            rel
+            for rel in rels
+            if rel.get("source_node_id") == "clause_ref_source" and rel.get("relation_kind") == "clause_reference"
+        )
+        self.assertEqual(resolved_relation.get("relation_authority"), "text_resolved")
+        self.assertEqual(resolved_relation.get("resolution_status"), "resolved")
+        self.assertEqual(resolved_relation.get("target_locator"), "C3D15")
+        self.assertEqual(resolved_relation.get("target_node_id"), "C3D15")
+        self.assertIn("candidate:unit:C3D15", source_candidate.get("depends_on") or [])
+        self.assertTrue(any(record.get("source_relation_ids") == [resolved_relation.get("relation_id")] for record in reconciliations))
+        self.assertGreaterEqual(summary.get("text_resolved_relation_count"), 1)
+        self.assertTrue(any(edge.get("payload", {}).get("relation_authority") == "text_resolved" for edge in edges))
+
+
+class CandidateRobustnessPayloadTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.service = IngestionService()
+
+    def test_semantic_enrichment_provenance_marks_authoritative_vs_heuristic(self) -> None:
+        fa = self.service._semantic_enrichment_field_authority()
+        self.assertEqual(fa["explicit_relations"], "xml_authoritative")
+        self.assertEqual(fa["glossary_links"], "heuristic_glossary_match")
+        self.assertEqual(fa["implicit_relation_candidates"], "heuristic_text")
+
+    def test_foundational_baseline_slice_is_deterministic_and_bounded(self) -> None:
+        units = [
+            {"unit_id": "unit:b", "node_id": "b", "semantic_class": "definition", "title": "B", "text": "B means two.", "path": "/definition[@id='b']"},
+            {"unit_id": "unit:a", "node_id": "a", "semantic_class": "definition", "title": "A", "text": "A means one.", "path": "/definition[@id='a']"},
+            {"unit_id": "unit:t", "node_id": "t", "semantic_class": "rule", "title": "R", "text": "Longer clause body for testing.", "path": "/clause[@id='t']"},
+        ]
+        candidates = [
+            {
+                "candidate_id": "candidate:unit:a",
+                "xml_node_id": "a",
+                "validation_state": "pass",
+                "status": "validated",
+                "evidence": [{"fragment_id": "f1", "page": 1}],
+                "title": "A",
+            },
+            {
+                "candidate_id": "candidate:unit:b",
+                "xml_node_id": "b",
+                "validation_state": "requires_review",
+                "status": "draft",
+                "evidence": [],
+                "title": "B",
+            },
+        ]
+        first = self.service._build_foundational_baseline_corpus_slice(semantic_units=units, candidate_objects=candidates)
+        second = self.service._build_foundational_baseline_corpus_slice(semantic_units=units, candidate_objects=candidates)
+        self.assertEqual(first["items"], second["items"])
+        self.assertEqual(first["items"][0]["node_id"], "a")
+        self.assertEqual(first["summary"]["eligible_semantic_unit_count"], 2)
+        self.assertEqual(first["summary"]["included_item_count"], 2)
+        self.assertEqual(first["items"][0]["baseline_category"], "glossary_definition")
+
+    def test_candidate_quality_and_graph_readiness_echo_counts(self) -> None:
+        baseline = {
+            "summary": {
+                "eligible_semantic_unit_count": 3,
+                "included_item_count": 2,
+                "truncated": True,
+                "coverage_ratio": 0.6667,
+            },
+            "items": [],
+        }
+        cq = self.service._build_candidate_quality_metrics(
+            semantic_units=[{}, {}, {}],
+            pdf_evidence_packets=[{}],
+            candidate_objects=[{}, {}],
+            review_units=[{}],
+            canonical_snippets=[{"x": 1}],
+            foundational_baseline_corpus=baseline,
+        )
+        self.assertEqual(cq["semantic_unit_count"], 3)
+        self.assertEqual(cq["pdf_evidence_packet_count"], 1)
+        self.assertEqual(cq["candidate_object_count"], 2)
+        self.assertEqual(cq["review_unit_count"], 1)
+        self.assertEqual(cq["promoted_snippet_count"], 1)
+        self.assertEqual(cq["foundational_baseline_eligible_count"], 3)
+        self.assertEqual(cq["foundational_baseline_included_count"], 2)
+
+        gr = self.service._build_graph_readiness_summary(
+            enrichment_summary={"unresolved_blocking_count": 0},
+            xml_validation={"overall_status": "PASS"},
+            pdf_validation={"overall_status": "PASS"},
+            candidate_quality=cq,
+        )
+        self.assertTrue(gr["ready_for_graph_handoff"])
+        self.assertEqual(len(gr["gates"]), 6)
+        gate_ids = {g["gate_id"] for g in gr["gates"]}
+        self.assertIn("explicit_relations_non_blocking", gate_ids)
+
+    def test_graph_readiness_fails_when_blocking_relations_remain(self) -> None:
+        cq = self.service._build_candidate_quality_metrics(
+            semantic_units=[{}],
+            pdf_evidence_packets=[{}],
+            candidate_objects=[{}],
+            review_units=[{}],
+            canonical_snippets=[],
+            foundational_baseline_corpus={"summary": {"eligible_semantic_unit_count": 0, "included_item_count": 0, "coverage_ratio": 0.0}},
+        )
+        gr = self.service._build_graph_readiness_summary(
+            enrichment_summary={"unresolved_blocking_count": 2},
+            xml_validation={"overall_status": "PASS"},
+            pdf_validation={"overall_status": "PASS"},
+            candidate_quality=cq,
+        )
+        self.assertFalse(gr["ready_for_graph_handoff"])
+        blocking_gate = next(g for g in gr["gates"] if g["gate_id"] == "explicit_relations_non_blocking")
+        self.assertFalse(blocking_gate["passed"])
 
 
 class DoclingExtractorTests(unittest.TestCase):

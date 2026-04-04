@@ -21,12 +21,19 @@ except ImportError:  # pragma: no cover - covered indirectly through fallback be
 
 
 class DoclingExtractor:
+    @classmethod
+    def is_available(cls) -> bool:
+        return all(
+            dependency is not None
+            for dependency in (DocumentConverter, InputFormat, PdfFormatOption, PdfPipelineOptions)
+        )
+
     def __init__(self) -> None:
         self._fallback = PdfPlumberExtractor()
         self._converters: dict[tuple[bool, bool, bool], DocumentConverter] = {}
 
     def extract(self, pdf_bytes: bytes, *, decision: DocumentStrategyDecision) -> ExtractedPdf:
-        if DocumentConverter is None or InputFormat is None or PdfFormatOption is None or PdfPipelineOptions is None:
+        if not self.is_available():
             return self._fallback_extract(pdf_bytes, decision, reason="Docling is not importable in this runtime.")
 
         try:

@@ -2,8 +2,13 @@
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
+import { BaselineCorpusPanel } from "../components/baseline-corpus-panel";
 import { CandidateReviewWorkspace } from "../components/candidate-review-workspace";
+import { ConsoleNavigation } from "../components/console-navigation";
+import { PdfUploadViewer } from "../components/pdf-upload-viewer";
+import { ReviewMetricsStrip } from "../components/review-metrics-strip";
 import { ValidationViewer } from "../components/validation-viewer";
+import { XmlUploadViewer } from "../components/xml-upload-viewer";
 
 type IngestionResponse = {
   summary: {
@@ -48,6 +53,12 @@ type IngestionResponse = {
       clause_id?: string;
       fragment_id?: string;
     }[];
+    /** Additive: foundational baseline corpus for robustness validation (optional). */
+    baseline_corpus?: unknown;
+    baseline_items?: unknown[];
+    foundational_baseline_corpus?: unknown;
+    candidate_quality?: Record<string, unknown>;
+    graph_readiness?: Record<string, unknown>;
   };
   review_workspace?: {
     mode?: string;
@@ -96,6 +107,14 @@ type IngestionResponse = {
     }[];
     alignment_total?: number;
     alignment_displayed?: number;
+    /** Additive: baseline corpus bundle or list (optional). */
+    baseline_corpus?: unknown;
+    baseline_items?: unknown[];
+    foundational_baseline_corpus?: unknown;
+    candidate_quality?: Record<string, unknown>;
+    candidate_quality_metrics?: Record<string, unknown>;
+    graph_readiness?: Record<string, unknown>;
+    robustness_validation?: Record<string, unknown>;
   };
 };
 
@@ -168,6 +187,7 @@ export default function HomePage() {
   const [hiddenRunIds, setHiddenRunIds] = useState<string[]>([]);
   const [validationStartedAt, setValidationStartedAt] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [reviewOutputTab, setReviewOutputTab] = useState<"candidates" | "baseline" | "validation">("candidates");
   const abortControllerRef = useRef<AbortController | null>(null);
   const pdfRelinkInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -265,7 +285,13 @@ export default function HomePage() {
     return () => {
       cancelled = true;
     };
+    // The startup restore runs once on mount; later workspace loads are user-driven.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    setReviewOutputTab("candidates");
+  }, [response?.summary.ingestion_run_id]);
 
   useEffect(() => {
     if (!loading || validationStartedAt === null) {
@@ -601,6 +627,7 @@ export default function HomePage() {
         onChange={handleRelinkPdfSelection}
         style={{ display: "none" }}
       />
+      <ConsoleNavigation />
       <section className="panel hero-panel">
         <div className="hero-grid">
           <div className="hero-copy">
@@ -735,40 +762,94 @@ export default function HomePage() {
         ) : null}
       </section>
 
+      <XmlUploadViewer files={xmlFile ? [xmlFile] : []} />
+      <PdfUploadViewer file={pdfFile} />
+
       {response ? (
         <>
-          <section className="section-header">
-            <div>
-              <span className="eyebrow">Review output</span>
-              <h2>Current validation and candidate review</h2>
-              <p className="muted">
-                Loaded run {response.summary.ingestion_run_id ?? "n/a"} recorded{" "}
-                {formatDateTime(response.summary.created_at)}.
-              </p>
-              {workspaceRestoreMessage ? <p className="muted">{workspaceRestoreMessage}</p> : null}
-            </div>
-          </section>
-          <CandidateReviewWorkspace
-            response={response}
-            pdfFile={pdfFile}
-            apiBaseUrl={API_BASE_URL}
-            onRelinkPdf={handleRelinkPdf}
-          />
-          <div className="grid results-grid">
-            <ValidationViewer title="XML Validation" result={response.results.xml_validation} />
-            <ValidationViewer title="PDF Validation" result={response.results.pdf_validation} />
-            <section className="panel">
-              <div className="section-header compact">
-                <div>
-                  <h2>Raw Metrics</h2>
-                  <p className="muted">Reference diagnostics for debugging and schema-level inspection.</p>
-                </div>
+          <div className="review-output-intro">
+            <section className="section-header review-output-heading">
+              <div>
+                <span className="eyebrow">Review output</span>
+                <h2>Current validation and candidate review</h2>
+                <p className="muted">
+                  Loaded run {response.summary.ingestion_run_id ?? "n/a"} recorded{" "}
+                  {formatDateTime(response.summary.created_at)}.
+                </p>
+                {workspaceRestoreMessage ? <p className="muted">{workspaceRestoreMessage}</p> : null}
               </div>
-              <details className="detail-disclosure" open>
-                <summary>Open raw metrics JSON</summary>
-                <pre>{JSON.stringify(response.raw_metrics, null, 2)}</pre>
-              </details>
             </section>
+            <div className="review-output-tabs" role="tablist" aria-label="Review output views">
+              <button
+                type="button"
+                role="tab"
+                className={`review-tab ${reviewOutputTab === "candidates" ? "active" : ""}`}
+                aria-selected={reviewOutputTab === "candidates"}
+                onClick={() => setReviewOutputTab("candidates")}
+              >
+                Candidate review
+              </button>
+              <button
+                type="button"
+                role="tab"
+                className={`review-tab ${reviewOutputTab === "baseline" ? "active" : ""}`}
+                aria-selected={reviewOutputTab === "baseline"}
+                onClick={() => setReviewOutputTab("baseline")}
+              >
+                Baseline corpus
+              </button>
+              <button
+                type="button"
+                role="tab"
+                className={`review-tab ${reviewOutputTab === "validation" ? "active" : ""}`}
+                aria-selected={reviewOutputTab === "validation"}
+                onClick={() => setReviewOutputTab("validation")}
+              >
+                Validation and metrics
+              </button>
+            </div>
+          </div>
+
+          <div className="review-output-panels">
+            {reviewOutputTab === "candidates" ? (
+              <CandidateReviewWorkspace
+                response={response}
+                pdfFile={pdfFile}
+                apiBaseUrl={API_BASE_URL}
+                onRelinkPdf={handleRelinkPdf}
+              />
+            ) : null}
+
+            {reviewOutputTab === "baseline" ? (
+              <BaselineCorpusPanel
+                review_workspace={response.review_workspace as Record<string, unknown> | undefined}
+                lineage={response.lineage as Record<string, unknown> | undefined}
+                raw_metrics={response.raw_metrics}
+              />
+            ) : null}
+
+            {reviewOutputTab === "validation" ? (
+              <div className="grid results-grid review-validation-stack">
+                <ValidationViewer title="XML Validation" result={response.results.xml_validation} />
+                <ValidationViewer title="PDF Validation" result={response.results.pdf_validation} />
+                <ReviewMetricsStrip
+                  raw_metrics={response.raw_metrics}
+                  review_workspace={response.review_workspace as Record<string, unknown> | undefined}
+                />
+                <section className="panel">
+                  <div className="section-header compact">
+                    <div>
+                      <h2>Raw metrics</h2>
+                      <p className="muted">Full reference diagnostics for debugging and schema-level inspection.</p>
+                    </div>
+                  </div>
+                  <details className="detail-disclosure" open>
+                    <summary>Open raw metrics JSON</summary>
+                    <pre>{JSON.stringify(response.raw_metrics, null, 2)}</pre>
+                  </details>
+                </section>
+              </div>
+            ) : null}
           </div>
         </>
       ) : isAutoRestoring ? (

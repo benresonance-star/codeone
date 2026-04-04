@@ -37,12 +37,17 @@ class DocumentStrategyRouter:
         *,
         pdf_name: str,
         xml_name: str,
+        xml_schema_family_id: str | None = None,
         requested_document_class: str | None = None,
         requested_extraction_profile: str | None = None,
         requested_evaluation_profile: str | None = None,
         requested_extractor_strategy: str | None = None,
     ) -> DocumentStrategyDecision:
-        document_class = requested_document_class or self._classify_document(pdf_name=pdf_name, xml_name=xml_name)
+        document_class = requested_document_class or self._classify_document(
+            pdf_name=pdf_name,
+            xml_name=xml_name,
+            xml_schema_family_id=xml_schema_family_id,
+        )
         if document_class not in DEFAULTS_BY_CLASS:
             raise ValueError(f"Unknown document class: {document_class}")
 
@@ -65,6 +70,8 @@ class DocumentStrategyRouter:
             f"evaluation_profile:{evaluation_profile.profile_id}",
             f"extractor_strategy:{extractor_strategy}",
         ]
+        if xml_schema_family_id:
+            notes.append(f"xml_schema_family:{xml_schema_family_id}")
         if extractor_strategy == "docling":
             notes.append(f"docling_mode:{extractor_options.get('docling_mode', 'text')}")
         if extraction_profile.glossary_first:
@@ -82,7 +89,16 @@ class DocumentStrategyRouter:
             notes=notes,
         )
 
-    def _classify_document(self, *, pdf_name: str, xml_name: str) -> str:
+    def _classify_document(
+        self,
+        *,
+        pdf_name: str,
+        xml_name: str,
+        xml_schema_family_id: str | None = None,
+    ) -> str:
+        schema_class = self._document_class_from_schema_family(xml_schema_family_id)
+        if schema_class:
+            return schema_class
         combined = f"{pdf_name} {xml_name}".lower()
         normalized = re.sub(r"[^a-z0-9]+", " ", combined)
 
@@ -93,6 +109,13 @@ class DocumentStrategyRouter:
         if any(token in normalized for token in ("contents", "cover", "preface", "front matter", "about this")):
             return "front_matter_non_parity"
         return "clause_parity"
+
+    def _document_class_from_schema_family(self, xml_schema_family_id: str | None) -> str | None:
+        if xml_schema_family_id == "abcb_glossentry":
+            return "definitions_glossary"
+        if xml_schema_family_id in {"ncc_clause", "table_reference", "image_reference"}:
+            return "clause_parity"
+        return None
 
     def _extractor_options(
         self,

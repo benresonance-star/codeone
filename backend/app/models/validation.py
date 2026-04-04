@@ -21,6 +21,11 @@ class ValidationSummary(BaseModel):
     pdf_status: str
     can_progress: bool
     paired_document_id: str | None = None
+    schema_family_id: str | None = None
+    schema_family_version: str | None = None
+    schema_registry_version: str | None = None
+    schema_normalizer_version: str | None = None
+    schema_recheck_status: str | None = None
     document_strategy: dict[str, Any] = Field(default_factory=dict)
     parity_summary: dict[str, Any] = Field(default_factory=dict)
 
@@ -93,3 +98,100 @@ class PurgeSummaryResponse(BaseModel):
     counts: dict[str, int] = Field(default_factory=dict)
     purge_order: list[str] = Field(default_factory=list)
     raw_inputs_retained: bool = True
+
+
+class XmlSchemaFamilyListResponse(BaseModel):
+    registry_type: str
+    registry_version: str | None = None
+    generated_at: str | None = None
+    scanned_file_count: int | None = None
+    family_count: int | None = None
+    families: list[dict[str, Any]] = Field(default_factory=list)
+    scan_errors: list[dict[str, Any]] = Field(default_factory=list)
+    repo_sync: dict[str, Any] = Field(default_factory=dict)
+
+
+class XmlSchemaTagListResponse(BaseModel):
+    registry_type: str
+    registry_version: str | None = None
+    generated_at: str | None = None
+    scanned_file_count: int | None = None
+    tag_count: int | None = None
+    tags: list[dict[str, Any]] = Field(default_factory=list)
+    scan_errors: list[dict[str, Any]] = Field(default_factory=list)
+    repo_sync: dict[str, Any] = Field(default_factory=dict)
+
+
+class XmlSchemaFamilyDetailResponse(BaseModel):
+    registry_type: str
+    registry_version: str | None = None
+    family: dict[str, Any] = Field(default_factory=dict)
+    repo_sync: dict[str, Any] = Field(default_factory=dict)
+
+
+class XmlSchemaTagDetailResponse(BaseModel):
+    registry_type: str
+    registry_version: str | None = None
+    tag: dict[str, Any] = Field(default_factory=dict)
+    repo_sync: dict[str, Any] = Field(default_factory=dict)
+
+
+class XmlSchemaScanResponse(BaseModel):
+    registry_version: str
+    generated_at: str
+    scanned_file_count: int
+    family_count: int
+    tag_count: int = 0
+    approved_registry_version: str | None = None
+    approved_tag_registry_version: str | None = None
+    scan_errors: list[dict[str, Any]] = Field(default_factory=list)
+    repo_sync: dict[str, Any] = Field(default_factory=dict)
+
+
+class XmlSchemaBatchResponse(BaseModel):
+    batch_job_id: str
+    generated_at: str
+    uploaded_file_count: int
+    scanned_file_count: int
+    family_count: int
+    tag_count: int = 0
+    families: list[dict[str, Any]] = Field(default_factory=list)
+    tags: list[dict[str, Any]] = Field(default_factory=list)
+    scan_errors: list[dict[str, Any]] = Field(default_factory=list)
+    approved_registry_version: str | None = None
+    approved_tag_registry_version: str | None = None
+    observed_registry_version: str | None = None
+    observed_family_count: int | None = None
+    observed_tag_count: int | None = None
+    observed_merge_applied: bool = False
+    repo_sync: dict[str, Any] = Field(default_factory=dict)
+
+
+class XmlSchemaApprovalRequest(BaseModel):
+    fingerprint_hash: str
+    schema_family_id: str | None = None
+    parser_profile: str | None = None
+    registry_type: str | None = None
+    batch_job_id: str | None = None
+
+
+class XmlSchemaApprovalResponse(BaseModel):
+    registry_version: str
+    fingerprint_hash: str
+    approved_family: dict[str, Any] = Field(default_factory=dict)
+    repo_sync: dict[str, Any] = Field(default_factory=dict)
+
+
+class XmlSchemaTagApprovalRequest(BaseModel):
+    tag_fingerprint_hash: str
+    schema_tag_id: str | None = None
+    parser_profile: str | None = None
+    registry_type: str | None = None
+    batch_job_id: str | None = None
+
+
+class XmlSchemaTagApprovalResponse(BaseModel):
+    registry_version: str
+    tag_fingerprint_hash: str
+    approved_tag: dict[str, Any] = Field(default_factory=dict)
+    repo_sync: dict[str, Any] = Field(default_factory=dict)

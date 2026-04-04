@@ -58,6 +58,56 @@
         "root_element": {
           "type": "string"
         },
+        "schema_family_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "schema_family_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "schema_approved": {
+          "type": "boolean"
+        },
+        "schema_variant_detected": {
+          "type": "boolean"
+        },
+        "unknown_schema_family": {
+          "type": "boolean"
+        },
+        "schema_match_confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "schema_match_reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "schema_parser_profile": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "schema_registry_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "schema_normalizer_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "edition": {
           "type": "string"
         },

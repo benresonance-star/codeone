@@ -2,6 +2,8 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+ARG BACKEND_REQUIREMENTS_FILE=requirements.txt
+
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
@@ -18,11 +20,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt /app/requirements.txt
+COPY backend/requirements-docling.txt /app/requirements-docling.txt
+
+RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r "/app/${BACKEND_REQUIREMENTS_FILE}"
+
 COPY backend/app /app/app
 COPY backend/tools /app/tools
 COPY Spec /app/Spec
 
-RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r /app/requirements.txt
+COPY data /app/data
 
 EXPOSE 8000
 

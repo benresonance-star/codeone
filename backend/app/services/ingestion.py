@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from difflib import SequenceMatcher
 import hashlib
@@ -18,6 +18,7 @@ from app.models.document_strategy import (
 )
 from app.services.document_strategy import DocumentStrategyRouter
 from app.services.extractors import DoclingExtractor, PdfPlumberExtractor
+from app.services.xml_schema_registry import XmlSchemaRegistryService
 
 
 def utc_now_iso() -> str:
@@ -49,6 +50,71 @@ REVIEW_WORKSPACE_MAX_ALIGNMENTS_PER_NODE = 3
 REVIEW_WORKSPACE_NARROW_XML_NODE_LIMIT = 12
 REVIEW_WORKSPACE_LARGE_FRAGMENT_LIMIT = 100
 TABLE_ROW_FRAGMENT_MIN_TEXT_LENGTH = 12
+_GLOSSARY_ENTRY_ROOT_TAGS = frozenset({"abcb-glossentry", "glossentry"})
+_GLOSSARY_CHILD_TAGS = frozenset({"glossterm", "glossdef"})
+_XML_SCHEMA_FAMILY_REGISTRY = (
+    {
+        "schema_family_id": "ncc_document",
+        "root_tags": frozenset({"ncc", "NCC"}),
+        "required_children": frozenset(),
+        "recommended_children": frozenset({"part", "clause", "table-reference", "image-reference"}),
+        "parser_profile": "ncc_document",
+    },
+    {
+        "schema_family_id": "ncc_part",
+        "root_tags": frozenset({"part"}),
+        "required_children": frozenset(),
+        "recommended_children": frozenset({"num", "title"}),
+        "parser_profile": "ncc_part",
+    },
+    {
+        "schema_family_id": "ncc_clause",
+        "root_tags": frozenset({"clause"}),
+        "required_children": frozenset(),
+        "recommended_children": frozenset({"title", "sptc", "p", "subclause"}),
+        "parser_profile": "ncc_clause",
+    },
+    {
+        "schema_family_id": "table_reference",
+        "root_tags": frozenset({"table-reference"}),
+        "required_children": frozenset({"table"}),
+        "recommended_children": frozenset({"num", "title"}),
+        "parser_profile": "table_reference",
+    },
+    {
+        "schema_family_id": "image_reference",
+        "root_tags": frozenset({"image-reference"}),
+        "required_children": frozenset(),
+        "recommended_children": frozenset({"title", "image", "caption"}),
+        "parser_profile": "image_reference",
+    },
+    {
+        "schema_family_id": "abcb_glossentry",
+        "root_tags": _GLOSSARY_ENTRY_ROOT_TAGS,
+        "required_children": frozenset({"glossterm", "glossdef"}),
+        "recommended_children": frozenset(),
+        "parser_profile": "abcb_glossentry",
+    },
+)
+
+# Foundational baseline corpus: low-risk, inspectable categories for a deterministic slice
+_BASELINE_SEMANTIC_CLASSES = frozenset({"definition", "title", "context_key", "note"})
+_BASELINE_PATH_MARKERS = ("intro-part", "/intro", "subtitle", "/note[", "/title[")
+_MAX_BASELINE_CORPUS_ITEMS = 500
+
+# Deterministic applicability / implicit-relation patterns (conservative, inspectable)
+_CLIMATE_ZONE_PATTERN = re.compile(r"(?i)climate\s+zone\s*([0-9]{1,2}[a-z]?)")
+_BUILDING_CLASS_PATTERN = re.compile(r"(?i)\bclass\s+([0-9]{1,2}[a-z]?)\b")
+_JURISDICTION_PATTERN = re.compile(
+    r"(?i)\b(NSW|VIC|QLD|SA|WA|TAS|ACT|NT|Australian\s+Capital\s+Territory|New\s+South\s+Wales)\b"
+)
+_CONDITIONAL_PHRASE_PATTERN = re.compile(
+    r"(?i)\b(where|if|unless|provided\s+that)\b[^.\n]{0,160}"
+)
+_IMPLICIT_SEE_PATTERN = re.compile(
+    r"(?i)\b(?:see|refer\s+to)\s+([A-Za-z0-9][^.;\n]{2,120})"
+)
+_CLAUSE_LABEL_PATTERN = re.compile(r"\b([A-Z]\d[A-Z]\d+[A-Z]?)\b")
 
 
 @dataclass
@@ -57,6 +123,23 @@ class XmlNode:
     clause_id: str
     text: str
     path: str
+    context_descriptor: XmlContextDescriptor | None = None
+
+
+@dataclass
+class XmlContextDescriptor:
+    node_id: str
+    full_path: str
+    context_path_signature: str
+    parent_node_id: str | None
+    root_node_id: str | None
+    ancestor_node_ids: list[str]
+    ancestor_tags: list[str]
+    nearest_structural_parent_id: str | None
+    nearest_structural_parent_tag: str | None
+    context_titles: list[str]
+    depth: int
+    sibling_index: int
 
 
 @dataclass
@@ -71,6 +154,7 @@ class IngestionService:
     def __init__(self) -> None:
         self.contracts = load_contracts()
         self.router = DocumentStrategyRouter()
+        self.schema_registry = XmlSchemaRegistryService()
         self.extractors = {
             "pdfplumber": PdfPlumberExtractor(),
             "docling": DoclingExtractor(),
@@ -92,11 +176,13 @@ class IngestionService:
         strategy = self.router.route(
             pdf_name=pdf_name,
             xml_name=xml_name,
+            xml_schema_family_id=xml_context["metrics"].get("schema_family_id"),
             requested_document_class=document_class,
             requested_extraction_profile=extraction_profile,
             requested_evaluation_profile=evaluation_profile,
             requested_extractor_strategy=extractor_strategy,
         )
+        strategy = self._resolve_runtime_strategy(strategy)
         pdf_context = self._validate_pdf(pdf_bytes, pdf_name, xml_context, strategy)
         document_family_id = self._build_document_family_id(pdf_name=pdf_name, xml_name=xml_name)
         semantic_units = xml_context["semantic_units"]
@@ -112,10 +198,32 @@ class IngestionService:
             semantic_units=semantic_units,
             pdf_evidence_packets=pdf_evidence_packets,
         )
+        (
+            candidate_objects,
+            candidate_relations,
+            reconciliation_records,
+            graph_edges,
+            enrichment_summary,
+        ) = self._apply_semantic_enrichment(
+            xml_bytes=xml_bytes,
+            xml_metrics=xml_context["metrics"],
+            semantic_units=semantic_units,
+            pdf_evidence_packets=pdf_evidence_packets,
+            candidate_objects=candidate_objects,
+        )
         canonical_snippets = self._build_canonical_snippets(
             can_progress=bool(pdf_context["result"]["gate_decision"]["can_progress_to_semantic_layer"]),
             candidates=candidate_objects,
         )
+        graph_edges = self._append_snippet_promotion_edges(
+            graph_edges=graph_edges,
+            candidates=candidate_objects,
+            canonical_snippets=canonical_snippets,
+        )
+        enrichment_summary = {
+            **enrichment_summary,
+            "graph_edge_count": len(graph_edges),
+        }
         review_workspace = self._build_review_workspace(
             pdf_name=pdf_name,
             xml_name=xml_name,
@@ -128,7 +236,38 @@ class IngestionService:
             canonical_snippets=canonical_snippets,
             xml_validation=xml_context["result"],
             pdf_validation=pdf_context["result"],
+            xml_bytes=xml_bytes,
+            xml_metrics=xml_context["metrics"],
+            candidate_relations=candidate_relations,
+            reconciliation_records=reconciliation_records,
+            graph_edges=graph_edges,
+            enrichment_summary=enrichment_summary,
         )
+
+        foundational_baseline_corpus = self._build_foundational_baseline_corpus_slice(
+            semantic_units=semantic_units,
+            candidate_objects=candidate_objects,
+        )
+        candidate_quality = self._build_candidate_quality_metrics(
+            semantic_units=semantic_units,
+            pdf_evidence_packets=pdf_evidence_packets,
+            candidate_objects=candidate_objects,
+            review_units=review_workspace["review_units"],
+            canonical_snippets=canonical_snippets,
+            foundational_baseline_corpus=foundational_baseline_corpus,
+        )
+        graph_readiness = self._build_graph_readiness_summary(
+            enrichment_summary=enrichment_summary,
+            xml_validation=xml_context["result"],
+            pdf_validation=pdf_context["result"],
+            candidate_quality=candidate_quality,
+        )
+        review_workspace = {
+            **review_workspace,
+            "candidate_quality": candidate_quality,
+            "graph_readiness": graph_readiness,
+            "foundational_baseline_corpus": foundational_baseline_corpus,
+        }
 
         return {
             "summary": {
@@ -138,6 +277,11 @@ class IngestionService:
                 "can_progress": bool(pdf_context["result"]["gate_decision"]["can_progress_to_semantic_layer"]),
                 "paired_document_id": pdf_context["result"]["document"].get("paired_xml_doc_id")
                 or xml_context["result"]["document"].get("paired_pdf_doc_id"),
+                "schema_family_id": xml_context["metrics"].get("schema_family_id"),
+                "schema_family_version": xml_context["metrics"].get("schema_family_version"),
+                "schema_registry_version": xml_context["metrics"].get("schema_registry_version"),
+                "schema_normalizer_version": xml_context["metrics"].get("schema_normalizer_version"),
+                "schema_recheck_status": xml_context["metrics"].get("schema_recheck_status"),
                 "document_strategy": pdf_context["strategy"],
                 "parity_summary": pdf_context["parity_scaffold"]["summary"],
             },
@@ -159,9 +303,17 @@ class IngestionService:
                 "parity_scaffold": pdf_context["parity_scaffold"],
                 "pdf_evidence_packets": pdf_evidence_packets,
                 "candidate_objects": candidate_objects,
+                "candidate_relations": candidate_relations,
+                "reconciliation_records": reconciliation_records,
+                "graph_edges": graph_edges,
+                "enrichment_summary": enrichment_summary,
                 "canonical_snippets": canonical_snippets,
                 "pdf_tables": pdf_context["result"].get("table_validation", []),
                 "xml_tables": xml_context["result"].get("table_validation", []),
+                "candidate_quality": candidate_quality,
+                "graph_readiness": graph_readiness,
+                "foundational_baseline_corpus": foundational_baseline_corpus,
+                "schema_runtime": xml_context["metrics"].get("schema_runtime", {}),
             },
             "review_workspace": review_workspace,
         }
@@ -172,6 +324,19 @@ class IngestionService:
             "is_well_formed": False,
             "encoding_valid": True,
             "root_element": None,
+            "schema_family_id": None,
+            "schema_family_confidence": 0.0,
+            "schema_match_reasons": [],
+            "schema_approved": False,
+            "schema_variant_detected": False,
+            "unknown_schema_family": False,
+            "schema_required_structure_missing": False,
+            "schema_parser_profile": None,
+            "schema_family_version": None,
+            "schema_registry_version": None,
+            "schema_normalizer_version": None,
+            "schema_recheck_status": "fresh",
+            "schema_runtime": {},
             "metadata": {"edition": None, "amendment": None, "volume": None, "section": None, "part": None},
             "context_not_applicable": False,
             "invalid_parent_child_links": 0,
@@ -232,6 +397,21 @@ class IngestionService:
             validate_payload("xml_result_schema", result)
             return {"result": result, "metrics": metrics, "xml_nodes": xml_nodes, "semantic_units": semantic_units}
 
+        parent_map = self._xml_parent_map(root)
+        schema_match = self._detect_xml_schema_family(root)
+        metrics["schema_family_id"] = schema_match["schema_family_id"]
+        metrics["schema_family_confidence"] = schema_match["schema_match_confidence"]
+        metrics["schema_match_reasons"] = schema_match["schema_match_reasons"]
+        metrics["schema_approved"] = schema_match["schema_approved"]
+        metrics["schema_variant_detected"] = schema_match["schema_variant_detected"]
+        metrics["unknown_schema_family"] = schema_match["unknown_schema_family"]
+        metrics["schema_required_structure_missing"] = schema_match["required_structure_missing"]
+        metrics["schema_parser_profile"] = schema_match["parser_profile"]
+        metrics["schema_family_version"] = schema_match.get("schema_family_version")
+        metrics["schema_registry_version"] = schema_match.get("registry_version")
+        metrics["schema_normalizer_version"] = schema_match.get("normalizer_version")
+        metrics["schema_runtime"] = dict(schema_match)
+
         all_elements = list(root.iter())
         metrics["nodes_processed"] = len(all_elements)
 
@@ -248,8 +428,8 @@ class IngestionService:
                 ids.append(element_id)
                 id_counts[element_id] += 1
 
-            tag_name = element.tag.split("}")[-1].lower()
-            text_value = clean_text(" ".join(part for part in element.itertext()))
+            tag_name = self._element_tag_name(element)
+            text_value = self._inventory_text_for_element(element)
 
             if tag_name in {"table", "tbody", "thead"}:
                 table_count += 1 if tag_name == "table" else 0
@@ -268,27 +448,43 @@ class IngestionService:
 
             node_path = self._element_path(element)
 
+            emit_inventory = not self._should_skip_inventory_for_element(element, parent_map)
             semantic_node_id = self._semantic_node_id(
                 element=element,
                 fallback_path=node_path,
                 text=text_value,
             )
-            if semantic_node_id:
-                semantic_unit = self._semantic_unit_from_parts(
+            context_descriptor = (
+                self._build_xml_context_descriptor(
+                    node_id=semantic_node_id,
+                    element=element,
+                    parent_map=parent_map,
+                )
+                if semantic_node_id
+                else None
+            )
+            if emit_inventory and semantic_node_id:
+                semantic_unit = self._semantic_unit_from_element(
+                    element=element,
                     node_id=semantic_node_id,
                     path=node_path,
                     text=text_value,
+                    context_descriptor=context_descriptor,
                 )
                 if semantic_unit is not None:
                     semantic_units.append(semantic_unit)
 
-            if element_id and len(text_value) >= 20:
+            should_emit_xml_node = emit_inventory and (
+                len(text_value) >= 20 or self._is_glossary_entry_element(element)
+            )
+            if element_id and should_emit_xml_node:
                 xml_nodes.append(
                     XmlNode(
                         node_id=element_id,
                         clause_id=element_id,
                         text=text_value,
                         path=node_path,
+                        context_descriptor=context_descriptor,
                     )
                 )
                 if len(trace_sample) < 5:
@@ -302,13 +498,15 @@ class IngestionService:
                         }
                     )
 
-        xml_nodes.extend(self._table_row_xml_nodes(root))
+        xml_nodes.extend(self._table_row_xml_nodes(root, parent_map))
         semantic_units.extend(self._semantic_units_from_xml_nodes(xml_nodes))
-        semantic_units = list({unit["unit_id"]: unit for unit in semantic_units}.values())
+        semantic_units = self._dedupe_semantic_units(semantic_units)
 
         metrics["duplicate_ids"] = sum(count - 1 for count in id_counts.values() if count > 1)
+        metrics.update(self._hierarchy_metrics(root, parent_map))
         metrics["empty_required_nodes"] = empty_required_nodes
         metrics["unresolved_references"] = sum(1 for ref in references if ref not in id_counts)
+        metrics["definition_link_failures"] = self._definition_link_failures(root, parent_map, set(id_counts))
         metrics["table_structure_issues"] = table_issues
         metrics["table_count"] = table_count
 
@@ -345,6 +543,42 @@ class IngestionService:
         warnings: list[dict[str, Any]] = []
         errors: list[dict[str, Any]] = []
         validation_trace = [{"step": "xml_loaded", "status": "PASS"}]
+        schema_rule_status = "PASS"
+        if metrics["schema_required_structure_missing"]:
+            schema_rule_status = "FAIL"
+            errors.append(
+                {
+                    "code": "XML_SCHEMA_REQUIRED_STRUCTURE",
+                    "severity": "error",
+                    "message": "XML matched a known schema family but is missing required structural elements.",
+                    "rule_id": "X0_SCHEMA_FAMILY_MATCH",
+                }
+            )
+            validation_trace.append({"step": "schema_family_detected", "status": "FAIL"})
+        elif metrics["unknown_schema_family"]:
+            schema_rule_status = "PASS_WITH_WARNINGS"
+            warnings.append(
+                {
+                    "code": "XML_SCHEMA_UNKNOWN",
+                    "severity": "warning",
+                    "message": "XML did not match an approved schema family and requires review before parser dispatch.",
+                    "rule_id": "X0_SCHEMA_FAMILY_MATCH",
+                }
+            )
+            validation_trace.append({"step": "schema_family_detected", "status": "PASS_WITH_WARNINGS"})
+        elif metrics["schema_variant_detected"]:
+            schema_rule_status = "PASS_WITH_WARNINGS"
+            warnings.append(
+                {
+                    "code": "XML_SCHEMA_VARIANT",
+                    "severity": "warning",
+                    "message": "XML matched an approved schema family but drifted from the preferred structural shape.",
+                    "rule_id": "X0_SCHEMA_FAMILY_MATCH",
+                }
+            )
+            validation_trace.append({"step": "schema_family_detected", "status": "PASS_WITH_WARNINGS"})
+        else:
+            validation_trace.append({"step": "schema_family_detected", "status": "PASS"})
 
         thresholds = contract["thresholds"]
 
@@ -354,6 +588,23 @@ class IngestionService:
                 warnings.append(warning)
             if error:
                 errors.append(error)
+
+        rule_results.append(
+            {
+                "rule_id": "X0_SCHEMA_FAMILY_MATCH",
+                "status": schema_rule_status,
+                "details": {
+                    "schema_family_id": metrics["schema_family_id"],
+                    "schema_approved": metrics["schema_approved"],
+                    "schema_variant_detected": metrics["schema_variant_detected"],
+                    "unknown_schema_family": metrics["unknown_schema_family"],
+                    "required_structure_missing": metrics["schema_required_structure_missing"],
+                    "parser_profile": metrics["schema_parser_profile"],
+                    "match_confidence": metrics["schema_family_confidence"],
+                    "match_reasons": metrics["schema_match_reasons"],
+                },
+            }
+        )
 
         add_rule(
             "X1_XML_WELL_FORMED",
@@ -418,13 +669,23 @@ class IngestionService:
 
         if metrics["empty_required_nodes"] == 0:
             x5_status = "PASS"
-        else:
-            x5_status = "FAIL"
+        elif metrics["empty_required_nodes"] <= thresholds["max_empty_required_nodes_for_review"]:
+            x5_status = "PASS_WITH_WARNINGS"
             warnings.append(
                 {
                     "code": "EMPTY_REQUIRED_NODES",
                     "severity": "warning",
                     "message": f"{metrics['empty_required_nodes']} required nodes are empty.",
+                    "rule_id": "X5_CONTENT_PRESENCE",
+                }
+            )
+        else:
+            x5_status = "FAIL"
+            errors.append(
+                {
+                    "code": "SOURCE_MISMATCH",
+                    "severity": "error",
+                    "message": "Empty required XML nodes exceed the configured review threshold.",
                     "rule_id": "X5_CONTENT_PRESENCE",
                 }
             )
@@ -498,13 +759,23 @@ class IngestionService:
 
         if metrics["table_structure_issues"] == 0:
             x8_status = "PASS"
-        else:
-            x8_status = "FAIL"
+        elif metrics["table_structure_issues"] <= thresholds["max_table_structure_issues_for_review"]:
+            x8_status = "PASS_WITH_WARNINGS"
             warnings.append(
                 {
                     "code": "TABLE_INCONSISTENCY",
                     "severity": "warning",
                     "message": f"{metrics['table_structure_issues']} XML table structure issues were found.",
+                    "rule_id": "X8_TABLE_STRUCTURE",
+                }
+            )
+        else:
+            x8_status = "FAIL"
+            errors.append(
+                {
+                    "code": "TABLE_INCONSISTENCY",
+                    "severity": "error",
+                    "message": "XML table structure issues exceed the configured review threshold.",
                     "rule_id": "X8_TABLE_STRUCTURE",
                 }
             )
@@ -555,7 +826,9 @@ class IngestionService:
             quality_score=metrics["quality_score"],
             min_quality=thresholds["min_quality_score"],
             review_required=(
-                0 < metrics["empty_required_nodes"] <= thresholds["max_empty_required_nodes_for_review"]
+                bool(metrics["unknown_schema_family"])
+                or bool(metrics["schema_variant_detected"])
+                or 0 < metrics["empty_required_nodes"] <= thresholds["max_empty_required_nodes_for_review"]
                 or 0 < metrics["table_structure_issues"] <= thresholds["max_table_structure_issues_for_review"]
             ),
             progression_target="alignment",
@@ -632,7 +905,8 @@ class IngestionService:
         unresolved = [item for item in alignments if not item["matched"]]
         low_confidence = [item for item in aligned if item["confidence"] < thresholds["preferred_alignment_confidence"]]
 
-        missing_clause_metadata = len([fragment for fragment in fragments if not fragment.fragment_id])
+        missing_fragment_id = len([fragment for fragment in fragments if not fragment.fragment_id])
+        missing_clause_metadata = missing_fragment_id
         missing_traceability_metadata = len(
             [
                 block
@@ -722,7 +996,13 @@ class IngestionService:
                 }
             )
 
-        c3_pass = bool(fragments)
+        c3_pass = (
+            bool(fragments)
+            and missing_bbox == 0
+            and untyped_fragments == 0
+            and missing_page_reference == 0
+            and missing_fragment_id == 0
+        )
         rule_results.append(
             {
                 "rule_id": "C3_BLOCK_STRUCTURE",
@@ -732,11 +1012,12 @@ class IngestionService:
                     "missing_bbox": missing_bbox,
                     "untyped_fragments": untyped_fragments,
                     "missing_page_reference": missing_page_reference,
+                    "missing_fragment_id": missing_fragment_id,
                     "block_types": sorted({block.block_type for block in scoped_blocks}),
                 },
             }
         )
-        if not c3_pass or missing_bbox or untyped_fragments or missing_page_reference:
+        if not c3_pass:
             errors.append(
                 {
                     "code": "BLOCK_STRUCTURE_FAILURE",
@@ -971,6 +1252,26 @@ class IngestionService:
         if extractor is None:
             raise ValueError(f"Unsupported extractor strategy: {strategy.extractor_strategy}")
         return extractor.extract(pdf_bytes, decision=strategy)
+
+    def _resolve_runtime_strategy(self, strategy: DocumentStrategyDecision) -> DocumentStrategyDecision:
+        if strategy.extractor_strategy != "docling":
+            return strategy
+
+        extractor = self.extractors.get("docling")
+        if isinstance(extractor, DoclingExtractor) and extractor.is_available():
+            return strategy
+
+        resolved_notes = [
+            *strategy.notes,
+            "docling_unavailable:fallback_to_pdfplumber",
+            "runtime_extractor:pdfplumber",
+        ]
+        return replace(
+            strategy,
+            extractor_strategy="pdfplumber",
+            extractor_options={},
+            notes=resolved_notes,
+        )
 
     def _fragments_from_blocks(
         self,
@@ -1322,6 +1623,16 @@ class IngestionService:
                 "doc_id": self._slugify(xml_name),
                 "paired_document_id": self._slugify(xml_name).replace("xml", "pdf"),
                 "root_element": metrics["root_element"],
+                "schema_family_id": metrics["schema_family_id"],
+                "schema_family_version": metrics.get("schema_family_version"),
+                "schema_approved": metrics["schema_approved"],
+                "schema_variant_detected": metrics["schema_variant_detected"],
+                "unknown_schema_family": metrics["unknown_schema_family"],
+                "schema_match_confidence": metrics["schema_family_confidence"],
+                "schema_match_reasons": metrics["schema_match_reasons"],
+                "schema_parser_profile": metrics["schema_parser_profile"],
+                "schema_registry_version": metrics.get("schema_registry_version"),
+                "schema_normalizer_version": metrics.get("schema_normalizer_version"),
                 "edition": metadata["edition"] or "unknown",
                 "amendment": metadata["amendment"],
                 "volume": metadata["volume"] or "unknown",
@@ -1463,7 +1774,122 @@ class IngestionService:
             return None
         return candidate.lstrip("#")
 
-    def _table_row_xml_nodes(self, root: ET.Element) -> list[XmlNode]:
+    def _hierarchy_metrics(self, root: ET.Element, parent_map: dict[ET.Element, ET.Element]) -> dict[str, int]:
+        structural_tags = {
+            "ncc",
+            "part",
+            "section",
+            "clause",
+            "subclause",
+            "intro-part",
+            "table-reference",
+            "image-reference",
+        }
+        allowed_parents: dict[str, set[str | None]] = {
+            "part": {None, "ncc"},
+            "section": {None, "ncc"},
+            "clause": {None, "ncc", "part", "section"},
+            "subclause": {"clause", "subclause"},
+            "intro-part": {"part", "section", "clause"},
+            "table-reference": {None, "ncc", "part", "section", "clause", "subclause", "intro-part"},
+            "image-reference": {None, "ncc", "part", "section", "clause", "subclause", "intro-part"},
+        }
+        root_eligible_tags = {"ncc", "part", "section", "clause", "table-reference", "image-reference"}
+        invalid_parent_child_links = 0
+        impossible_nesting_count = 0
+        orphaned_structural_nodes = 0
+
+        for element in root.iter():
+            if element is root:
+                continue
+            tag_name = self._element_tag_name(element)
+            if tag_name not in structural_tags:
+                continue
+
+            structural_parent: ET.Element | None = None
+            structural_ancestor_tags: list[str] = []
+            current = parent_map.get(element)
+            while current is not None:
+                current_tag = self._element_tag_name(current)
+                if current_tag in structural_tags:
+                    structural_ancestor_tags.append(current_tag)
+                    if structural_parent is None:
+                        structural_parent = current
+                current = parent_map.get(current)
+
+            parent_tag = self._element_tag_name(structural_parent) if structural_parent is not None else None
+            if structural_parent is None and tag_name not in root_eligible_tags:
+                orphaned_structural_nodes += 1
+                continue
+
+            if parent_tag not in allowed_parents.get(tag_name, {None}):
+                invalid_parent_child_links += 1
+
+            if tag_name in {"part", "section"} and structural_parent is not None:
+                impossible_nesting_count += 1
+            elif tag_name == "subclause" and parent_tag not in {"clause", "subclause"}:
+                impossible_nesting_count += 1
+            elif tag_name == "clause" and "subclause" in structural_ancestor_tags:
+                impossible_nesting_count += 1
+
+        return {
+            "invalid_parent_child_links": invalid_parent_child_links,
+            "impossible_nesting_count": impossible_nesting_count,
+            "orphaned_structural_nodes": orphaned_structural_nodes,
+        }
+
+    def _definition_link_failures(
+        self,
+        root: ET.Element,
+        parent_map: dict[ET.Element, ET.Element],
+        known_ids: set[str],
+    ) -> int:
+        definition_target_ids: set[str] = set()
+        for element in root.iter():
+            if not (self._element_tag_name(element) == "definition" or self._is_glossary_entry_element(element)):
+                continue
+            element_id = element.attrib.get("id") or element.attrib.get("{http://www.w3.org/XML/1998/namespace}id")
+            if element_id:
+                definition_target_ids.add(element_id)
+
+        if not definition_target_ids:
+            return 0
+
+        failures = 0
+        for element in root.iter():
+            tag_name = self._element_tag_name(element)
+            if tag_name not in {"termref", "glossref", "glossseealso", "xref"}:
+                continue
+
+            target: str | None = None
+            for key in ("ref", "href", "target", "rid"):
+                value = element.attrib.get(key)
+                if not value:
+                    continue
+                target = self._extract_local_reference_target(key, value)
+                if target:
+                    break
+            if not target:
+                continue
+
+            parent = parent_map.get(element)
+            parent_tag = self._element_tag_name(parent) if parent is not None else ""
+            source_text = self._inventory_text_for_element(element).lower()
+            is_definition_link = (
+                tag_name in {"termref", "glossref", "glossseealso"}
+                or "definition" in source_text
+                or "defined term" in source_text
+                or parent_tag in {"termref", "glossref", "glossseealso"}
+            )
+            if not is_definition_link:
+                continue
+
+            if target not in known_ids or target not in definition_target_ids:
+                failures += 1
+
+        return failures
+
+    def _table_row_xml_nodes(self, root: ET.Element, parent_map: dict[ET.Element, ET.Element]) -> list[XmlNode]:
         nodes: list[XmlNode] = []
         for element in root.iter():
             if element.tag.split("}")[-1].lower() != "table-reference":
@@ -1491,12 +1917,20 @@ class IngestionService:
                 if len(row_text) < 20:
                     continue
                 row_node_id = f"{table_ref_id}__row_{index}"
+                context_descriptor = self._build_synthetic_context_descriptor(
+                    node_id=row_node_id,
+                    parent_element=element,
+                    parent_map=parent_map,
+                    suffix_segments=["tbody", f"row[{index}]"],
+                    context_title=table_title,
+                )
                 nodes.append(
                     XmlNode(
                         node_id=row_node_id,
                         clause_id=row_node_id,
                         text=row_text,
                         path=f"{self._element_path(element)}/tbody/row[{index}]",
+                        context_descriptor=context_descriptor,
                     )
                 )
         return nodes
@@ -1543,6 +1977,102 @@ class IngestionService:
                 return clean_text(" ".join(child.itertext()))
         return ""
 
+    def _element_tag_name(self, element: ET.Element) -> str:
+        return element.tag.split("}")[-1].lower()
+
+    def _is_glossary_entry_element(self, element: ET.Element) -> bool:
+        tag_name = self._element_tag_name(element)
+        outputclass = clean_text(element.attrib.get("outputclass", "")).lower()
+        return tag_name in _GLOSSARY_ENTRY_ROOT_TAGS or outputclass == "abcb-glossentry"
+
+    def _glossary_term_text(self, element: ET.Element) -> str:
+        if self._element_tag_name(element) == "glossterm":
+            return clean_text(" ".join(element.itertext()))
+        for child in element:
+            if self._element_tag_name(child) == "glossterm":
+                return clean_text(" ".join(child.itertext()))
+        return ""
+
+    def _glossary_definition_text(self, element: ET.Element) -> str:
+        if self._element_tag_name(element) == "glossdef":
+            return clean_text(" ".join(element.itertext()))
+        for child in element:
+            if self._element_tag_name(child) == "glossdef":
+                return clean_text(" ".join(child.itertext()))
+        return ""
+
+    def _inventory_text_for_element(self, element: ET.Element) -> str:
+        tag_name = self._element_tag_name(element)
+        if self._is_glossary_entry_element(element):
+            term = self._glossary_term_text(element)
+            definition = self._glossary_definition_text(element)
+            if term and definition:
+                return clean_text(f"{term} means {definition}")
+        if tag_name == "glossterm":
+            return self._glossary_term_text(element)
+        if tag_name == "glossdef":
+            return self._glossary_definition_text(element)
+        return clean_text(" ".join(part for part in element.itertext()))
+
+    def _should_skip_inventory_for_element(
+        self,
+        element: ET.Element,
+        parent_map: dict[ET.Element, ET.Element],
+    ) -> bool:
+        tag_name = self._element_tag_name(element)
+        if tag_name not in _GLOSSARY_CHILD_TAGS:
+            return False
+        current = parent_map.get(element)
+        while current is not None:
+            if self._is_glossary_entry_element(current):
+                return True
+            current = parent_map.get(current)
+        return False
+
+    def _semantic_unit_from_element(
+        self,
+        *,
+        element: ET.Element,
+        node_id: str,
+        path: str,
+        text: str,
+        context_descriptor: XmlContextDescriptor | None = None,
+    ) -> dict[str, Any] | None:
+        if self._is_glossary_entry_element(element):
+            term = self._glossary_term_text(element)
+            definition = self._glossary_definition_text(element)
+            return {
+                "unit_id": f"unit:{node_id}",
+                "node_id": node_id,
+                "semantic_class": "definition",
+                "title": term or self._review_title(text, "", node_id),
+                "text": text,
+                "path": path,
+                "full_path": context_descriptor.full_path if context_descriptor is not None else path,
+                "context_descriptor": asdict(context_descriptor) if context_descriptor is not None else None,
+                "glossary_term": term,
+                "glossary_definition": definition,
+                "schema_family_id": "abcb_glossentry",
+            }
+        return self._semantic_unit_from_parts(
+            node_id=node_id,
+            path=path,
+            text=text,
+            context_descriptor=context_descriptor,
+        )
+
+    def _dedupe_semantic_units(self, units: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        deduped: dict[str, dict[str, Any]] = {}
+        for unit in units:
+            unit_id = str(unit.get("unit_id") or "")
+            if not unit_id or unit_id in deduped:
+                continue
+            deduped[unit_id] = unit
+        return list(deduped.values())
+
+    def _detect_xml_schema_family(self, root: ET.Element) -> dict[str, Any]:
+        return self.schema_registry.match_against_approved_registry(root)
+
     def _build_document_family_id(self, *, pdf_name: str, xml_name: str) -> str:
         pdf_stem = re.sub(r"\.pdf$", "", pdf_name, flags=re.IGNORECASE)
         xml_stem = re.sub(r"\.xml$", "", xml_name, flags=re.IGNORECASE)
@@ -1567,6 +2097,181 @@ class IngestionService:
         prefix = candidate[:prefix_length].rstrip("_") or "document_family"
         return f"{prefix}_{digest}"
 
+    def _baseline_semantic_unit_eligible(self, unit: dict[str, Any]) -> bool:
+        """Deterministic inclusion predicate for foundational baseline slice (inspectable, low-risk)."""
+        cls = str(unit.get("semantic_class") or "").lower()
+        if cls in _BASELINE_SEMANTIC_CLASSES:
+            return True
+        path = str(unit.get("path") or "").lower()
+        return any(marker in path for marker in _BASELINE_PATH_MARKERS)
+
+    def _baseline_category_for_unit(self, unit: dict[str, Any]) -> str:
+        cls = str(unit.get("semantic_class") or "").lower()
+        path = str(unit.get("path") or "").lower()
+        if cls == "definition" or "/definition" in path:
+            return "glossary_definition"
+        if cls in {"title", "context_key"} or "/title" in path or "/num" in path:
+            return "title_or_context"
+        if cls == "note" or any(m in path for m in ("intro-part", "intro", "subtitle")):
+            return "interpretive_structure"
+        return "interpretive_structure"
+
+    def _build_foundational_baseline_corpus_slice(
+        self,
+        *,
+        semantic_units: list[dict[str, Any]],
+        candidate_objects: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        cand_by_node = {str(c.get("xml_node_id")): c for c in candidate_objects if c.get("xml_node_id")}
+        eligible_units = [u for u in semantic_units if self._baseline_semantic_unit_eligible(u)]
+        eligible_ids = {str(u.get("node_id")) for u in eligible_units}
+
+        items: list[dict[str, Any]] = []
+        for unit in sorted(eligible_units, key=lambda u: str(u.get("node_id") or "")):
+            nid = str(unit.get("node_id") or "")
+            cand = cand_by_node.get(nid, {})
+            evidence = list(cand.get("evidence") or [])
+            primary = evidence[0] if evidence else {}
+            items.append(
+                {
+                    "candidate_id": cand.get("candidate_id"),
+                    "node_id": nid,
+                    "semantic_unit_id": unit.get("unit_id"),
+                    "baseline_category": self._baseline_category_for_unit(unit),
+                    "title": unit.get("title") or cand.get("title"),
+                    "semantic_class": unit.get("semantic_class"),
+                    "validation_state": cand.get("validation_state"),
+                    "status": cand.get("status"),
+                    "text_preview": clean_text(str(unit.get("text") or ""))[:400],
+                    "evidence": {
+                        "primary_fragment_id": primary.get("fragment_id"),
+                        "primary_page": primary.get("page"),
+                        "has_pdf_evidence": bool(primary.get("fragment_id")),
+                        "evidence_packet_count": len(evidence),
+                    },
+                }
+            )
+            if len(items) >= _MAX_BASELINE_CORPUS_ITEMS:
+                break
+
+        eligible_count = len(eligible_ids)
+        included = len(items)
+        coverage = ratio(included, max(eligible_count, 1))
+
+        return {
+            "schema_version": "1",
+            "generated_at": utc_now_iso(),
+            "summary": {
+                "eligible_semantic_unit_count": eligible_count,
+                "included_item_count": included,
+                "truncated": eligible_count > included,
+                "coverage_ratio": round(coverage, 4),
+            },
+            "items": items,
+        }
+
+    def _build_candidate_quality_metrics(
+        self,
+        *,
+        semantic_units: list[dict[str, Any]],
+        pdf_evidence_packets: list[dict[str, Any]],
+        candidate_objects: list[dict[str, Any]],
+        review_units: list[dict[str, Any]],
+        canonical_snippets: list[dict[str, Any]],
+        foundational_baseline_corpus: dict[str, Any],
+    ) -> dict[str, Any]:
+        baseline_summary = foundational_baseline_corpus.get("summary") if isinstance(foundational_baseline_corpus, dict) else {}
+        return {
+            "schema_version": "1",
+            "generated_at": utc_now_iso(),
+            "semantic_unit_count": len(semantic_units),
+            "pdf_evidence_packet_count": len(pdf_evidence_packets),
+            "candidate_object_count": len(candidate_objects),
+            "review_unit_count": len(review_units),
+            "promoted_snippet_count": len(canonical_snippets),
+            "foundational_baseline_eligible_count": int(baseline_summary.get("eligible_semantic_unit_count") or 0),
+            "foundational_baseline_included_count": int(baseline_summary.get("included_item_count") or 0),
+            "foundational_baseline_coverage_ratio": float(baseline_summary.get("coverage_ratio") or 0.0),
+        }
+
+    def _validation_status_allows_graph_inspection(self, validation: dict[str, Any]) -> bool:
+        status = str(validation.get("overall_status") or "")
+        if not status:
+            return True
+        return status in {"PASS", "PASS_WITH_WARNINGS"}
+
+    def _build_graph_readiness_summary(
+        self,
+        *,
+        enrichment_summary: dict[str, Any],
+        xml_validation: dict[str, Any],
+        pdf_validation: dict[str, Any],
+        candidate_quality: dict[str, Any],
+    ) -> dict[str, Any]:
+        unresolved_blocking = int(enrichment_summary.get("unresolved_blocking_count") or 0)
+        su_count = int(candidate_quality.get("semantic_unit_count") or 0)
+        cand_count = int(candidate_quality.get("candidate_object_count") or 0)
+        baseline_eligible = int(candidate_quality.get("foundational_baseline_eligible_count") or 0)
+        baseline_included = int(candidate_quality.get("foundational_baseline_included_count") or 0)
+
+        gates: list[dict[str, Any]] = [
+            {
+                "gate_id": "explicit_relations_non_blocking",
+                "passed": unresolved_blocking == 0,
+                "detail": f"unresolved_blocking_count={unresolved_blocking}",
+            },
+            {
+                "gate_id": "semantic_inventory_present",
+                "passed": su_count > 0,
+                "detail": f"semantic_unit_count={su_count}",
+            },
+            {
+                "gate_id": "candidate_layer_present",
+                "passed": cand_count > 0,
+                "detail": f"candidate_object_count={cand_count}",
+            },
+            {
+                "gate_id": "xml_validation_allows_inspection",
+                "passed": self._validation_status_allows_graph_inspection(xml_validation),
+                "detail": f"overall_status={xml_validation.get('overall_status')!r}",
+            },
+            {
+                "gate_id": "pdf_validation_allows_inspection",
+                "passed": self._validation_status_allows_graph_inspection(pdf_validation),
+                "detail": f"overall_status={pdf_validation.get('overall_status')!r}",
+            },
+            {
+                "gate_id": "foundational_baseline_slice_present_or_empty_doc",
+                "passed": baseline_eligible == 0 or baseline_included > 0,
+                "detail": f"eligible={baseline_eligible} included={baseline_included}",
+            },
+        ]
+        passed_all = all(bool(g.get("passed")) for g in gates)
+        return {
+            "schema_version": "1",
+            "generated_at": utc_now_iso(),
+            "ready_for_graph_handoff": passed_all,
+            "gates": gates,
+            "metrics_echo": {
+                "unresolved_blocking_count": unresolved_blocking,
+                "semantic_unit_count": su_count,
+                "candidate_object_count": cand_count,
+                "foundational_baseline_eligible_count": baseline_eligible,
+                "foundational_baseline_included_count": baseline_included,
+            },
+        }
+
+    def _semantic_enrichment_field_authority(self) -> dict[str, str]:
+        """Static provenance map: XML-backed vs heuristic enrichment (additive; top-level fields unchanged)."""
+        return {
+            "explicit_relations": "xml_authoritative",
+            "glossary_links": "heuristic_glossary_match",
+            "applicability_conditions": "heuristic_pattern",
+            "implicit_relation_candidates": "heuristic_text",
+            "defined_terms_used": "derived_from_heuristic_glossary_match",
+            "unresolved_terms": "heuristic_glossary_match",
+        }
+
     def _build_review_workspace(
         self,
         *,
@@ -1581,6 +2286,12 @@ class IngestionService:
         canonical_snippets: list[dict[str, Any]],
         xml_validation: dict[str, Any],
         pdf_validation: dict[str, Any],
+        xml_bytes: bytes | None = None,
+        xml_metrics: dict[str, Any] | None = None,
+        candidate_relations: list[dict[str, Any]] | None = None,
+        reconciliation_records: list[dict[str, Any]] | None = None,
+        graph_edges: list[dict[str, Any]] | None = None,
+        enrichment_summary: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         workspace_mode = "full"
         workspace_reason = "default_full_lineage_review"
@@ -1601,17 +2312,43 @@ class IngestionService:
             if snippet.get("fragment_id") in review_fragment_ids
         ]
         semantic_units = semantic_units or self._semantic_units_from_xml_nodes(xml_nodes)
-        candidate_objects = candidates or self._build_candidate_objects(
+        pdf_packets = self._build_pdf_evidence_packets(
             semantic_units=semantic_units,
-            pdf_evidence_packets=self._build_pdf_evidence_packets(
-                semantic_units=semantic_units,
-                fragments=fragments,
-                structured_blocks=structured_blocks,
-                alignments=alignments,
-                xml_validation=xml_validation,
-                pdf_validation=pdf_validation,
-            ),
+            fragments=fragments,
+            structured_blocks=structured_blocks,
+            alignments=alignments,
+            xml_validation=xml_validation,
+            pdf_validation=pdf_validation,
         )
+        if candidates is None:
+            candidate_objects = self._build_candidate_objects(
+                semantic_units=semantic_units,
+                pdf_evidence_packets=pdf_packets,
+            )
+            rels: list[dict[str, Any]] = list(candidate_relations or [])
+            reconciliations: list[dict[str, Any]] = list(reconciliation_records or [])
+            edges: list[dict[str, Any]] = list(graph_edges or [])
+            summary: dict[str, Any] = dict(enrichment_summary or {})
+            if xml_bytes is not None and xml_metrics is not None:
+                candidate_objects, rels, reconciliations, edges, summary = self._apply_semantic_enrichment(
+                    xml_bytes=xml_bytes,
+                    xml_metrics=xml_metrics,
+                    semantic_units=semantic_units,
+                    pdf_evidence_packets=pdf_packets,
+                    candidate_objects=candidate_objects,
+                )
+                edges = self._append_snippet_promotion_edges(
+                    graph_edges=edges,
+                    candidates=candidate_objects,
+                    canonical_snippets=canonical_snippets,
+                )
+                summary = {**summary, "graph_edge_count": len(edges)}
+        else:
+            candidate_objects = candidates
+            rels = list(candidate_relations or [])
+            reconciliations = list(reconciliation_records or [])
+            edges = list(graph_edges or [])
+            summary = dict(enrichment_summary or {})
         if workspace_mode == "focused":
             review_candidates = [
                 candidate
@@ -1633,6 +2370,14 @@ class IngestionService:
         candidate_needs_review = len(
             [unit for unit in review_units if unit.get("needs_human_review")]
         )
+        blocking_relation_candidates = sum(
+            1
+            for cand in review_candidates
+            if any(rel.get("blocking") for rel in (cand.get("explicit_relations") or []))
+        )
+        review_required_reconciliations = sum(
+            1 for record in reconciliations if record.get("review_required")
+        )
 
         return {
             "mode": workspace_mode,
@@ -1649,6 +2394,15 @@ class IngestionService:
             "candidate_total": candidate_total,
             "candidate_surfaced": candidate_surfaced,
             "candidate_needs_review": candidate_needs_review,
+            "candidate_relations": rels,
+            "reconciliation_records": reconciliations,
+            "graph_edges": edges,
+            "enrichment_summary": summary,
+            "enrichment_counts": {
+                "candidates_with_blocking_relations": blocking_relation_candidates,
+                "review_required_reconciliations": review_required_reconciliations,
+                "graph_edge_count": len(edges),
+            },
         }
 
     def _should_focus_review_workspace(
@@ -1743,6 +2497,12 @@ class IngestionService:
                     "raw_xml_only_terms": candidate.get("review", {}).get("raw_xml_only_terms", []),
                     "raw_pdf_only_terms": candidate.get("review", {}).get("raw_pdf_only_terms", []),
                     "ignored_structural_terms": candidate.get("review", {}).get("ignored_structural_terms", []),
+                    "validation_state": candidate.get("validation_state"),
+                    "classification": candidate.get("classification"),
+                    "explicit_relations_count": len(candidate.get("explicit_relations") or []),
+                    "glossary_links_count": len(candidate.get("glossary_links") or []),
+                    "enrichment_summary": candidate.get("review", {}).get("enrichment_summary"),
+                    "enrichment_issue_class": candidate.get("review", {}).get("enrichment_issue_class"),
                 }
             )
         return review_units
@@ -1811,6 +2571,7 @@ class IngestionService:
         node_id: str,
         path: str,
         text: str,
+        context_descriptor: XmlContextDescriptor | None = None,
     ) -> dict[str, Any] | None:
         semantic_class = self._xml_structural_class(path, text)
         min_text_length = 1 if semantic_class in {"title", "context_key"} else 5
@@ -1823,6 +2584,8 @@ class IngestionService:
             "title": self._review_title(text, "", node_id),
             "text": text,
             "path": path,
+            "full_path": context_descriptor.full_path if context_descriptor is not None else path,
+            "context_descriptor": asdict(context_descriptor) if context_descriptor is not None else None,
         }
 
     def _semantic_node_id(
@@ -1852,12 +2615,13 @@ class IngestionService:
                     node_id=node.node_id,
                     path=node.path,
                     text=node.text,
+                    context_descriptor=node.context_descriptor,
                 )
                 for node in xml_nodes
             )
             if unit is not None
         ]
-        return list({unit["unit_id"]: unit for unit in units}.values())
+        return self._dedupe_semantic_units(units)
 
     def _build_pdf_evidence_packets(
         self,
@@ -1931,6 +2695,7 @@ class IngestionService:
             packet = packet_by_unit_id.get(unit["unit_id"], {"evidence_fragments": [], "linked_issue": False})
             evidence = list(packet.get("evidence_fragments") or [])
             primary_evidence = evidence[0] if evidence else {}
+            context_descriptor = dict(unit.get("context_descriptor") or {})
             pdf_text = str(primary_evidence.get("text") or "")
             raw_xml_only_terms, raw_pdf_only_terms = self._review_term_deltas(unit["text"], pdf_text)
             xml_only_terms, pdf_only_terms, ignored_structural_terms = self._effective_review_term_deltas(
@@ -1972,11 +2737,21 @@ class IngestionService:
                     "candidate_id": f"candidate:{unit['unit_id']}",
                     "semantic_unit_id": unit["unit_id"],
                     "xml_node_id": unit["node_id"],
+                    "schema_family_id": unit.get("schema_family_id"),
+                    "glossary_term": unit.get("glossary_term"),
+                    "glossary_definition": unit.get("glossary_definition"),
                     "title": unit["title"],
                     "candidate_type": unit["semantic_class"],
                     "xml_structural_class": unit["semantic_class"],
                     "candidate_semantic_class": unit["semantic_class"],
                     "xml_path": unit["path"],
+                    "xml_full_path": unit.get("full_path") or unit["path"],
+                    "xml_parent_node_id": context_descriptor.get("parent_node_id"),
+                    "xml_root_node_id": context_descriptor.get("root_node_id"),
+                    "xml_ancestor_node_ids": list(context_descriptor.get("ancestor_node_ids") or []),
+                    "xml_ancestor_tags": list(context_descriptor.get("ancestor_tags") or []),
+                    "xml_context_path_signature": context_descriptor.get("context_path_signature"),
+                    "xml_context_descriptor": context_descriptor or None,
                     "xml_text": unit["text"],
                     "status": "validated" if validation_state == "pass" else "draft",
                     "validation_state": validation_state,
@@ -2016,6 +2791,868 @@ class IngestionService:
             )
         return candidates
 
+    def _xml_parent_map(self, root: ET.Element) -> dict[ET.Element, ET.Element]:
+        parent: dict[ET.Element, ET.Element] = {}
+        for ancestor in root.iter():
+            for child in ancestor:
+                parent[child] = ancestor
+        return parent
+
+    def _element_identifier(self, element: ET.Element | None) -> str | None:
+        if element is None:
+            return None
+        return element.attrib.get("id") or element.attrib.get("{http://www.w3.org/XML/1998/namespace}id")
+
+    def _xml_ancestor_chain(
+        self,
+        element: ET.Element,
+        parent_map: dict[ET.Element, ET.Element],
+    ) -> list[ET.Element]:
+        chain: list[ET.Element] = []
+        current: ET.Element | None = element
+        while current is not None:
+            chain.append(current)
+            current = parent_map.get(current)
+        return list(reversed(chain))
+
+    def _xml_sibling_index(
+        self,
+        element: ET.Element,
+        parent_map: dict[ET.Element, ET.Element],
+    ) -> int:
+        parent = parent_map.get(element)
+        if parent is None:
+            return 1
+        tag_name = self._element_tag_name(element)
+        same_tag_siblings = [child for child in parent if self._element_tag_name(child) == tag_name]
+        for index, sibling in enumerate(same_tag_siblings, start=1):
+            if sibling is element:
+                return index
+        return 1
+
+    def _element_full_path(
+        self,
+        element: ET.Element,
+        parent_map: dict[ET.Element, ET.Element],
+    ) -> str:
+        segments: list[str] = []
+        for current in self._xml_ancestor_chain(element, parent_map):
+            tag_name = self._element_tag_name(current)
+            identifier = self._element_identifier(current)
+            if identifier:
+                safe_identifier = str(identifier).replace("'", "\\'")
+                segments.append(f"{tag_name}[@id='{safe_identifier}']")
+            else:
+                segments.append(f"{tag_name}[{self._xml_sibling_index(current, parent_map)}]")
+        return "/" + "/".join(segments)
+
+    def _context_titles_for_chain(self, chain: list[ET.Element]) -> list[str]:
+        labels: list[str] = []
+        for element in chain:
+            for tag_name in ("title", "num", "sptc"):
+                label = self._first_child_text(element, tag_name)
+                if label and label not in labels:
+                    labels.append(label)
+                    break
+        return labels
+
+    def _nearest_structural_ancestor(
+        self,
+        element: ET.Element,
+        parent_map: dict[ET.Element, ET.Element],
+    ) -> ET.Element | None:
+        structural_tags = {"clause", "part", "section", "definition", "table-reference", "intro-part", "table", "page"}
+        current = parent_map.get(element)
+        while current is not None:
+            if self._element_tag_name(current) in structural_tags:
+                return current
+            current = parent_map.get(current)
+        return None
+
+    def _build_xml_context_descriptor(
+        self,
+        *,
+        node_id: str,
+        element: ET.Element,
+        parent_map: dict[ET.Element, ET.Element],
+    ) -> XmlContextDescriptor:
+        chain = self._xml_ancestor_chain(element, parent_map)
+        parent = parent_map.get(element)
+        ancestor_elements = chain[:-1]
+        ancestor_node_ids = [
+            str(identifier)
+            for identifier in (self._element_identifier(ancestor) for ancestor in ancestor_elements)
+            if identifier
+        ]
+        nearest_structural_parent = self._nearest_structural_ancestor(element, parent_map)
+        return XmlContextDescriptor(
+            node_id=node_id,
+            full_path=self._element_full_path(element, parent_map),
+            context_path_signature="/".join(self._element_tag_name(item) for item in chain),
+            parent_node_id=self._element_identifier(parent),
+            root_node_id=ancestor_node_ids[0] if ancestor_node_ids else self._element_identifier(element),
+            ancestor_node_ids=ancestor_node_ids,
+            ancestor_tags=[self._element_tag_name(item) for item in ancestor_elements],
+            nearest_structural_parent_id=self._element_identifier(nearest_structural_parent),
+            nearest_structural_parent_tag=self._element_tag_name(nearest_structural_parent) if nearest_structural_parent is not None else None,
+            context_titles=self._context_titles_for_chain(ancestor_elements),
+            depth=max(0, len(chain) - 1),
+            sibling_index=self._xml_sibling_index(element, parent_map),
+        )
+
+    def _build_synthetic_context_descriptor(
+        self,
+        *,
+        node_id: str,
+        parent_element: ET.Element,
+        parent_map: dict[ET.Element, ET.Element],
+        suffix_segments: list[str],
+        context_title: str | None = None,
+    ) -> XmlContextDescriptor:
+        parent_chain = self._xml_ancestor_chain(parent_element, parent_map)
+        parent_descriptor = self._build_xml_context_descriptor(node_id=node_id, element=parent_element, parent_map=parent_map)
+        parent_identifier = self._element_identifier(parent_element)
+        context_titles = list(parent_descriptor.context_titles)
+        if context_title:
+            normalized_title = clean_text(context_title)
+            if normalized_title and normalized_title not in context_titles:
+                context_titles.append(normalized_title)
+        return XmlContextDescriptor(
+            node_id=node_id,
+            full_path=f"{parent_descriptor.full_path}/{'/'.join(suffix_segments)}",
+            context_path_signature="/".join([*(self._element_tag_name(item) for item in parent_chain), *suffix_segments]),
+            parent_node_id=parent_identifier,
+            root_node_id=parent_descriptor.root_node_id,
+            ancestor_node_ids=[*parent_descriptor.ancestor_node_ids, *([str(parent_identifier)] if parent_identifier else [])],
+            ancestor_tags=[*(self._element_tag_name(item) for item in parent_chain)],
+            nearest_structural_parent_id=parent_identifier or parent_descriptor.nearest_structural_parent_id,
+            nearest_structural_parent_tag=self._element_tag_name(parent_element),
+            context_titles=context_titles,
+            depth=parent_descriptor.depth + len(suffix_segments),
+            sibling_index=1,
+        )
+
+    def _nearest_xml_id(
+        self,
+        element: ET.Element | None,
+        parent_map: dict[ET.Element, ET.Element],
+    ) -> str | None:
+        current: ET.Element | None = element
+        while current is not None:
+            eid = self._element_identifier(current)
+            if eid:
+                return str(eid)
+            current = parent_map.get(current)
+        return None
+
+    def _collect_explicit_xml_relations(self, root: ET.Element) -> tuple[list[dict[str, Any]], set[str]]:
+        """Derive explicit ref/href/target/rid edges and structural parent links where both ends have ids."""
+        all_ids: set[str] = set()
+        for element in root.iter():
+            eid = element.attrib.get("id") or element.attrib.get("{http://www.w3.org/XML/1998/namespace}id")
+            if eid:
+                all_ids.add(str(eid))
+
+        parent_map = self._xml_parent_map(root)
+        relations: list[dict[str, Any]] = []
+
+        for element in root.iter():
+            tag_name = element.tag.split("}")[-1].lower()
+            for key in ("ref", "href", "target", "rid"):
+                raw = element.attrib.get(key)
+                if not raw:
+                    continue
+                target = self._extract_local_reference_target(key, raw)
+                if not target:
+                    continue
+                if tag_name in {"xref", "ref"}:
+                    parent_el = parent_map.get(element)
+                    source_id = (
+                        self._nearest_xml_id(parent_el, parent_map)
+                        if parent_el is not None
+                        else self._nearest_xml_id(element, parent_map)
+                    )
+                else:
+                    source_id = self._nearest_xml_id(element, parent_map)
+                if not source_id:
+                    continue
+                resolved = target in all_ids
+                relations.append(
+                    {
+                        "relation_id": f"xref:{source_id}:{key}:{target}",
+                        "relation_kind": "xref_attribute",
+                        "relation_authority": "xml_explicit",
+                        "source_node_id": source_id,
+                        "target_node_id": target,
+                        "target_locator": target,
+                        "resolution_status": "resolved" if resolved else "unresolved",
+                        "attrib_key": key,
+                        "raw_value": clean_text(raw)[:500],
+                        "resolved": resolved,
+                        "blocking": not resolved,
+                        "confidence": 1.0 if resolved else 0.0,
+                        "provenance": {
+                            "source_authority": "xml_authoritative",
+                            "source_fields": [key],
+                            "evidence_fragment_ids": [],
+                            "evidence_spans": [clean_text(raw)[:200]],
+                        },
+                    }
+                )
+
+        structural_tags = {"clause", "part", "section", "definition", "table-reference", "intro-part", "table"}
+        for element in root.iter():
+            eid = element.attrib.get("id") or element.attrib.get("{http://www.w3.org/XML/1998/namespace}id")
+            if not eid:
+                continue
+            tag_name = element.tag.split("}")[-1].lower()
+            parent = parent_map.get(element)
+            if parent is None:
+                continue
+            parent_tag = parent.tag.split("}")[-1].lower()
+            if tag_name not in structural_tags and parent_tag not in structural_tags:
+                continue
+            parent_id = self._nearest_xml_id(parent, parent_map)
+            if not parent_id or parent_id == eid:
+                continue
+            relations.append(
+                {
+                    "relation_id": f"struct:child:{eid}",
+                    "relation_kind": "structural_parent",
+                    "relation_authority": "xml_explicit",
+                    "source_node_id": eid,
+                    "target_node_id": parent_id,
+                    "target_locator": parent_id,
+                    "resolution_status": "resolved" if parent_id in all_ids else "unresolved",
+                    "attrib_key": "parent",
+                    "raw_value": tag_name,
+                    "resolved": parent_id in all_ids,
+                    "blocking": False,
+                    "confidence": 1.0,
+                    "provenance": {
+                        "source_authority": "xml_authoritative",
+                        "source_fields": ["parent"],
+                        "evidence_fragment_ids": [],
+                        "evidence_spans": [tag_name],
+                    },
+                }
+            )
+
+        dedup: dict[str, dict[str, Any]] = {}
+        for rel in relations:
+            dedup[rel["relation_id"]] = rel
+        return list(dedup.values()), all_ids
+
+    def _build_glossary_index(self, semantic_units: list[dict[str, Any]]) -> dict[str, str]:
+        """Map normalized term -> definition node_id for definition-class units."""
+        index: dict[str, str] = {}
+        for unit in semantic_units:
+            if str(unit.get("semantic_class") or "") != "definition":
+                continue
+            text = clean_text(str(unit.get("text") or ""))
+            term: str | None = None
+            structured_term = clean_text(str(unit.get("glossary_term") or ""))
+            if structured_term:
+                term = structured_term
+            for marker in (" means ", " refers to ", " includes "):
+                idx = text.lower().find(marker)
+                if idx > 0:
+                    term = clean_text(text[:idx])
+                    break
+            if not term:
+                term = clean_text(str(unit.get("title") or ""))
+            if not term:
+                continue
+            key = normalize_text(term)
+            if key and key not in index:
+                index[key] = str(unit["node_id"])
+        return dict(sorted(index.items(), key=lambda item: (-len(item[0]), item[0])))
+
+    def _glossary_links_for_text(
+        self,
+        text: str,
+        glossary_index: dict[str, str],
+    ) -> tuple[list[dict[str, Any]], list[str], list[str]]:
+        """Longest-first deterministic term matching against glossary keys."""
+        normalized = normalize_text(text)
+        if not normalized or not glossary_index:
+            return [], [], []
+
+        matched_keys: set[str] = set()
+        links: list[dict[str, Any]] = []
+        for key in sorted(glossary_index.keys(), key=lambda k: (-len(k), k)):
+            if not key or key in matched_keys:
+                continue
+            boundary = rf"(?<![a-z0-9]){re.escape(key)}(?![a-z0-9])"
+            if re.search(boundary, normalized):
+                matched_keys.add(key)
+                node_id = glossary_index[key]
+                links.append(
+                    {
+                        "definition_node_id": node_id,
+                        "term_normalized": key,
+                        "match": "boundary_token",
+                    }
+                )
+
+        defined_terms = sorted(matched_keys)
+        candidate_tokens = {t for t in re.findall(r"[A-Za-z][a-z]+(?:\s+[a-z]+){0,4}", text) if len(t) >= 8}
+        unresolved: list[str] = []
+        for phrase in sorted(candidate_tokens):
+            n = normalize_text(phrase)
+            if n and n not in glossary_index and not any(n in k or k in n for k in matched_keys):
+                if len(unresolved) < 8:
+                    unresolved.append(phrase.strip()[:80])
+        return links, defined_terms, unresolved
+
+    def _extract_applicability_conditions(self, text: str) -> list[dict[str, Any]]:
+        conditions: list[dict[str, Any]] = []
+        for match in _CLIMATE_ZONE_PATTERN.finditer(text):
+            conditions.append(
+                {"dimension": "climate_zone", "value": match.group(1).strip(), "source_span": match.group(0)[:120]}
+            )
+        for match in _BUILDING_CLASS_PATTERN.finditer(text):
+            conditions.append(
+                {"dimension": "building_class", "value": match.group(1).strip(), "source_span": match.group(0)[:120]}
+            )
+        for match in _JURISDICTION_PATTERN.finditer(text):
+            conditions.append(
+                {"dimension": "jurisdiction", "value": match.group(1).strip(), "source_span": match.group(0)[:120]}
+            )
+        for match in _CONDITIONAL_PHRASE_PATTERN.finditer(text):
+            conditions.append(
+                {"dimension": "conditional_phrase", "value": clean_text(match.group(0))[:200], "source_span": match.group(0)[:120]}
+            )
+        dedup: dict[str, dict[str, Any]] = {}
+        for item in conditions:
+            dedup[f"{item['dimension']}:{item.get('value')}:{item.get('source_span')}"] = item
+        return list(dedup.values())
+
+    def _implicit_relation_candidates_for_text(self, text: str) -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
+        for match in _IMPLICIT_SEE_PATTERN.finditer(text):
+            hint = clean_text(match.group(1))[:200]
+            if len(hint) < 4:
+                continue
+            clause_labels = self._clause_labels_from_text(hint)
+            out.append(
+                {
+                    "kind": "text_see_reference",
+                    "hint": hint,
+                    "target_locator": clause_labels[0] if clause_labels else hint,
+                    "confidence": 0.35,
+                    "note": "Heuristic; not XML-backed.",
+                }
+            )
+        return out[:5]
+
+    def _clause_labels_from_text(self, text: str) -> list[str]:
+        labels: list[str] = []
+        seen: set[str] = set()
+        for match in _CLAUSE_LABEL_PATTERN.finditer(clean_text(text).upper()):
+            label = match.group(1)
+            if label not in seen:
+                seen.add(label)
+                labels.append(label)
+        return labels
+
+    def _leading_clause_labels_from_text(self, text: str) -> list[str]:
+        normalized = clean_text(text).upper()
+        match = re.match(r"^([A-Z]\d[A-Z]\d+[A-Z]?)\b", normalized)
+        return [match.group(1)] if match else []
+
+    def _build_clause_reference_index(
+        self,
+        *,
+        semantic_units: list[dict[str, Any]],
+        node_to_candidate: dict[str, dict[str, Any]],
+    ) -> dict[str, list[dict[str, Any]]]:
+        index: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for unit in semantic_units:
+            node_id = str(unit.get("node_id") or "")
+            if not node_id:
+                continue
+            labels: set[str] = set()
+            labels.update(self._clause_labels_from_text(node_id))
+            labels.update(self._leading_clause_labels_from_text(str(unit.get("text") or "")))
+            if not labels:
+                continue
+            candidate = node_to_candidate.get(node_id) or {}
+            for label in sorted(labels):
+                index[label].append(
+                    {
+                        "node_id": node_id,
+                        "semantic_unit_id": unit.get("unit_id"),
+                        "candidate_id": candidate.get("candidate_id"),
+                        "candidate_semantic_class": candidate.get("candidate_semantic_class") or unit.get("semantic_class"),
+                    }
+                )
+        return dict(index)
+
+    def _text_relation_source_authority(self, candidate: dict[str, Any], hint: str) -> str:
+        evidence_text = normalize_text(" ".join(str(item.get("text") or "") for item in (candidate.get("evidence") or [])))
+        if evidence_text and normalize_text(hint) in evidence_text:
+            return "pdf_grounded"
+        return "heuristic"
+
+    def _text_relations_for_candidate(
+        self,
+        *,
+        candidate: dict[str, Any],
+        clause_reference_index: dict[str, list[dict[str, Any]]],
+    ) -> list[dict[str, Any]]:
+        source_node_id = str(candidate.get("xml_node_id") or "")
+        source_candidate_id = str(candidate.get("candidate_id") or "")
+        source_semantic_unit_id = str(candidate.get("semantic_unit_id") or "")
+        evidence_fragment_ids = [
+            str(item.get("fragment_id"))
+            for item in (candidate.get("evidence") or [])
+            if item.get("fragment_id")
+        ]
+        relations: list[dict[str, Any]] = []
+        seen_relation_ids: set[str] = set()
+        combined_text = f"{candidate.get('xml_text') or ''} {' '.join(str(item.get('text') or '') for item in (candidate.get('evidence') or []))}"
+        for match in _IMPLICIT_SEE_PATTERN.finditer(combined_text):
+            hint = clean_text(match.group(1))[:200]
+            clause_labels = self._clause_labels_from_text(hint)
+            if not clause_labels:
+                continue
+            for label in clause_labels:
+                matches = [
+                    item
+                    for item in clause_reference_index.get(label, [])
+                    if str(item.get("node_id") or "") != source_node_id
+                ]
+                preferred_matches = [
+                    item
+                    for item in matches
+                    if str(item.get("candidate_semantic_class") or "") not in {"title", "context_key"}
+                ]
+                if len(preferred_matches) == 1:
+                    matches = preferred_matches
+                relation_id = f"textref:{source_node_id}:{label}"
+                if relation_id in seen_relation_ids:
+                    continue
+                seen_relation_ids.add(relation_id)
+                if len(matches) == 1:
+                    target = matches[0]
+                    relation = {
+                        "relation_id": relation_id,
+                        "relation_kind": "clause_reference",
+                        "relation_authority": "text_resolved",
+                        "source_node_id": source_node_id,
+                        "source_candidate_id": source_candidate_id,
+                        "source_semantic_unit_id": source_semantic_unit_id,
+                        "target_node_id": str(target.get("node_id") or ""),
+                        "target_candidate_id": target.get("candidate_id"),
+                        "target_semantic_unit_id": target.get("semantic_unit_id"),
+                        "target_locator": label,
+                        "resolution_status": "resolved",
+                        "resolved": True,
+                        "blocking": False,
+                        "confidence": 0.72,
+                        "raw_value": hint,
+                        "provenance": {
+                            "source_authority": self._text_relation_source_authority(candidate, hint),
+                            "source_fields": ["xml_text", "pdf_evidence_text"],
+                            "evidence_fragment_ids": evidence_fragment_ids,
+                            "evidence_spans": [hint],
+                        },
+                    }
+                else:
+                    ambiguous = len(matches) > 1
+                    relation = {
+                        "relation_id": relation_id,
+                        "relation_kind": "clause_reference",
+                        "relation_authority": "text_unresolved",
+                        "source_node_id": source_node_id,
+                        "source_candidate_id": source_candidate_id,
+                        "source_semantic_unit_id": source_semantic_unit_id,
+                        "target_node_id": None,
+                        "target_candidate_id": None,
+                        "target_semantic_unit_id": None,
+                        "target_locator": label,
+                        "resolution_status": "ambiguous" if ambiguous else "unresolved",
+                        "resolved": False,
+                        "blocking": False,
+                        "confidence": 0.35 if ambiguous else 0.4,
+                        "raw_value": hint,
+                        "provenance": {
+                            "source_authority": self._text_relation_source_authority(candidate, hint),
+                            "source_fields": ["xml_text", "pdf_evidence_text"],
+                            "evidence_fragment_ids": evidence_fragment_ids,
+                            "evidence_spans": [hint],
+                        },
+                    }
+                relations.append(relation)
+        return relations
+
+    def _reconciliation_records_for_candidate(
+        self,
+        *,
+        candidate: dict[str, Any],
+        relations: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        candidate_id = str(candidate.get("candidate_id") or "")
+        records: list[dict[str, Any]] = []
+        for relation in relations:
+            authority = str(relation.get("relation_authority") or "")
+            resolution_status = str(relation.get("resolution_status") or "")
+            classification = "match"
+            promotion_effect = "none"
+            review_required = False
+            notes: str | None = None
+            if relation.get("blocking"):
+                classification = "gap"
+                promotion_effect = "blocks_selected_relation_classes"
+                review_required = True
+                notes = "Explicit XML relation could not be resolved."
+            elif authority == "text_unresolved":
+                classification = "review_required" if resolution_status == "ambiguous" else "gap"
+                promotion_effect = "advisory_only"
+                review_required = True
+                notes = "Text-derived clause reference needs review."
+            elif authority == "text_resolved":
+                classification = "match"
+                promotion_effect = "advisory_only"
+                notes = "Text-derived clause reference resolved to a known candidate."
+            records.append(
+                {
+                    "reconciliation_id": f"reconcile:{candidate_id}:{relation.get('relation_id')}",
+                    "source_candidate_ids": [candidate_id] if candidate_id else [],
+                    "source_relation_ids": [relation.get("relation_id")],
+                    "classification": classification,
+                    "promotion_effect": promotion_effect,
+                    "review_required": review_required,
+                    "notes": notes,
+                }
+            )
+        return records
+
+    def _bind_relation_candidate_context(
+        self,
+        *,
+        relation: dict[str, Any],
+        source_candidate: dict[str, Any],
+        node_to_candidate: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        bound = dict(relation)
+        target_node_id = str(bound.get("target_node_id") or "")
+        target_candidate = node_to_candidate.get(target_node_id) if target_node_id else None
+        bound.setdefault("source_candidate_id", source_candidate.get("candidate_id"))
+        bound.setdefault("source_semantic_unit_id", source_candidate.get("semantic_unit_id"))
+        if target_candidate is not None:
+            bound.setdefault("target_candidate_id", target_candidate.get("candidate_id"))
+            bound.setdefault("target_semantic_unit_id", target_candidate.get("semantic_unit_id"))
+        else:
+            bound.setdefault("target_candidate_id", None)
+            bound.setdefault("target_semantic_unit_id", None)
+        return bound
+
+    def _apply_semantic_enrichment(
+        self,
+        *,
+        xml_bytes: bytes | None,
+        xml_metrics: dict[str, Any],
+        semantic_units: list[dict[str, Any]],
+        pdf_evidence_packets: list[dict[str, Any]],
+        candidate_objects: list[dict[str, Any]],
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+        _ = xml_metrics
+        _ = pdf_evidence_packets
+        explicit_relations: list[dict[str, Any]] = []
+        id_set: set[str] = set()
+        if xml_bytes:
+            try:
+                root = ET.fromstring(xml_bytes)
+                explicit_relations, id_set = self._collect_explicit_xml_relations(root)
+            except ET.ParseError:
+                explicit_relations, id_set = [], set()
+
+        glossary_index = self._build_glossary_index(semantic_units)
+        node_to_candidate: dict[str, dict[str, Any]] = {}
+        for c in candidate_objects:
+            nid = str(c.get("xml_node_id") or "")
+            if nid:
+                node_to_candidate[nid] = c
+        clause_reference_index = self._build_clause_reference_index(
+            semantic_units=semantic_units,
+            node_to_candidate=node_to_candidate,
+        )
+
+        gated = 0
+        all_candidate_relations: list[dict[str, Any]] = []
+        all_reconciliation_records: list[dict[str, Any]] = []
+        for candidate in candidate_objects:
+            original_validation_state = candidate.get("validation_state")
+            original_status = candidate.get("status")
+            nid = str(candidate.get("xml_node_id") or "")
+            evidence = list(candidate.get("evidence") or [])
+            primary = evidence[0] if evidence else {}
+            xml_cls = str(candidate.get("xml_structural_class") or "")
+            pdf_cls = str(primary.get("pdf_evidence_class") or "unknown")
+            alignment_like = {
+                "matched": bool(primary),
+                "node_id": nid if primary else None,
+                "confidence": float(primary.get("confidence", 0.0)),
+            }
+            sem_cls = self._candidate_semantic_class(
+                xml_structural_class=xml_cls,
+                pdf_evidence_class=pdf_cls,
+                alignment=alignment_like,
+            )
+            candidate["classification"] = {
+                "xml_structural_class": xml_cls,
+                "pdf_evidence_class": pdf_cls,
+                "candidate_semantic_class": sem_cls,
+            }
+            candidate["candidate_semantic_class"] = sem_cls
+
+            combined_text = f"{candidate.get('xml_text') or ''} {primary.get('text') or ''}"
+            g_links, defined_terms, unresolved_terms = self._glossary_links_for_text(combined_text, glossary_index)
+            candidate["glossary_links"] = g_links
+            candidate["defined_terms_used"] = defined_terms
+            candidate["unresolved_terms"] = unresolved_terms[:12]
+            candidate["applicability_conditions"] = self._extract_applicability_conditions(combined_text)
+            candidate["implicit_relation_candidates"] = self._implicit_relation_candidates_for_text(combined_text)
+
+            local_explicit_rels = [
+                self._bind_relation_candidate_context(
+                    relation=rel,
+                    source_candidate=candidate,
+                    node_to_candidate=node_to_candidate,
+                )
+                for rel in explicit_relations
+                if str(rel.get("source_node_id") or "") == nid
+            ]
+            local_text_rels = self._text_relations_for_candidate(
+                candidate=candidate,
+                clause_reference_index=clause_reference_index,
+            )
+            local_rels = [*local_explicit_rels, *local_text_rels]
+            candidate["explicit_relations"] = local_explicit_rels
+            candidate["candidate_relations"] = local_rels
+            all_candidate_relations.extend(local_rels)
+
+            depends_on: list[str] = []
+            for rel in local_rels:
+                if rel.get("relation_kind") in {"xref_attribute", "structural_parent", "clause_reference"} and rel.get("resolved"):
+                    tgt = str(rel.get("target_node_id") or "")
+                    if tgt and tgt in node_to_candidate:
+                        depends_on.append(str(node_to_candidate[tgt].get("candidate_id")))
+            candidate["depends_on"] = sorted(set(depends_on))
+
+            reconciliation_records = self._reconciliation_records_for_candidate(
+                candidate=candidate,
+                relations=local_rels,
+            )
+            candidate["reconciliation_records"] = reconciliation_records
+            all_reconciliation_records.extend(reconciliation_records)
+
+            blocking = [rel for rel in local_explicit_rels if rel.get("blocking")]
+            review_only_relations = [
+                rel for rel in local_rels
+                if rel.get("resolution_status") in {"unresolved", "ambiguous", "review_required"} and not rel.get("blocking")
+            ]
+            review = dict(candidate.get("review") or {})
+            issues = list(review.get("issues") or [])
+            if blocking:
+                for rel in blocking:
+                    issues.append(
+                        f"Unresolved explicit XML relation ({rel.get('attrib_key')}) targets '{rel.get('target_node_id')}'."
+                    )
+                review["enrichment_issue_class"] = "unresolved_explicit_relation"
+                review["enrichment_summary"] = f"{len(blocking)} unresolved explicit relation(s)."
+            elif review_only_relations:
+                for rel in review_only_relations:
+                    issues.append(
+                        f"Review relation candidate '{rel.get('target_locator')}' ({rel.get('resolution_status')})."
+                    )
+                review["enrichment_issue_class"] = "review_relation_candidate"
+                review["enrichment_summary"] = f"{len(review_only_relations)} relation candidate(s) require review."
+            else:
+                review.setdefault("enrichment_issue_class", "clean")
+                review.setdefault("enrichment_summary", "")
+
+            if blocking:
+                gated += 1
+                candidate["validation_state"] = "requires_review"
+                candidate["status"] = "draft"
+                review["needs_human_review"] = True
+                review["base_status"] = self._derive_review_base_status(
+                    alignment=alignment_like,
+                    issues=issues,
+                    approved=False,
+                    candidate_semantic_class=sem_cls,
+                )
+            else:
+                candidate["validation_state"] = original_validation_state
+                candidate["status"] = original_status
+                if review_only_relations:
+                    review["needs_human_review"] = True
+
+            review["issues"] = issues
+            candidate["review"] = review
+
+            candidate["semantic_enrichment"] = {
+                "schema_version": "1",
+                "field_authority": self._semantic_enrichment_field_authority(),
+                "per_field_counts": {
+                    "explicit_relations": len(local_explicit_rels),
+                    "candidate_relations": len(local_rels),
+                    "reconciliation_records": len(reconciliation_records),
+                    "glossary_links": len(g_links),
+                    "applicability_conditions": len(candidate.get("applicability_conditions") or []),
+                    "implicit_relation_candidates": len(candidate.get("implicit_relation_candidates") or []),
+                },
+            }
+
+        enrichment_summary = {
+            "generated_at": utc_now_iso(),
+            "explicit_relation_count": len(explicit_relations),
+            "candidate_relation_count": len(all_candidate_relations),
+            "text_resolved_relation_count": sum(
+                1 for rel in all_candidate_relations if rel.get("relation_authority") == "text_resolved"
+            ),
+            "text_unresolved_relation_count": sum(
+                1 for rel in all_candidate_relations if rel.get("relation_authority") == "text_unresolved"
+            ),
+            "reconciliation_record_count": len(all_reconciliation_records),
+            "reconciliation_review_required_count": sum(
+                1 for record in all_reconciliation_records if record.get("review_required")
+            ),
+            "unresolved_blocking_count": sum(1 for r in explicit_relations if r.get("blocking")),
+            "candidates_gated": gated,
+            "glossary_term_count": len(glossary_index),
+            "xml_id_count": len(id_set),
+            "graph_edge_count": 0,
+            "field_authority": self._semantic_enrichment_field_authority(),
+        }
+
+        graph_edges = self._build_semantic_graph_edges(
+            candidate_objects=candidate_objects,
+            semantic_units=semantic_units,
+            candidate_relations=all_candidate_relations,
+            enrichment_summary=enrichment_summary,
+        )
+        return candidate_objects, all_candidate_relations, all_reconciliation_records, graph_edges, enrichment_summary
+
+    def _build_semantic_graph_edges(
+        self,
+        *,
+        candidate_objects: list[dict[str, Any]],
+        semantic_units: list[dict[str, Any]],
+        candidate_relations: list[dict[str, Any]],
+        enrichment_summary: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        edges: list[dict[str, Any]] = []
+        unit_by_node = {str(u.get("node_id")): u for u in semantic_units}
+
+        for candidate in candidate_objects:
+            cid = str(candidate.get("candidate_id") or "")
+            suid = str(candidate.get("semantic_unit_id") or "")
+            if suid:
+                edges.append(
+                    {
+                        "edge_id": f"e:{cid}:unit:{suid}",
+                        "edge_type": "candidate_to_semantic_unit",
+                        "source": {"kind": "candidate", "id": cid},
+                        "target": {"kind": "semantic_unit", "id": suid},
+                    }
+                )
+            frag = (candidate.get("source") or {}).get("pdf_fragment_id")
+            if frag:
+                edges.append(
+                    {
+                        "edge_id": f"e:{cid}:frag:{frag}",
+                        "edge_type": "candidate_to_pdf_fragment",
+                        "source": {"kind": "candidate", "id": cid},
+                        "target": {"kind": "pdf_fragment", "id": str(frag)},
+                    }
+                )
+            for link in candidate.get("glossary_links") or []:
+                dnode = str(link.get("definition_node_id") or "")
+                if not dnode:
+                    continue
+                du = unit_by_node.get(dnode, {})
+                edges.append(
+                    {
+                        "edge_id": f"e:{cid}:gloss:{dnode}",
+                        "edge_type": "glossary_link",
+                        "source": {"kind": "candidate", "id": cid},
+                        "target": {"kind": "definition_node", "id": dnode},
+                        "payload": {"semantic_unit_id": du.get("unit_id"), "term": link.get("term_normalized")},
+                    }
+                )
+            for app_index, cond in enumerate(candidate.get("applicability_conditions") or []):
+                dim = str(cond.get("dimension") or "unknown")
+                val = str(cond.get("value") or "")[:40]
+                edges.append(
+                    {
+                        "edge_id": f"e:{cid}:app:{dim}:{app_index}:{val}",
+                        "edge_type": "applicability",
+                        "source": {"kind": "candidate", "id": cid},
+                        "target": {"kind": "applicability_dimension", "id": dim},
+                        "payload": cond,
+                    }
+                )
+
+        for rel in candidate_relations:
+            sid = str(rel.get("source_node_id") or "")
+            tid = str(rel.get("target_node_id") or "")
+            src_c = next((c for c in candidate_objects if str(c.get("xml_node_id")) == sid), None)
+            tgt_c = next((c for c in candidate_objects if str(c.get("xml_node_id")) == tid), None)
+            edge_type = "relation_resolved" if rel.get("resolution_status") == "resolved" else "relation_unresolved"
+            target_kind = "xml_node" if tid else "relation_locator"
+            target_id = tid or str(rel.get("target_locator") or rel.get("relation_id"))
+            source_kind = "candidate" if (src_c or {}).get("candidate_id") else "xml_node"
+            source_id = str((src_c or {}).get("candidate_id") or sid)
+            edges.append(
+                {
+                    "edge_id": f"e:rel:{rel.get('relation_id')}",
+                    "edge_type": edge_type,
+                    "source": {"kind": source_kind, "id": source_id},
+                    "target": {"kind": target_kind, "id": target_id},
+                    "payload": {
+                        "relation_kind": rel.get("relation_kind"),
+                        "relation_authority": rel.get("relation_authority"),
+                        "resolution_status": rel.get("resolution_status"),
+                        "attrib_key": rel.get("attrib_key"),
+                        "source_candidate_id": (src_c or {}).get("candidate_id"),
+                        "target_candidate_id": (tgt_c or {}).get("candidate_id"),
+                        "target_locator": rel.get("target_locator"),
+                    },
+                }
+            )
+
+        enrichment_summary["graph_edge_count"] = len(edges)
+        return edges
+
+    def _append_snippet_promotion_edges(
+        self,
+        *,
+        graph_edges: list[dict[str, Any]],
+        candidates: list[dict[str, Any]],
+        canonical_snippets: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        edges = list(graph_edges)
+        cand_set = {str(c.get("candidate_id")) for c in candidates}
+        for snippet in canonical_snippets:
+            cid = str(snippet.get("candidate_id") or "")
+            if not cid or cid not in cand_set:
+                continue
+            sid = f"snippet:{cid}"
+            edges.append(
+                {
+                    "edge_id": f"e:promote:{cid}",
+                    "edge_type": "candidate_to_canonical_snippet",
+                    "source": {"kind": "candidate", "id": cid},
+                    "target": {"kind": "canonical_snippet", "id": sid},
+                    "payload": {"clause_id": snippet.get("clause_id"), "fragment_id": snippet.get("fragment_id")},
+                }
+            )
+        return edges
+
     def _review_term_deltas(self, xml_text: str, pdf_text: str) -> tuple[list[str], list[str]]:
         xml_terms = {token for token in normalize_text(xml_text).split() if token}
         pdf_terms = {token for token in normalize_text(pdf_text).split() if token}
@@ -2026,6 +3663,10 @@ class IngestionService:
         normalized_text = xml_text.lower()
         if not normalized_path and not normalized_text:
             return "ambiguous"
+        if any(marker in normalized_path for marker in ("glossentry", "glossdef")):
+            return "definition"
+        if "glossterm" in normalized_path:
+            return "context_key"
         if "/title[" in normalized_path or normalized_path.endswith("/title"):
             return "title"
         if "/num[" in normalized_path or normalized_path.endswith("/num"):

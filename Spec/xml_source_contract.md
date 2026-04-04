@@ -1,6 +1,6 @@
 # XML Source Validation Contract
 ## NCC XML Ingestion Constraint Manual
-### Version 1.2.0
+### Version 1.4.1
 
 ---
 
@@ -33,6 +33,11 @@ The XML must therefore be suitable for:
 - downstream XML-to-PDF alignment
 - canonical snippet generation
 
+Boundary note:
+- XML remains the primary structural authority for candidate inventory, hierarchy, and explicit XML-encoded references
+- XML validation does not guarantee that all semantically important dependencies are fully encoded in XML attributes or structure
+- prose-level references, layout-implied dependencies, and other non-structural semantic links may be resolved downstream by the `CandidateRelation` engine and reconciliation stages defined in `Spec/Candidate_Extraction_Layer.md`
+
 If XML validation fails, the system must stop before alignment can be trusted and before semantic compilation can proceed.
 
 ---
@@ -58,7 +63,7 @@ For XML validation:
 
 The executable contract defines these thresholds and assumptions:
 
-- expected root elements: `ncc`, `NCC`, `part`, `clause`, `table-reference`, `image-reference`
+- expected root elements: `ncc`, `NCC`, `part`, `clause`, `table-reference`, `image-reference`, `abcb-glossentry`, `glossentry`
 - section or part context is required when applicable
 - maximum empty required nodes before review becomes blocking: `2`
 - maximum unresolved references allowed with warnings: `5`
@@ -80,6 +85,7 @@ The XML must:
 
 Current corpus note:
 - legitimate NCC source files may use structural roots such as `part`, `clause`, `table-reference`, or `image-reference`
+- glossary-entry source files may also use `abcb-glossentry` or `glossentry`
 - those roots must not be treated as malformed simply because they are not wrapped in a single `ncc` document root
 
 Outcome:
@@ -101,6 +107,24 @@ Current metadata inference behavior may derive these values from:
 
 Outcome:
 - block progression if required metadata is missing
+
+## X2a — Approved schema-family match
+
+The XML should be checked against approved structural schema families before parser dispatch.
+
+Current approved families may include:
+- `ncc_document`
+- `ncc_part`
+- `ncc_clause`
+- `table_reference`
+- `image_reference`
+- `abcb_glossentry`
+
+Outcome:
+- `PASS` when the XML matches an approved family without drift
+- `PASS_WITH_WARNINGS` when the XML matches an approved family but drifts from preferred structure
+- `REVIEW_REQUIRED` when the XML does not match an approved family and no harder blocking rule has fired
+- `BLOCKED` when a matched family is missing required structural elements
 
 ## X3 — Hierarchy integrity
 
@@ -141,6 +165,10 @@ Examples:
 - clause bodies cannot be empty unless explicitly allowed
 - table containers must not be empty
 
+Current rendered-content note:
+- equation-bearing XML should preserve renderable math structure where supplied by the source, such as `<mathML><math>...</math>`, even when MathType annotations or image fallbacks are also present
+- loss of renderable equation structure should be treated as a content-readiness problem when the remaining text cannot convey the normative expression
+
 Outcome:
 - `PASS` when empty required nodes = `0`
 - `REVIEW_REQUIRED` when empty required nodes are greater than `0` and less than or equal to `2`
@@ -158,6 +186,7 @@ Unresolved references must be explicitly flagged.
 Current reference-resolution note:
 - only local XML targets should count toward unresolved-reference totals
 - external publishing paths and non-local `href` targets must not be treated as missing local XML ids
+- free-text clause references that are not encoded as XML link attributes may be surfaced downstream as relation candidates, but they do not count as XML reference-resolution failures under this contract
 
 Outcome:
 - `PASS` when unresolved references = `0`
@@ -184,6 +213,11 @@ If tables are represented in XML, they must preserve enough structure for downst
 - row presence
 - header presence where available
 - cell grouping and notes where represented
+
+Current table-shape note:
+- `table-reference` artifacts should preserve `num` and `title` as addressable siblings of the inner `table` container when present
+- CALS-style structure such as `tgroup`, `thead`, `tbody`, `row`, and `entry` should remain intact so operator review can project the XML into a readable grid rather than flattening it into prose
+- attributes that affect review meaning, such as `keycol`, `namest`, and `nameend`, should be retained when present
 
 Current table-alignment note:
 - `table-reference` XML may synthesize row-level XML nodes such as `{table_id}__row_{n}` for downstream row-granular PDF alignment and focused review
@@ -242,6 +276,7 @@ Where cross-representation links are present, the shared identifier vocabulary s
 Current-state expectation for XML-side lineage:
 - broad `part` and `clause` XML may validate as `PASS_WITH_WARNINGS` or `REVIEW_REQUIRED` when the structure is trustworthy but still requires human review before automatic progression
 - narrow table XML may surface additional synthesized row nodes in lineage or review payloads so PDF row fragments can align against them
+- XML-side lineage may surface explicit relation hints or normalized identifiers that help downstream relation resolution, but this contract does not require XML alone to fully scope all semantic dependencies
 
 ---
 

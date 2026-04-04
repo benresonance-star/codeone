@@ -1,14 +1,15 @@
 {
   "contract_id": "xml_source_v1",
-  "contract_version": "1.2.0",
-  "description": "Deterministic validation contract for NCC XML source ingestion with candidate-backed semantic promotion.",
+  "contract_version": "1.4.1",
+  "description": "Deterministic validation contract for NCC XML source ingestion with candidate-backed semantic promotion, renderable math and table-shape preservation, and explicit boundaries between XML structural authority and downstream semantic dependency resolution.",
   "representation_model": {
     "primary_representation": "xml",
     "paired_representation": "pdf",
     "relationship": "same_ncc_content_different_form",
     "xml_role": "structural_authority",
     "pdf_role": "rendered_spatial_authority",
-    "alignment_dependency": "XML must pass its gate before XML-to-PDF alignment and downstream candidate extraction can be trusted."
+    "alignment_dependency": "XML must pass its gate before XML-to-PDF alignment and downstream candidate extraction can be trusted.",
+    "semantic_dependency_boundary": "XML remains the structural authority for candidate inventory, hierarchy, and explicit XML-encoded references, but it is not required to fully encode all prose-level or layout-implied semantic dependencies."
   },
   "thresholds": {
     "expected_root_elements": [
@@ -17,7 +18,9 @@
       "part",
       "clause",
       "table-reference",
-      "image-reference"
+      "image-reference",
+      "abcb-glossentry",
+      "glossentry"
     ],
     "section_or_part_context_required_when_applicable": true,
     "max_empty_required_nodes_for_review": 2,
@@ -68,7 +71,7 @@
     },
     {
       "rule_id": "X5_CONTENT_PRESENCE",
-      "description": "Required structural nodes must contain usable content, including non-empty headings, clause bodies, and table containers unless explicitly allowed to be empty.",
+      "description": "Required structural nodes must contain usable content, including non-empty headings, clause bodies, table containers, and equation-bearing content that preserves renderable math structure when supplied by the source.",
       "severity": "review_or_block",
       "pass_when": "xml.empty_required_nodes == 0",
       "review_required_when": "xml.empty_required_nodes > 0 AND xml.empty_required_nodes <= thresholds.max_empty_required_nodes_for_review",
@@ -95,7 +98,7 @@
     },
     {
       "rule_id": "X8_TABLE_STRUCTURE",
-      "description": "XML table structures must preserve enough row, header, and cell-grouping information for downstream interpretation and later PDF/XML relationship checks.",
+      "description": "XML table structures must preserve enough row, header, sibling heading, key-column, and cell-grouping information for downstream interpretation, readable operator review projection, and later PDF/XML relationship checks.",
       "severity": "review_or_block",
       "pass_when": "xml.table_structure_issues == 0",
       "review_required_when": "xml.table_structure_issues > 0 AND xml.table_structure_issues <= thresholds.max_table_structure_issues_for_review",
@@ -119,10 +122,25 @@
       "error_code": "EXECUTION_BLOCKED"
     }
   ],
+  "schema_family_policy": {
+    "approved_schema_families": [
+      "ncc_document",
+      "ncc_part",
+      "ncc_clause",
+      "table_reference",
+      "image_reference",
+      "abcb_glossentry"
+    ],
+    "approved_match_behavior": "proceed",
+    "variant_behavior": "PASS_WITH_WARNINGS and REVIEW_REQUIRED in aggregate gate logic",
+    "unknown_family_behavior": "REVIEW_REQUIRED unless another blocking XML rule fires",
+    "required_structure_missing_behavior": "BLOCKED"
+  },
   "candidate_stage_contract": {
     "mandatory": true,
     "entry_requirement": "Validated XML may participate in candidate extraction only after alignment prerequisites are satisfied.",
     "snippet_promotion_rule": "Canonical snippets must be promoted from validated candidates rather than generated directly from XML structure.",
-    "compatibility_note": "The legacy rule identifier X9_SNIPPET_READINESS is retained for compatibility while candidate-stage semantics become normative."
+    "compatibility_note": "The legacy rule identifier X9_SNIPPET_READINESS is retained for compatibility while candidate-stage semantics become normative.",
+    "relation_boundary_note": "Free-text clause references and other non-attribute semantic dependencies may be surfaced downstream by the CandidateRelation engine without counting as XML contract failures on their own."
   }
 }

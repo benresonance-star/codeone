@@ -1,0 +1,145 @@
+{
+  "registry_version": "approved_seed_v1",
+  "generated_at": "2026-04-03T11:27:26Z",
+  "normalizer_version": "1",
+  "families": [
+    {
+      "schema_family_id": "ncc_document",
+      "schema_family_version": "1",
+      "parser_profile": "ncc_document",
+      "match_rules": {
+        "root_tags": [
+          "ncc",
+          "NCC"
+        ],
+        "required_children": [],
+        "recommended_children": [
+          "part",
+          "clause",
+          "table-reference",
+          "image-reference"
+        ],
+        "outputclass_hints": []
+      },
+      "approved_fingerprint_hashes": [],
+      "schema_family_NCC_volume": null,
+      "schema_family_NCC_version": "2022",
+      "schema_family_NCC_ammendment": null
+    },
+    {
+      "schema_family_id": "ncc_part",
+      "schema_family_version": "1",
+      "parser_profile": "ncc_part",
+      "match_rules": {
+        "root_tags": [
+          "part"
+        ],
+        "required_children": [],
+        "recommended_children": [
+          "num",
+          "title"
+        ],
+        "outputclass_hints": [
+          "ncc-part"
+        ]
+      },
+      "approved_fingerprint_hashes": [],
+      "schema_family_NCC_volume": null,
+      "schema_family_NCC_version": "2022",
+      "schema_family_NCC_ammendment": null
+    },
+    {
+      "schema_family_id": "ncc_clause",
+      "schema_family_version": "1",
+      "parser_profile": "ncc_clause",
+      "match_rules": {
+        "root_tags": [
+          "clause"
+        ],
+        "required_children": [],
+        "recommended_children": [
+          "title",
+          "sptc",
+          "p",
+          "subclause"
+        ],
+        "outputclass_hints": [
+          "ncc-clause"
+        ]
+      },
+      "approved_fingerprint_hashes": [],
+      "schema_family_NCC_volume": null,
+      "schema_family_NCC_version": "2022",
+      "schema_family_NCC_ammendment": null
+    },
+    {
+      "schema_family_id": "table_reference",
+      "schema_family_version": "1",
+      "parser_profile": "table_reference",
+      "match_rules": {
+        "root_tags": [
+          "table-reference"
+        ],
+        "required_children": [
+          "table"
+        ],
+        "recommended_children": [
+          "num",
+          "title"
+        ],
+        "outputclass_hints": []
+      },
+      "approved_fingerprint_hashes": [],
+      "schema_family_NCC_volume": null,
+      "schema_family_NCC_version": "2022",
+      "schema_family_NCC_ammendment": null
+    },
+    {
+      "schema_family_id": "image_reference",
+      "schema_family_version": "1",
+      "parser_profile": "image_reference",
+      "match_rules": {
+        "root_tags": [
+          "image-reference"
+        ],
+        "required_children": [],
+        "recommended_children": [
+          "title",
+          "image",
+          "caption"
+        ],
+        "outputclass_hints": []
+      },
+      "approved_fingerprint_hashes": [],
+      "schema_family_NCC_volume": null,
+      "schema_family_NCC_version": "2022",
+      "schema_family_NCC_ammendment": null
+    },
+    {
+      "schema_family_id": "abcb_glossentry",
+      "schema_family_version": "1",
+      "parser_profile": "abcb_glossentry",
+      "match_rules": {
+        "root_tags": [
+          "abcb-glossentry",
+          "glossentry"
+        ],
+        "required_children": [
+          "glossterm",
+          "glossdef"
+        ],
+        "recommended_children": [],
+        "outputclass_hints": [
+          "abcb-glossentry"
+        ]
+      },
+      "approved_fingerprint_hashes": [],
+      "schema_family_NCC_volume": null,
+      "schema_family_NCC_version": "2022",
+      "schema_family_NCC_ammendment": null
+    }
+  ],
+  "export_mode": "runtime_exported_to_repo",
+  "repo_export_path": "data/schema-registry/approved_schema_registry.json",
+  "exported_from_runtime_at": "2026-04-04T01:58:30Z"
+}

@@ -1,18 +1,18 @@
 import type { Metadata } from "next";
-import { Fraunces, IBM_Plex_Sans } from "next/font/google";
+import { Roboto, Roboto_Mono } from "next/font/google";
 import { ReactNode } from "react";
 
 import "./globals.css";
 
-const displayFont = Fraunces({
+const roboto = Roboto({
   subsets: ["latin"],
-  variable: "--font-display",
-  weight: ["500", "600", "700"],
+  variable: "--font-roboto",
+  weight: ["400", "500", "600", "700"],
 });
 
-const bodyFont = IBM_Plex_Sans({
+const robotoMono = Roboto_Mono({
   subsets: ["latin"],
-  variable: "--font-body",
+  variable: "--font-roboto-mono",
   weight: ["400", "500", "600", "700"],
 });
 
@@ -23,8 +23,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <body className={`${displayFont.variable} ${bodyFont.variable}`}>{children}</body>
+    <html lang="en" className={`${roboto.variable} ${robotoMono.variable}`}>
+      <body>{children}</body>
     </html>
   );
 }
