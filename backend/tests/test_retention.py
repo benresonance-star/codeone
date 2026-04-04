@@ -64,6 +64,8 @@ class RetentionCandidateRuntimeContractTests(unittest.TestCase):
         src = inspect.getsource(RetentionService.persist_ingestion)
         self.assertIn("candidate_relations", src)
         self.assertIn("reconciliation_records", src)
+        self.assertIn("candidate_validation_results", src)
+        self.assertIn("candidate_validation_summary", src)
         self.assertIn("graph_edges", src)
         self.assertIn("enrichment_summary", src)
         self.assertIn("candidate_quality", src)
@@ -71,12 +73,12 @@ class RetentionCandidateRuntimeContractTests(unittest.TestCase):
         self.assertIn("foundational_baseline_corpus", src)
         self.assertIn("schema_runtime", src)
 
-    def test_load_run_payload_recomputes_enrichment_when_classification_missing(self) -> None:
+    def test_load_run_payload_replays_shared_candidate_runtime(self) -> None:
         src = inspect.getsource(retention_module.RetentionService.load_run_payload)
-        self.assertIn("_apply_semantic_enrichment", src)
-        self.assertIn("classification", src)
+        self.assertIn("_run_candidate_runtime", src)
+        self.assertIn("review_decisions", src)
         self.assertIn("reconciliation_records", src)
-        self.assertIn("candidate_to_canonical_snippet", src)
+        self.assertIn("candidate_validation_results", src)
         self.assertIn("candidate_quality", src)
         self.assertIn("foundational_baseline_corpus", src)
 
@@ -163,8 +165,10 @@ class RetentionPayloadRoundTripTests(unittest.TestCase):
 
         self.assertGreaterEqual(len(restored["lineage"]["candidate_relations"]), 1)
         self.assertGreaterEqual(len(restored["lineage"]["reconciliation_records"]), 1)
+        self.assertGreaterEqual(len(restored["lineage"]["candidate_validation_results"]), 1)
         self.assertGreaterEqual(len(restored["review_workspace"]["candidate_relations"]), 1)
         self.assertGreaterEqual(len(restored["review_workspace"]["reconciliation_records"]), 1)
+        self.assertGreaterEqual(len(restored["review_workspace"]["candidate_validation_results"]), 1)
 
         source_candidate = next(
             candidate for candidate in restored["lineage"]["candidate_objects"] if candidate.get("xml_node_id") == "clause_ref_source"
@@ -173,9 +177,52 @@ class RetentionPayloadRoundTripTests(unittest.TestCase):
 
         relation = restored["lineage"]["candidate_relations"][0]
         self.assertIn(relation.get("relation_authority"), {"text_resolved", "xml_explicit"})
+        self.assertIn("candidate_validation_summary", restored["lineage"])
         self.assertIn("schema_family_version", restored["summary"])
         self.assertIn("schema_registry_version", restored["summary"])
         self.assertIn("schema_normalizer_version", restored["summary"])
+
+    def test_load_run_payload_applies_review_decisions_to_candidate_validation_state(self) -> None:
+        payload, pdf_bytes, xml_bytes, pdf_name, xml_name = self._build_payload()
+
+        with self.SessionLocal() as session:
+            persisted = self.retention.persist_ingestion(
+                session,
+                payload=payload,
+                pdf_name=pdf_name,
+                pdf_bytes=pdf_bytes,
+                xml_name=xml_name,
+                xml_bytes=xml_bytes,
+            )
+            candidate_id = next(
+                candidate["candidate_id"]
+                for candidate in payload["lineage"]["candidate_objects"]
+                if candidate.get("xml_node_id") == "C3D15"
+            )
+            self.retention.save_review_decision(
+                session,
+                run_id=persisted["summary"]["ingestion_run_id"],
+                candidate_id=candidate_id,
+                fragment_id="xml_only:C3D15",
+                node_id="C3D15",
+                decision_status="approved",
+                note="Reviewed and accepted despite missing PDF evidence.",
+            )
+            session.commit()
+
+            restored = self.retention.load_run_payload(session, persisted["summary"]["ingestion_run_id"])
+
+        reviewed_candidate = next(
+            candidate for candidate in restored["lineage"]["candidate_objects"] if candidate.get("candidate_id") == candidate_id
+        )
+        validation_record = next(
+            item for item in restored["lineage"]["candidate_validation_results"] if item.get("candidate_id") == candidate_id
+        )
+        self.assertEqual(reviewed_candidate["review"]["human_decision_status"], "approved")
+        self.assertEqual(reviewed_candidate["validation_state"], "pass")
+        self.assertEqual(validation_record["review_decision_status"], "approved")
+        self.assertFalse(validation_record["promotion_eligible"])
+        self.assertEqual(restored["review_workspace"]["review_decisions"][0]["decision_status"], "approved")
 
     def test_persist_ingestion_snapshot_echoes_relation_and_reconciliation_counts(self) -> None:
         payload, pdf_bytes, xml_bytes, pdf_name, xml_name = self._build_payload()
@@ -199,3 +246,4 @@ class RetentionPayloadRoundTripTests(unittest.TestCase):
         summary = snapshot.payload["candidate_runtime_summary"]
         self.assertGreaterEqual(summary["candidate_relations"], 1)
         self.assertGreaterEqual(summary["reconciliation_records"], 1)
+        self.assertGreaterEqual(summary["candidate_validation_results"], 1)

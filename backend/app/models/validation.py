@@ -90,6 +90,36 @@ class ReviewDecisionListResponse(BaseModel):
     decisions: list[ReviewDecisionRecord] = Field(default_factory=list)
 
 
+class CandidateValidationIssueRecord(BaseModel):
+    code: str
+    severity: str
+    message: str
+    blocking: bool = False
+
+
+class CandidateValidationRecord(BaseModel):
+    candidate_id: str
+    validation_state: str
+    lifecycle_status: str
+    promotion_eligible: bool = False
+    review_override_applied: bool = False
+    review_decision_status: str | None = None
+    issue_count: int = 0
+    blocking_issue_count: int = 0
+    advisory_issue_count: int = 0
+    issues: list[CandidateValidationIssueRecord] = Field(default_factory=list)
+
+
+class CandidateValidationSummaryRecord(BaseModel):
+    schema_version: str = "1"
+    candidate_count: int = 0
+    pass_count: int = 0
+    requires_review_count: int = 0
+    fail_count: int = 0
+    promotion_eligible_count: int = 0
+    review_override_count: int = 0
+
+
 class PurgeSummaryResponse(BaseModel):
     target_type: str
     target_id: str

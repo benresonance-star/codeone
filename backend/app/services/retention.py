@@ -118,6 +118,8 @@ class RetentionService:
                 "candidate_objects": lineage.get("candidate_objects", []),
                 "candidate_relations": lineage.get("candidate_relations", []),
                 "reconciliation_records": lineage.get("reconciliation_records", []),
+                "candidate_validation_results": lineage.get("candidate_validation_results", []),
+                "candidate_validation_summary": lineage.get("candidate_validation_summary", {}),
                 "graph_edges": lineage.get("graph_edges", []),
                 "enrichment_summary": lineage.get("enrichment_summary", {}),
                 "candidate_quality": lineage.get("candidate_quality", {}),
@@ -190,6 +192,7 @@ class RetentionService:
         )
         schema_runtime = candidate_runtime.get("schema_runtime") if isinstance(candidate_runtime, dict) else {}
         semantic_units = candidate_runtime.get("xml_semantic_units") or xml_context.get("semantic_units") or []
+        review_decisions = self.list_review_decisions(session, run_id)
 
         pdf_tables = self._table_payloads(session, run_id, "pdf")
         xml_tables = self._table_payloads(session, run_id, "xml")
@@ -207,47 +210,24 @@ class RetentionService:
         )
         xml_metrics = xml_context.get("metrics") or {}
 
-        def _needs_enrichment_restore(_cr: dict[str, Any], cands: list[dict[str, Any]]) -> bool:
-            if not cands:
-                return False
-            return not all(isinstance(c, dict) and "classification" in c for c in cands)
-
-        candidate_relations: list[dict[str, Any]] = list(candidate_runtime.get("candidate_relations") or [])
-        reconciliation_records: list[dict[str, Any]] = list(candidate_runtime.get("reconciliation_records") or [])
-        graph_edges: list[dict[str, Any]] = list(candidate_runtime.get("graph_edges") or [])
-        enrichment_summary: dict[str, Any] = dict(candidate_runtime.get("enrichment_summary") or {})
-
-        if _needs_enrichment_restore(candidate_runtime, candidate_objects):
-            (
-                candidate_objects,
-                candidate_relations,
-                reconciliation_records,
-                graph_edges,
-                enrichment_summary,
-            ) = ingestion_service._apply_semantic_enrichment(
-                xml_bytes=xml_bytes,
-                xml_metrics=xml_metrics,
-                semantic_units=semantic_units,
-                pdf_evidence_packets=pdf_evidence_packets,
-                candidate_objects=candidate_objects,
-            )
-
-        canonical_snippet_records = self._load_canonical_snippet_records(session, run_id)
-        canonical_snippets = ingestion_service._build_canonical_snippets(
-            can_progress=bool(canonical_snippet_records),
-            candidates=candidate_objects,
+        (
+            candidate_objects,
+            candidate_relations,
+            reconciliation_records,
+            graph_edges,
+            enrichment_summary,
+            candidate_validation_results,
+            candidate_validation_summary,
+            canonical_snippets,
+        ) = ingestion_service._run_candidate_runtime(
+            xml_bytes=xml_bytes,
+            xml_metrics=xml_metrics,
+            semantic_units=semantic_units,
+            pdf_evidence_packets=pdf_evidence_packets,
+            candidate_objects=candidate_objects,
+            can_progress_to_semantic_layer=ingestion_service._can_progress_to_candidate_promotion(pdf_validation),
+            review_decisions=review_decisions,
         )
-        graph_edges = [
-            edge
-            for edge in graph_edges
-            if edge.get("edge_type") != "candidate_to_canonical_snippet"
-        ]
-        graph_edges = ingestion_service._append_snippet_promotion_edges(
-            graph_edges=graph_edges,
-            candidates=candidate_objects,
-            canonical_snippets=canonical_snippets,
-        )
-        enrichment_summary = {**enrichment_summary, "graph_edge_count": len(graph_edges)}
         review_workspace = ingestion_service._build_review_workspace(
             pdf_name=pdf_document.file_name,
             xml_name=xml_document.file_name,
@@ -264,12 +244,13 @@ class RetentionService:
             xml_metrics=xml_metrics,
             candidate_relations=candidate_relations,
             reconciliation_records=reconciliation_records,
+            candidate_validation_results=candidate_validation_results,
+            candidate_validation_summary=candidate_validation_summary,
             graph_edges=graph_edges,
             enrichment_summary=enrichment_summary,
+            review_decisions=review_decisions,
         )
 
-        stored_quality = candidate_runtime.get("candidate_quality") if isinstance(candidate_runtime, dict) else {}
-        stored_graph = candidate_runtime.get("graph_readiness") if isinstance(candidate_runtime, dict) else {}
         stored_baseline = candidate_runtime.get("foundational_baseline_corpus") if isinstance(candidate_runtime, dict) else {}
         foundational_baseline_corpus = (
             stored_baseline
@@ -279,27 +260,21 @@ class RetentionService:
                 candidate_objects=candidate_objects,
             )
         )
-        candidate_quality = (
-            stored_quality
-            if isinstance(stored_quality, dict) and stored_quality.get("schema_version")
-            else ingestion_service._build_candidate_quality_metrics(
-                semantic_units=semantic_units,
-                pdf_evidence_packets=pdf_evidence_packets,
-                candidate_objects=candidate_objects,
-                review_units=review_workspace["review_units"],
-                canonical_snippets=canonical_snippets,
-                foundational_baseline_corpus=foundational_baseline_corpus,
-            )
+        candidate_quality = ingestion_service._build_candidate_quality_metrics(
+            semantic_units=semantic_units,
+            pdf_evidence_packets=pdf_evidence_packets,
+            candidate_objects=candidate_objects,
+            review_units=review_workspace["review_units"],
+            canonical_snippets=canonical_snippets,
+            foundational_baseline_corpus=foundational_baseline_corpus,
+            candidate_validation_results=candidate_validation_results,
         )
-        graph_readiness = (
-            stored_graph
-            if isinstance(stored_graph, dict) and stored_graph.get("gates")
-            else ingestion_service._build_graph_readiness_summary(
-                enrichment_summary=enrichment_summary,
-                xml_validation=xml_validation,
-                pdf_validation=pdf_validation,
-                candidate_quality=candidate_quality,
-            )
+        graph_readiness = ingestion_service._build_graph_readiness_summary(
+            enrichment_summary=enrichment_summary,
+            xml_validation=xml_validation,
+            pdf_validation=pdf_validation,
+            candidate_quality=candidate_quality,
+            candidate_validation_summary=candidate_validation_summary,
         )
         review_workspace = {
             **review_workspace,
@@ -355,6 +330,8 @@ class RetentionService:
                 "candidate_objects": candidate_objects,
                 "candidate_relations": candidate_relations,
                 "reconciliation_records": reconciliation_records,
+                "candidate_validation_results": candidate_validation_results,
+                "candidate_validation_summary": candidate_validation_summary,
                 "graph_edges": graph_edges,
                 "enrichment_summary": enrichment_summary,
                 "canonical_snippets": canonical_snippets,
@@ -749,6 +726,10 @@ class RetentionService:
                         "graph_edges": len(candidate_runtime.get("graph_edges", [])),
                         "candidate_relations": len(candidate_runtime.get("candidate_relations", [])),
                         "reconciliation_records": len(candidate_runtime.get("reconciliation_records", [])),
+                        "candidate_validation_results": len(candidate_runtime.get("candidate_validation_results", [])),
+                        "promotion_eligible_candidates": int(
+                            (candidate_runtime.get("candidate_validation_summary") or {}).get("promotion_eligible_count") or 0
+                        ),
                         "review_units_echo": int(
                             (candidate_runtime.get("candidate_quality") or {}).get("review_unit_count") or 0
                         ),

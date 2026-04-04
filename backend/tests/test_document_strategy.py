@@ -1132,6 +1132,10 @@ class CandidateRobustnessPayloadTests(unittest.TestCase):
             review_units=[{}],
             canonical_snippets=[{"x": 1}],
             foundational_baseline_corpus=baseline,
+            candidate_validation_results=[
+                {"candidate_id": "candidate:1", "validation_state": "pass", "promotion_eligible": True},
+                {"candidate_id": "candidate:2", "validation_state": "requires_review", "promotion_eligible": False},
+            ],
         )
         self.assertEqual(cq["semantic_unit_count"], 3)
         self.assertEqual(cq["pdf_evidence_packet_count"], 1)
@@ -1142,15 +1146,22 @@ class CandidateRobustnessPayloadTests(unittest.TestCase):
         self.assertEqual(cq["foundational_baseline_included_count"], 2)
 
         gr = self.service._build_graph_readiness_summary(
-            enrichment_summary={"unresolved_blocking_count": 0},
+            enrichment_summary={
+                "unresolved_blocking_count": 0,
+                "text_unresolved_relation_count": 0,
+                "reconciliation_review_required_count": 0,
+            },
             xml_validation={"overall_status": "PASS"},
             pdf_validation={"overall_status": "PASS"},
             candidate_quality=cq,
+            candidate_validation_summary={"requires_review_count": 0, "fail_count": 0},
         )
         self.assertTrue(gr["ready_for_graph_handoff"])
-        self.assertEqual(len(gr["gates"]), 6)
+        self.assertEqual(len(gr["gates"]), 10)
         gate_ids = {g["gate_id"] for g in gr["gates"]}
         self.assertIn("explicit_relations_non_blocking", gate_ids)
+        self.assertIn("candidate_validation_non_blocking", gate_ids)
+        self.assertIn("snippet_promotion_consistent", gate_ids)
 
     def test_graph_readiness_fails_when_blocking_relations_remain(self) -> None:
         cq = self.service._build_candidate_quality_metrics(
@@ -1160,16 +1171,54 @@ class CandidateRobustnessPayloadTests(unittest.TestCase):
             review_units=[{}],
             canonical_snippets=[],
             foundational_baseline_corpus={"summary": {"eligible_semantic_unit_count": 0, "included_item_count": 0, "coverage_ratio": 0.0}},
+            candidate_validation_results=[{"candidate_id": "candidate:1", "validation_state": "pass", "promotion_eligible": True}],
         )
         gr = self.service._build_graph_readiness_summary(
-            enrichment_summary={"unresolved_blocking_count": 2},
+            enrichment_summary={
+                "unresolved_blocking_count": 2,
+                "text_unresolved_relation_count": 0,
+                "reconciliation_review_required_count": 0,
+            },
             xml_validation={"overall_status": "PASS"},
             pdf_validation={"overall_status": "PASS"},
             candidate_quality=cq,
+            candidate_validation_summary={"requires_review_count": 0, "fail_count": 0},
         )
         self.assertFalse(gr["ready_for_graph_handoff"])
         blocking_gate = next(g for g in gr["gates"] if g["gate_id"] == "explicit_relations_non_blocking")
         self.assertFalse(blocking_gate["passed"])
+
+    def test_candidate_validation_stage_respects_human_review_override(self) -> None:
+        candidate = {
+            "candidate_id": "candidate:unit:C3D15",
+            "xml_node_id": "C3D15",
+            "source": {"pdf_fragment_id": None},
+            "validation_state": "requires_review",
+            "status": "draft",
+            "review": {"needs_human_review": True, "issues": []},
+            "explicit_relations": [],
+            "candidate_relations": [],
+            "reconciliation_records": [],
+        }
+        candidates, relations, reconciliations, validation_results, summary = self.service._apply_candidate_validation_stage(
+            candidate_objects=[candidate],
+            candidate_relations=[],
+            reconciliation_records=[],
+            review_decisions=[
+                {
+                    "candidate_id": "candidate:unit:C3D15",
+                    "decision_status": "approved",
+                    "note": "Operator approved candidate.",
+                    "updated_at": "2026-04-04T00:00:00Z",
+                }
+            ],
+        )
+        self.assertEqual(relations, [])
+        self.assertEqual(reconciliations, [])
+        self.assertEqual(candidates[0]["validation_state"], "pass")
+        self.assertEqual(candidates[0]["review"]["human_decision_status"], "approved")
+        self.assertFalse(validation_results[0]["promotion_eligible"])
+        self.assertEqual(summary["review_override_count"], 1)
 
 
 class DoclingExtractorTests(unittest.TestCase):

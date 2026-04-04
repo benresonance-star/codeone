@@ -16,6 +16,11 @@ from app.models.document_strategy import (
     ReviewPolicy,
     StructuredBlock,
 )
+from app.models.validation import (
+    CandidateValidationIssueRecord,
+    CandidateValidationRecord,
+    CandidateValidationSummaryRecord,
+)
 from app.services.document_strategy import DocumentStrategyRouter
 from app.services.extractors import DoclingExtractor, PdfPlumberExtractor
 from app.services.xml_schema_registry import XmlSchemaRegistryService
@@ -204,26 +209,18 @@ class IngestionService:
             reconciliation_records,
             graph_edges,
             enrichment_summary,
-        ) = self._apply_semantic_enrichment(
+            candidate_validation_results,
+            candidate_validation_summary,
+            canonical_snippets,
+        ) = self._run_candidate_runtime(
             xml_bytes=xml_bytes,
             xml_metrics=xml_context["metrics"],
             semantic_units=semantic_units,
             pdf_evidence_packets=pdf_evidence_packets,
             candidate_objects=candidate_objects,
+            can_progress_to_semantic_layer=self._can_progress_to_candidate_promotion(pdf_context["result"]),
+            review_decisions=None,
         )
-        canonical_snippets = self._build_canonical_snippets(
-            can_progress=bool(pdf_context["result"]["gate_decision"]["can_progress_to_semantic_layer"]),
-            candidates=candidate_objects,
-        )
-        graph_edges = self._append_snippet_promotion_edges(
-            graph_edges=graph_edges,
-            candidates=candidate_objects,
-            canonical_snippets=canonical_snippets,
-        )
-        enrichment_summary = {
-            **enrichment_summary,
-            "graph_edge_count": len(graph_edges),
-        }
         review_workspace = self._build_review_workspace(
             pdf_name=pdf_name,
             xml_name=xml_name,
@@ -242,6 +239,9 @@ class IngestionService:
             reconciliation_records=reconciliation_records,
             graph_edges=graph_edges,
             enrichment_summary=enrichment_summary,
+            candidate_validation_results=candidate_validation_results,
+            candidate_validation_summary=candidate_validation_summary,
+            review_decisions=[],
         )
 
         foundational_baseline_corpus = self._build_foundational_baseline_corpus_slice(
@@ -255,12 +255,14 @@ class IngestionService:
             review_units=review_workspace["review_units"],
             canonical_snippets=canonical_snippets,
             foundational_baseline_corpus=foundational_baseline_corpus,
+            candidate_validation_results=candidate_validation_results,
         )
         graph_readiness = self._build_graph_readiness_summary(
             enrichment_summary=enrichment_summary,
             xml_validation=xml_context["result"],
             pdf_validation=pdf_context["result"],
             candidate_quality=candidate_quality,
+            candidate_validation_summary=candidate_validation_summary,
         )
         review_workspace = {
             **review_workspace,
@@ -305,6 +307,8 @@ class IngestionService:
                 "candidate_objects": candidate_objects,
                 "candidate_relations": candidate_relations,
                 "reconciliation_records": reconciliation_records,
+                "candidate_validation_results": candidate_validation_results,
+                "candidate_validation_summary": candidate_validation_summary,
                 "graph_edges": graph_edges,
                 "enrichment_summary": enrichment_summary,
                 "canonical_snippets": canonical_snippets,
@@ -2179,8 +2183,10 @@ class IngestionService:
         review_units: list[dict[str, Any]],
         canonical_snippets: list[dict[str, Any]],
         foundational_baseline_corpus: dict[str, Any],
+        candidate_validation_results: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         baseline_summary = foundational_baseline_corpus.get("summary") if isinstance(foundational_baseline_corpus, dict) else {}
+        validation_results = list(candidate_validation_results or [])
         return {
             "schema_version": "1",
             "generated_at": utc_now_iso(),
@@ -2189,6 +2195,13 @@ class IngestionService:
             "candidate_object_count": len(candidate_objects),
             "review_unit_count": len(review_units),
             "promoted_snippet_count": len(canonical_snippets),
+            "candidate_validation_result_count": len(validation_results),
+            "candidate_validation_pass_count": sum(1 for item in validation_results if item.get("validation_state") == "pass"),
+            "candidate_validation_requires_review_count": sum(
+                1 for item in validation_results if item.get("validation_state") == "requires_review"
+            ),
+            "candidate_validation_fail_count": sum(1 for item in validation_results if item.get("validation_state") == "fail"),
+            "promotion_eligible_candidate_count": sum(1 for item in validation_results if item.get("promotion_eligible")),
             "foundational_baseline_eligible_count": int(baseline_summary.get("eligible_semantic_unit_count") or 0),
             "foundational_baseline_included_count": int(baseline_summary.get("included_item_count") or 0),
             "foundational_baseline_coverage_ratio": float(baseline_summary.get("coverage_ratio") or 0.0),
@@ -2207,18 +2220,37 @@ class IngestionService:
         xml_validation: dict[str, Any],
         pdf_validation: dict[str, Any],
         candidate_quality: dict[str, Any],
+        candidate_validation_summary: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         unresolved_blocking = int(enrichment_summary.get("unresolved_blocking_count") or 0)
+        unresolved_text_relations = int(enrichment_summary.get("text_unresolved_relation_count") or 0)
+        reconciliation_review_required = int(enrichment_summary.get("reconciliation_review_required_count") or 0)
         su_count = int(candidate_quality.get("semantic_unit_count") or 0)
         cand_count = int(candidate_quality.get("candidate_object_count") or 0)
+        promoted_count = int(candidate_quality.get("promoted_snippet_count") or 0)
+        promotable_count = int(candidate_quality.get("promotion_eligible_candidate_count") or 0)
         baseline_eligible = int(candidate_quality.get("foundational_baseline_eligible_count") or 0)
         baseline_included = int(candidate_quality.get("foundational_baseline_included_count") or 0)
+        validation_summary = candidate_validation_summary or {}
+        validation_blocking = int(validation_summary.get("requires_review_count") or 0) + int(
+            validation_summary.get("fail_count") or 0
+        )
 
         gates: list[dict[str, Any]] = [
             {
                 "gate_id": "explicit_relations_non_blocking",
                 "passed": unresolved_blocking == 0,
                 "detail": f"unresolved_blocking_count={unresolved_blocking}",
+            },
+            {
+                "gate_id": "query_relations_resolved_or_reviewed",
+                "passed": unresolved_text_relations == 0,
+                "detail": f"text_unresolved_relation_count={unresolved_text_relations}",
+            },
+            {
+                "gate_id": "reconciliation_pressure_clear",
+                "passed": reconciliation_review_required == 0,
+                "detail": f"reconciliation_review_required_count={reconciliation_review_required}",
             },
             {
                 "gate_id": "semantic_inventory_present",
@@ -2229,6 +2261,11 @@ class IngestionService:
                 "gate_id": "candidate_layer_present",
                 "passed": cand_count > 0,
                 "detail": f"candidate_object_count={cand_count}",
+            },
+            {
+                "gate_id": "candidate_validation_non_blocking",
+                "passed": validation_blocking == 0,
+                "detail": f"candidate_validation_blocking_count={validation_blocking}",
             },
             {
                 "gate_id": "xml_validation_allows_inspection",
@@ -2245,6 +2282,11 @@ class IngestionService:
                 "passed": baseline_eligible == 0 or baseline_included > 0,
                 "detail": f"eligible={baseline_eligible} included={baseline_included}",
             },
+            {
+                "gate_id": "snippet_promotion_consistent",
+                "passed": promoted_count <= promotable_count,
+                "detail": f"promoted={promoted_count} promotable={promotable_count}",
+            },
         ]
         passed_all = all(bool(g.get("passed")) for g in gates)
         return {
@@ -2254,8 +2296,13 @@ class IngestionService:
             "gates": gates,
             "metrics_echo": {
                 "unresolved_blocking_count": unresolved_blocking,
+                "text_unresolved_relation_count": unresolved_text_relations,
+                "reconciliation_review_required_count": reconciliation_review_required,
                 "semantic_unit_count": su_count,
                 "candidate_object_count": cand_count,
+                "candidate_validation_blocking_count": validation_blocking,
+                "promoted_snippet_count": promoted_count,
+                "promotable_candidate_count": promotable_count,
                 "foundational_baseline_eligible_count": baseline_eligible,
                 "foundational_baseline_included_count": baseline_included,
             },
@@ -2290,8 +2337,11 @@ class IngestionService:
         xml_metrics: dict[str, Any] | None = None,
         candidate_relations: list[dict[str, Any]] | None = None,
         reconciliation_records: list[dict[str, Any]] | None = None,
+        candidate_validation_results: list[dict[str, Any]] | None = None,
+        candidate_validation_summary: dict[str, Any] | None = None,
         graph_edges: list[dict[str, Any]] | None = None,
         enrichment_summary: dict[str, Any] | None = None,
+        review_decisions: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         workspace_mode = "full"
         workspace_reason = "default_full_lineage_review"
@@ -2327,6 +2377,8 @@ class IngestionService:
             )
             rels: list[dict[str, Any]] = list(candidate_relations or [])
             reconciliations: list[dict[str, Any]] = list(reconciliation_records or [])
+            validation_results: list[dict[str, Any]] = list(candidate_validation_results or [])
+            validation_summary: dict[str, Any] = dict(candidate_validation_summary or {})
             edges: list[dict[str, Any]] = list(graph_edges or [])
             summary: dict[str, Any] = dict(enrichment_summary or {})
             if xml_bytes is not None and xml_metrics is not None:
@@ -2347,6 +2399,8 @@ class IngestionService:
             candidate_objects = candidates
             rels = list(candidate_relations or [])
             reconciliations = list(reconciliation_records or [])
+            validation_results = list(candidate_validation_results or [])
+            validation_summary = dict(candidate_validation_summary or {})
             edges = list(graph_edges or [])
             summary = dict(enrichment_summary or {})
         if workspace_mode == "focused":
@@ -2396,6 +2450,9 @@ class IngestionService:
             "candidate_needs_review": candidate_needs_review,
             "candidate_relations": rels,
             "reconciliation_records": reconciliations,
+            "candidate_validation_results": validation_results,
+            "candidate_validation_summary": validation_summary,
+            "review_decisions": list(review_decisions or []),
             "graph_edges": edges,
             "enrichment_summary": summary,
             "enrichment_counts": {
@@ -2469,7 +2526,12 @@ class IngestionService:
             evidence = candidate.get("evidence") or []
             primary_evidence = evidence[0] if evidence else {}
             approved = candidate.get("candidate_id") in approved_candidate_ids
-            base_status = "approved" if approved else str(candidate.get("review", {}).get("base_status") or "review required")
+            review_decision_status = str(candidate.get("review", {}).get("human_decision_status") or "")
+            base_status = (
+                "approved"
+                if approved
+                else review_decision_status or str(candidate.get("review", {}).get("base_status") or "review required")
+            )
             review_units.append(
                 {
                     "candidate_id": candidate.get("candidate_id"),
@@ -2499,6 +2561,8 @@ class IngestionService:
                     "ignored_structural_terms": candidate.get("review", {}).get("ignored_structural_terms", []),
                     "validation_state": candidate.get("validation_state"),
                     "classification": candidate.get("classification"),
+                    "promotion_eligible": bool(candidate.get("promotion_eligible", False)),
+                    "review_decision_status": review_decision_status or None,
                     "explicit_relations_count": len(candidate.get("explicit_relations") or []),
                     "glossary_links_count": len(candidate.get("glossary_links") or []),
                     "enrichment_summary": candidate.get("review", {}).get("enrichment_summary"),
@@ -2790,6 +2854,253 @@ class IngestionService:
                 }
             )
         return candidates
+
+    def _can_progress_to_candidate_promotion(self, pdf_validation: dict[str, Any]) -> bool:
+        gate_decision = pdf_validation.get("gate_decision") if isinstance(pdf_validation, dict) else {}
+        return bool((gate_decision or {}).get("can_progress_to_semantic_layer"))
+
+    def _run_candidate_runtime(
+        self,
+        *,
+        xml_bytes: bytes | None,
+        xml_metrics: dict[str, Any],
+        semantic_units: list[dict[str, Any]],
+        pdf_evidence_packets: list[dict[str, Any]],
+        candidate_objects: list[dict[str, Any]],
+        can_progress_to_semantic_layer: bool,
+        review_decisions: list[dict[str, Any]] | None,
+    ) -> tuple[
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+        dict[str, Any],
+        list[dict[str, Any]],
+        dict[str, Any],
+        list[dict[str, Any]],
+    ]:
+        (
+            candidate_objects,
+            candidate_relations,
+            reconciliation_records,
+            graph_edges,
+            enrichment_summary,
+        ) = self._apply_semantic_enrichment(
+            xml_bytes=xml_bytes,
+            xml_metrics=xml_metrics,
+            semantic_units=semantic_units,
+            pdf_evidence_packets=pdf_evidence_packets,
+            candidate_objects=candidate_objects,
+        )
+        (
+            candidate_objects,
+            candidate_relations,
+            reconciliation_records,
+            candidate_validation_results,
+            candidate_validation_summary,
+        ) = self._apply_candidate_validation_stage(
+            candidate_objects=candidate_objects,
+            candidate_relations=candidate_relations,
+            reconciliation_records=reconciliation_records,
+            review_decisions=review_decisions,
+        )
+        canonical_snippets = self._build_canonical_snippets(
+            can_progress=can_progress_to_semantic_layer,
+            candidates=candidate_objects,
+            candidate_validation_results=candidate_validation_results,
+        )
+        graph_edges = self._append_snippet_promotion_edges(
+            graph_edges=graph_edges,
+            candidates=candidate_objects,
+            canonical_snippets=canonical_snippets,
+        )
+        enrichment_summary = {
+            **enrichment_summary,
+            "graph_edge_count": len(graph_edges),
+            "candidate_validation_blocking_count": int(candidate_validation_summary.get("requires_review_count") or 0)
+            + int(candidate_validation_summary.get("fail_count") or 0),
+            "promotion_eligible_count": int(candidate_validation_summary.get("promotion_eligible_count") or 0),
+        }
+        return (
+            candidate_objects,
+            candidate_relations,
+            reconciliation_records,
+            graph_edges,
+            enrichment_summary,
+            candidate_validation_results,
+            candidate_validation_summary,
+            canonical_snippets,
+        )
+
+    def _apply_candidate_validation_stage(
+        self,
+        *,
+        candidate_objects: list[dict[str, Any]],
+        candidate_relations: list[dict[str, Any]],
+        reconciliation_records: list[dict[str, Any]],
+        review_decisions: list[dict[str, Any]] | None = None,
+    ) -> tuple[
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+        dict[str, Any],
+    ]:
+        review_decision_by_candidate = {
+            str(item.get("candidate_id") or ""): item
+            for item in (review_decisions or [])
+            if item.get("candidate_id")
+        }
+        relations_by_candidate: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for relation in candidate_relations:
+            source_candidate_id = str(relation.get("source_candidate_id") or "")
+            if source_candidate_id:
+                relations_by_candidate[source_candidate_id].append(relation)
+        reconciliations_by_candidate: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for record in reconciliation_records:
+            for candidate_id in (record.get("source_candidate_ids") or []):
+                cid = str(candidate_id or "")
+                if cid:
+                    reconciliations_by_candidate[cid].append(record)
+
+        validation_results: list[dict[str, Any]] = []
+        for candidate in candidate_objects:
+            candidate_id = str(candidate.get("candidate_id") or "")
+            source = candidate.get("source") or {}
+            review = dict(candidate.get("review") or {})
+            issues: list[CandidateValidationIssueRecord] = []
+
+            if not candidate.get("xml_node_id"):
+                issues.append(
+                    CandidateValidationIssueRecord(
+                        code="missing_xml_node",
+                        severity="high",
+                        message="Candidate is missing an XML node reference.",
+                        blocking=True,
+                    )
+                )
+            if not source.get("pdf_fragment_id"):
+                issues.append(
+                    CandidateValidationIssueRecord(
+                        code="missing_pdf_fragment",
+                        severity="medium",
+                        message="Candidate has no linked PDF evidence fragment for promotion.",
+                        blocking=False,
+                    )
+                )
+            if candidate.get("validation_state") != "pass":
+                issues.append(
+                    CandidateValidationIssueRecord(
+                        code="candidate_requires_review",
+                        severity="medium",
+                        message="Candidate remains in a review-required state before promotion.",
+                        blocking=True,
+                    )
+                )
+            if any(rel.get("blocking") for rel in relations_by_candidate.get(candidate_id, [])):
+                issues.append(
+                    CandidateValidationIssueRecord(
+                        code="blocking_relation",
+                        severity="high",
+                        message="Candidate has one or more blocking explicit relations.",
+                        blocking=True,
+                    )
+                )
+            if any(record.get("review_required") for record in reconciliations_by_candidate.get(candidate_id, [])):
+                issues.append(
+                    CandidateValidationIssueRecord(
+                        code="reconciliation_review_required",
+                        severity="medium",
+                        message="Candidate reconciliation still requires review.",
+                        blocking=False,
+                    )
+                )
+
+            decision = review_decision_by_candidate.get(candidate_id)
+            review_override_applied = False
+            review_decision_status = str((decision or {}).get("decision_status") or "") or None
+
+            blocking_issue_count = sum(1 for issue in issues if issue.blocking)
+            advisory_issue_count = len(issues) - blocking_issue_count
+            final_validation_state = "pass" if blocking_issue_count == 0 else "requires_review"
+            lifecycle_status = "validated" if final_validation_state == "pass" else "draft"
+
+            if review_decision_status == "approved":
+                final_validation_state = "pass"
+                lifecycle_status = "validated"
+                review_override_applied = blocking_issue_count > 0
+            elif review_decision_status == "rejected":
+                final_validation_state = "fail"
+                lifecycle_status = "rejected"
+                issues.append(
+                    CandidateValidationIssueRecord(
+                        code="review_rejected",
+                        severity="high",
+                        message="Candidate was rejected by human review.",
+                        blocking=True,
+                    )
+                )
+                blocking_issue_count = sum(1 for issue in issues if issue.blocking)
+                advisory_issue_count = len(issues) - blocking_issue_count
+
+            promotion_eligible = bool(
+                final_validation_state == "pass" and source.get("pdf_fragment_id") and candidate.get("xml_node_id")
+            )
+
+            review["needs_human_review"] = final_validation_state == "requires_review"
+            if review_decision_status:
+                review["human_decision_status"] = review_decision_status
+                review["human_decision_note"] = (decision or {}).get("note")
+                review["human_decision_updated_at"] = (decision or {}).get("updated_at")
+            candidate["review"] = review
+            candidate["validation_state"] = final_validation_state
+            candidate["status"] = lifecycle_status
+            candidate["promotion_eligible"] = promotion_eligible
+            candidate["candidate_validation"] = {
+                "schema_version": "1",
+                "validation_state": final_validation_state,
+                "lifecycle_status": lifecycle_status,
+                "promotion_eligible": promotion_eligible,
+                "review_override_applied": review_override_applied,
+                "review_decision_status": review_decision_status,
+                "issues": [issue.model_dump() for issue in issues],
+            }
+
+            for relation in relations_by_candidate.get(candidate_id, []):
+                if review_decision_status:
+                    relation["review_decision_status"] = review_decision_status
+                    relation["review_decision_note"] = (decision or {}).get("note")
+            for record in reconciliations_by_candidate.get(candidate_id, []):
+                if review_decision_status:
+                    record["review_decision_status"] = review_decision_status
+                    record["review_decision_note"] = (decision or {}).get("note")
+
+            validation_results.append(
+                CandidateValidationRecord(
+                    candidate_id=candidate_id,
+                    validation_state=final_validation_state,
+                    lifecycle_status=lifecycle_status,
+                    promotion_eligible=promotion_eligible,
+                    review_override_applied=review_override_applied,
+                    review_decision_status=review_decision_status,
+                    issue_count=len(issues),
+                    blocking_issue_count=blocking_issue_count,
+                    advisory_issue_count=advisory_issue_count,
+                    issues=issues,
+                ).model_dump()
+            )
+
+        summary = CandidateValidationSummaryRecord(
+            candidate_count=len(validation_results),
+            pass_count=sum(1 for item in validation_results if item.get("validation_state") == "pass"),
+            requires_review_count=sum(
+                1 for item in validation_results if item.get("validation_state") == "requires_review"
+            ),
+            fail_count=sum(1 for item in validation_results if item.get("validation_state") == "fail"),
+            promotion_eligible_count=sum(1 for item in validation_results if item.get("promotion_eligible")),
+            review_override_count=sum(1 for item in validation_results if item.get("review_override_applied")),
+        ).model_dump()
+        return candidate_objects, candidate_relations, reconciliation_records, validation_results, summary
 
     def _xml_parent_map(self, root: ET.Element) -> dict[ET.Element, ET.Element]:
         parent: dict[ET.Element, ET.Element] = {}
@@ -3349,43 +3660,17 @@ class IngestionService:
             bound.setdefault("target_semantic_unit_id", None)
         return bound
 
-    def _apply_semantic_enrichment(
+    def _extract_candidate_relation_runtime(
         self,
         *,
-        xml_bytes: bytes | None,
-        xml_metrics: dict[str, Any],
-        semantic_units: list[dict[str, Any]],
-        pdf_evidence_packets: list[dict[str, Any]],
+        explicit_relations: list[dict[str, Any]],
+        glossary_index: dict[str, str],
+        clause_reference_index: dict[str, list[dict[str, Any]]],
+        node_to_candidate: dict[str, dict[str, Any]],
         candidate_objects: list[dict[str, Any]],
-    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
-        _ = xml_metrics
-        _ = pdf_evidence_packets
-        explicit_relations: list[dict[str, Any]] = []
-        id_set: set[str] = set()
-        if xml_bytes:
-            try:
-                root = ET.fromstring(xml_bytes)
-                explicit_relations, id_set = self._collect_explicit_xml_relations(root)
-            except ET.ParseError:
-                explicit_relations, id_set = [], set()
-
-        glossary_index = self._build_glossary_index(semantic_units)
-        node_to_candidate: dict[str, dict[str, Any]] = {}
-        for c in candidate_objects:
-            nid = str(c.get("xml_node_id") or "")
-            if nid:
-                node_to_candidate[nid] = c
-        clause_reference_index = self._build_clause_reference_index(
-            semantic_units=semantic_units,
-            node_to_candidate=node_to_candidate,
-        )
-
-        gated = 0
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         all_candidate_relations: list[dict[str, Any]] = []
-        all_reconciliation_records: list[dict[str, Any]] = []
         for candidate in candidate_objects:
-            original_validation_state = candidate.get("validation_state")
-            original_status = candidate.get("status")
             nid = str(candidate.get("xml_node_id") or "")
             evidence = list(candidate.get("evidence") or [])
             primary = evidence[0] if evidence else {}
@@ -3436,11 +3721,48 @@ class IngestionService:
 
             depends_on: list[str] = []
             for rel in local_rels:
-                if rel.get("relation_kind") in {"xref_attribute", "structural_parent", "clause_reference"} and rel.get("resolved"):
+                if rel.get("relation_kind") in {"xref_attribute", "structural_parent", "clause_reference"} and rel.get(
+                    "resolved"
+                ):
                     tgt = str(rel.get("target_node_id") or "")
                     if tgt and tgt in node_to_candidate:
                         depends_on.append(str(node_to_candidate[tgt].get("candidate_id")))
             candidate["depends_on"] = sorted(set(depends_on))
+
+            candidate["semantic_enrichment"] = {
+                "schema_version": "1",
+                "field_authority": self._semantic_enrichment_field_authority(),
+                "per_field_counts": {
+                    "explicit_relations": len(local_explicit_rels),
+                    "candidate_relations": len(local_rels),
+                    "reconciliation_records": 0,
+                    "glossary_links": len(g_links),
+                    "applicability_conditions": len(candidate.get("applicability_conditions") or []),
+                    "implicit_relation_candidates": len(candidate.get("implicit_relation_candidates") or []),
+                },
+            }
+        return candidate_objects, all_candidate_relations
+
+    def _reconcile_candidate_relation_runtime(
+        self,
+        *,
+        candidate_objects: list[dict[str, Any]],
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], int]:
+        gated = 0
+        all_reconciliation_records: list[dict[str, Any]] = []
+        for candidate in candidate_objects:
+            evidence = list(candidate.get("evidence") or [])
+            primary = evidence[0] if evidence else {}
+            alignment_like = {
+                "matched": bool(primary),
+                "node_id": str(candidate.get("xml_node_id") or "") if primary else None,
+                "confidence": float(primary.get("confidence", 0.0)),
+            }
+            sem_cls = str(candidate.get("candidate_semantic_class") or "")
+            original_validation_state = candidate.get("validation_state")
+            original_status = candidate.get("status")
+            local_explicit_rels = list(candidate.get("explicit_relations") or [])
+            local_rels = list(candidate.get("candidate_relations") or [])
 
             reconciliation_records = self._reconciliation_records_for_candidate(
                 candidate=candidate,
@@ -3451,7 +3773,8 @@ class IngestionService:
 
             blocking = [rel for rel in local_explicit_rels if rel.get("blocking")]
             review_only_relations = [
-                rel for rel in local_rels
+                rel
+                for rel in local_rels
                 if rel.get("resolution_status") in {"unresolved", "ambiguous", "review_required"} and not rel.get("blocking")
             ]
             review = dict(candidate.get("review") or {})
@@ -3493,19 +3816,53 @@ class IngestionService:
 
             review["issues"] = issues
             candidate["review"] = review
+            semantic_enrichment = dict(candidate.get("semantic_enrichment") or {})
+            per_field_counts = dict(semantic_enrichment.get("per_field_counts") or {})
+            per_field_counts["reconciliation_records"] = len(reconciliation_records)
+            semantic_enrichment["per_field_counts"] = per_field_counts
+            candidate["semantic_enrichment"] = semantic_enrichment
+        return candidate_objects, all_reconciliation_records, gated
 
-            candidate["semantic_enrichment"] = {
-                "schema_version": "1",
-                "field_authority": self._semantic_enrichment_field_authority(),
-                "per_field_counts": {
-                    "explicit_relations": len(local_explicit_rels),
-                    "candidate_relations": len(local_rels),
-                    "reconciliation_records": len(reconciliation_records),
-                    "glossary_links": len(g_links),
-                    "applicability_conditions": len(candidate.get("applicability_conditions") or []),
-                    "implicit_relation_candidates": len(candidate.get("implicit_relation_candidates") or []),
-                },
-            }
+    def _apply_semantic_enrichment(
+        self,
+        *,
+        xml_bytes: bytes | None,
+        xml_metrics: dict[str, Any],
+        semantic_units: list[dict[str, Any]],
+        pdf_evidence_packets: list[dict[str, Any]],
+        candidate_objects: list[dict[str, Any]],
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+        _ = xml_metrics
+        _ = pdf_evidence_packets
+        explicit_relations: list[dict[str, Any]] = []
+        id_set: set[str] = set()
+        if xml_bytes:
+            try:
+                root = ET.fromstring(xml_bytes)
+                explicit_relations, id_set = self._collect_explicit_xml_relations(root)
+            except ET.ParseError:
+                explicit_relations, id_set = [], set()
+
+        glossary_index = self._build_glossary_index(semantic_units)
+        node_to_candidate: dict[str, dict[str, Any]] = {}
+        for c in candidate_objects:
+            nid = str(c.get("xml_node_id") or "")
+            if nid:
+                node_to_candidate[nid] = c
+        clause_reference_index = self._build_clause_reference_index(
+            semantic_units=semantic_units,
+            node_to_candidate=node_to_candidate,
+        )
+        candidate_objects, all_candidate_relations = self._extract_candidate_relation_runtime(
+            explicit_relations=explicit_relations,
+            glossary_index=glossary_index,
+            clause_reference_index=clause_reference_index,
+            node_to_candidate=node_to_candidate,
+            candidate_objects=candidate_objects,
+        )
+        candidate_objects, all_reconciliation_records, gated = self._reconcile_candidate_relation_runtime(
+            candidate_objects=candidate_objects,
+        )
 
         enrichment_summary = {
             "generated_at": utc_now_iso(),
@@ -3794,13 +4151,23 @@ class IngestionService:
         *,
         can_progress: bool,
         candidates: list[dict[str, Any]],
+        candidate_validation_results: list[dict[str, Any]] | None = None,
     ) -> list[dict[str, Any]]:
         if not can_progress:
             return []
 
+        promotable_ids = {
+            str(item.get("candidate_id"))
+            for item in (candidate_validation_results or [])
+            if item.get("promotion_eligible")
+        }
         snippets: list[dict[str, Any]] = []
         for candidate in candidates:
-            if candidate.get("validation_state") != "pass":
+            candidate_id = str(candidate.get("candidate_id") or "")
+            if promotable_ids:
+                if candidate_id not in promotable_ids:
+                    continue
+            elif candidate.get("validation_state") != "pass":
                 continue
             source = candidate.get("source") or {}
             fragment_id = source.get("pdf_fragment_id")
