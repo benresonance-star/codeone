@@ -522,6 +522,15 @@ a {
     radial-gradient(circle at top right, rgba(215, 161, 74, 0.1), transparent 42%);
 }
 
+.docling-reader-panel {
+  display: grid;
+  gap: 16px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(12, 18, 26, 0.96), rgba(8, 13, 19, 0.9)),
+    radial-gradient(circle at top right, rgba(143, 184, 255, 0.12), transparent 42%);
+}
+
 .pdf-reader-meta {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -531,6 +540,30 @@ a {
   border: 1px solid rgba(153, 174, 197, 0.12);
   background: rgba(8, 13, 19, 0.5);
   color: var(--text-soft);
+}
+
+.docling-reader-meta,
+.docling-source-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(153, 174, 197, 0.12);
+  background: rgba(8, 13, 19, 0.5);
+  color: var(--text-soft);
+}
+
+.docling-page-chip-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.docling-page-chip.active {
+  border-color: rgba(143, 184, 255, 0.3);
+  color: var(--accent-cool);
+  background: rgba(22, 40, 66, 0.28);
 }
 
 .pdf-reader-frame-shell {
@@ -654,6 +687,174 @@ a {
   background: rgba(5, 9, 14, 0.72);
 }
 
+.docling-output-rows {
+  align-content: start;
+}
+
+.docling-status-banner {
+  margin-bottom: 12px;
+}
+
+.docling-output-tabs {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.docling-output-tab.active {
+  border-color: rgba(143, 184, 255, 0.3);
+  color: var(--accent-cool);
+  background: rgba(22, 40, 66, 0.28);
+}
+
+.docling-page-group {
+  display: grid;
+  gap: 10px;
+}
+
+.docling-page-group + .docling-page-group {
+  margin-top: 8px;
+}
+
+.docling-page-group-header,
+.docling-page-group-badges,
+.docling-block-header,
+.docling-block-badges,
+.docling-block-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.docling-page-group-header {
+  justify-content: space-between;
+}
+
+.docling-block-stack {
+  display: grid;
+  gap: 8px;
+}
+
+.docling-block-card {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(153, 174, 197, 0.12);
+  background:
+    linear-gradient(180deg, rgba(11, 16, 24, 0.94), rgba(7, 11, 17, 0.86)),
+    radial-gradient(circle at top right, rgba(143, 184, 255, 0.08), transparent 50%);
+  color: var(--text);
+  text-align: left;
+  box-shadow: none;
+  display: grid;
+  gap: 10px;
+}
+
+.docling-block-card:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.docling-block-card.is-selected {
+  border-color: rgba(143, 184, 255, 0.28);
+  box-shadow: inset 0 0 0 1px rgba(143, 184, 255, 0.12);
+}
+
+.docling-block-header {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.docling-block-text {
+  color: var(--text-soft);
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.docling-enhanced-block-text {
+  color: var(--text);
+}
+
+.docling-inline-style-span {
+  white-space: pre-wrap;
+}
+
+.docling-style-summary {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.docling-style-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(153, 174, 197, 0.14);
+  background: rgba(8, 13, 19, 0.58);
+  color: var(--text-soft);
+  font-size: 0.8rem;
+}
+
+.docling-color-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  box-shadow: inset 0 0 0 1px rgba(8, 13, 19, 0.3);
+}
+
+.docling-style-empty {
+  font-size: 0.88rem;
+}
+
+.docling-table-card {
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(153, 174, 197, 0.12);
+  background: rgba(8, 13, 19, 0.62);
+  padding: 12px 14px;
+}
+
+.docling-table-card summary {
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.docling-table-shell {
+  margin-top: 12px;
+  overflow-x: auto;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(153, 174, 197, 0.1);
+  background: rgba(4, 8, 13, 0.88);
+}
+
+.docling-table-grid {
+  width: 100%;
+  min-width: 420px;
+  border-collapse: collapse;
+}
+
+.docling-table-grid th,
+.docling-table-grid td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(153, 174, 197, 0.08);
+  text-align: left;
+  vertical-align: top;
+  color: var(--text-soft);
+}
+
+.docling-table-grid th {
+  color: #f2f6ff;
+  background: rgba(143, 184, 255, 0.08);
+}
+
 .xml-tree-row,
 .xml-parsed-row {
   display: grid;
@@ -720,6 +921,18 @@ a {
     linear-gradient(180deg, rgba(20, 15, 12, 0.96), rgba(12, 9, 7, 0.86)),
     radial-gradient(circle at top right, rgba(215, 161, 74, 0.16), transparent 54%);
   box-shadow: inset 0 0 0 1px rgba(215, 161, 74, 0.12);
+}
+
+.xml-tree-text-button.xml-parsed-segment-glossary:not(.is-selected) {
+  border-color: rgba(76, 190, 128, 0.22);
+  background:
+    linear-gradient(180deg, rgba(12, 22, 18, 0.94), rgba(8, 16, 12, 0.86)),
+    radial-gradient(circle at top right, rgba(76, 190, 128, 0.12), transparent 52%);
+  box-shadow: inset 0 0 0 1px rgba(76, 190, 128, 0.12);
+}
+
+.xml-tree-text-button.xml-parsed-segment-glossary .xml-tree-text {
+  color: #c9ffe0;
 }
 
 .xml-tree-code {
@@ -869,8 +1082,10 @@ a {
   margin-top: 8px;
   color: var(--text-soft);
   line-height: 1.65;
-  white-space: pre-wrap;
+  /* Normal wrapping so glossary/xref/delText inline runs flow like prose (pre-wrap caused stray breaks after highlights). */
+  white-space: normal;
   word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .xml-parsed-text-subclause {
@@ -1022,6 +1237,12 @@ a {
 
 .xml-parsed-inline-run {
   display: inline;
+  white-space: normal;
+}
+
+/* When two xref/glossary runs sit side by side with no text node between, add a thin gap (XML often omits the space). */
+.xml-parsed-text .xml-parsed-inline-run:has(.xml-parsed-segment-glossary) + .xml-parsed-inline-run:has(.xml-parsed-segment-glossary) {
+  margin-inline-start: 0.28em;
 }
 
 .xml-parsed-prefix {
@@ -1047,6 +1268,8 @@ a {
 
 .xml-parsed-list-content {
   min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .xml-math-inline {
@@ -1139,16 +1362,31 @@ a {
 }
 
 .xml-parsed-segment-glossary {
+  display: inline;
   color: #c9ffe0;
-  background: rgba(76, 190, 128, 0.16);
-  box-shadow: 0 0 0 1px rgba(76, 190, 128, 0.12);
-  padding: 0 3px;
+  background: linear-gradient(180deg, rgba(76, 190, 128, 0.2), rgba(76, 190, 128, 0.12));
+  box-shadow:
+    inset 0 -0.08em 0 rgba(76, 190, 128, 0.22),
+    0 0 0 1px rgba(76, 190, 128, 0.12);
+  vertical-align: baseline;
+}
+
+.xml-parsed-segment-structural {
+  display: inline;
+  color: #d9e7ff;
+  background: linear-gradient(180deg, rgba(122, 162, 255, 0.24), rgba(122, 162, 255, 0.14));
+  box-shadow:
+    inset 0 -0.08em 0 rgba(122, 162, 255, 0.24),
+    0 0 0 1px rgba(122, 162, 255, 0.14);
+  vertical-align: baseline;
 }
 
 .xml-parsed-segment-selected {
   color: #fff4d6;
-  background: rgba(215, 161, 74, 0.22);
-  box-shadow: 0 0 0 1px rgba(215, 161, 74, 0.16);
+  background: linear-gradient(180deg, rgba(215, 161, 74, 0.26), rgba(215, 161, 74, 0.16));
+  box-shadow:
+    inset 0 -0.08em 0 rgba(215, 161, 74, 0.26),
+    0 0 0 1px rgba(215, 161, 74, 0.16);
 }
 
 .schema-upload-grid {
@@ -2012,6 +2250,12 @@ pre {
   color: #ffd6d1;
   background: rgba(102, 38, 38, 0.28);
   border-color: rgba(242, 139, 130, 0.2);
+}
+
+.alert-info {
+  color: #d7e7ff;
+  background: rgba(24, 44, 74, 0.28);
+  border-color: rgba(143, 184, 255, 0.22);
 }
 
 .detail-disclosure {

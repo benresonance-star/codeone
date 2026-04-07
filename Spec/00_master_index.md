@@ -106,3 +106,4 @@ This separation is required to support high-reliability human and agentic questi
 
 ## Change Log
 - `2026-04-04`: Created the master index, established document precedence, and superseded umbrella narrative specs with a root-level normative structure.
+- `2026-04-07`: Updated the PDF ingestion contract to reflect the Docling inspection viewer, additive PyMuPDF style enrichment, and raw-vs-enhanced output tabs in the current console implementation.

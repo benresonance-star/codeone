@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildXmlViewerDocument, type XmlAttributeLike, type XmlElementLike } from "../lib/xml-viewer";
-import { extractXmlViewerTableModel } from "./xml-upload-viewer";
+import { extractXmlViewerTableModel, shouldRenderParsedInlineFlowChild } from "./xml-upload-viewer";
 
 function text(value: string) {
   return { nodeType: 3, textContent: value };
@@ -112,5 +112,54 @@ describe("xml upload viewer table extraction", () => {
     expect(model?.headingNumberNode).toBeNull();
     expect(model?.headingTitleNode).toBeNull();
     expect(model?.bodyRows.map((row) => row.map((cell) => cell.descendantText))).toEqual([["Alpha", "Beta"]]);
+  });
+});
+
+describe("parsed inline-flow child detection", () => {
+  it("keeps lightweight phrasing wrappers inline inside prose", () => {
+    const tree = element("p", {
+      children: [
+        text("protect occupant health and"),
+        element("ph", { children: [text("amenity")] }),
+        text("by ensuring the building envelope assists"),
+      ],
+    });
+
+    const document = buildXmlViewerDocument(tree);
+
+    expect(shouldRenderParsedInlineFlowChild(document.root.children[0]!)).toBe(true);
+  });
+
+  it("keeps track-change wrappers inline when they carry visible text", () => {
+    const tree = element("p", {
+      children: [
+        text("A building must"),
+        element("xt:insText", { children: [text("reduce")] }),
+        text("the energy consumption."),
+      ],
+    });
+
+    const document = buildXmlViewerDocument(tree);
+
+    expect(shouldRenderParsedInlineFlowChild(document.root.children[0]!)).toBe(true);
+  });
+
+  it("does not inline block-shaped descendants like lists", () => {
+    const tree = element("p", {
+      children: [
+        text("Conditions include"),
+        element("note", {
+          children: [
+            element("ol", {
+              children: [element("li", { children: [text("Alpha")] })],
+            }),
+          ],
+        }),
+      ],
+    });
+
+    const document = buildXmlViewerDocument(tree);
+
+    expect(shouldRenderParsedInlineFlowChild(document.root.children[0]!)).toBe(false);
   });
 });

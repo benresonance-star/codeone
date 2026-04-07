@@ -67,6 +67,8 @@ export type XmlViewerSourceRow =
       depth: number;
       parentId: string;
       text: string;
+      /** True when this text is direct content of an element with `type` glossary markup (e.g. xref). */
+      isGlossaryEntry: boolean;
     };
 
 export type XmlViewerParsedSegment = {
@@ -75,6 +77,7 @@ export type XmlViewerParsedSegment = {
   kind: "text" | "child";
   sourceNodeId: string;
   isGlossaryEntry: boolean;
+  isStructuralHighlight: boolean;
 };
 
 const TEXT_NODE = 3;
@@ -102,6 +105,22 @@ function indexedPathSegment(tagName: string, siblingIndex: number): string {
 
 function hasAttributeValue(attributes: XmlViewerAttribute[], name: string, expectedValue: string): boolean {
   return attributes.some((attribute) => attribute.name === name && attribute.value === expectedValue);
+}
+
+const GLOSSARY_TYPE_ATTRIBUTE_VALUES = new Set(["abcb-glossentry", "glossterm"]);
+const STRUCTURAL_HIGHLIGHT_TYPE_ATTRIBUTE_VALUES = new Set(["ncc-clause", "part"]);
+
+/** True when `type` is a glossary link (same highlighting as abcb-glossentry for xref-style terms). */
+export function isXmlViewerGlossaryType(node: XmlViewerNode): boolean {
+  return node.attributes.some(
+    (attribute) => attribute.name === "type" && GLOSSARY_TYPE_ATTRIBUTE_VALUES.has(attribute.value)
+  );
+}
+
+export function isXmlViewerStructuralHighlightType(node: XmlViewerNode): boolean {
+  return node.attributes.some(
+    (attribute) => attribute.name === "type" && STRUCTURAL_HIGHLIGHT_TYPE_ATTRIBUTE_VALUES.has(attribute.value)
+  );
 }
 
 function normalizedTagName(tagName: string): string {
@@ -336,6 +355,7 @@ export function flattenXmlSourceRows(root: XmlViewerNode, collapsedIds: Iterable
           depth: node.depth + 1,
           parentId: node.id,
           text: entry.text,
+          isGlossaryEntry: isXmlViewerGlossaryType(node),
         });
         return;
       }
@@ -362,7 +382,8 @@ export function getXmlViewerParsedSegments(node: XmlViewerNode): XmlViewerParsed
           text: entry.text,
           kind: "text" as const,
           sourceNodeId: node.id,
-          isGlossaryEntry: hasAttributeValue(node.attributes, "type", "abcb-glossentry"),
+          isGlossaryEntry: isXmlViewerGlossaryType(node),
+          isStructuralHighlight: isXmlViewerStructuralHighlightType(node),
         };
       }
       const childNode = childById.get(entry.nodeId);
@@ -374,7 +395,8 @@ export function getXmlViewerParsedSegments(node: XmlViewerNode): XmlViewerParsed
         text: childNode.descendantText,
         kind: "child" as const,
         sourceNodeId: childNode.id,
-        isGlossaryEntry: hasAttributeValue(childNode.attributes, "type", "abcb-glossentry"),
+        isGlossaryEntry: isXmlViewerGlossaryType(childNode),
+        isStructuralHighlight: isXmlViewerStructuralHighlightType(childNode),
       };
     })
     .filter((segment): segment is XmlViewerParsedSegment => Boolean(segment));

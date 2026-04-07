@@ -5,6 +5,7 @@ from fastapi.responses import FileResponse
 
 from app.core.database import session_scope
 from app.models.validation import (
+    DoclingPreviewResponse,
     IngestionResponse,
     IngestionRunListResponse,
     InvalidationResponse,
@@ -308,6 +309,38 @@ async def validate_ingestion(
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {exc}") from exc
 
     return IngestionResponse.model_validate(payload)
+
+
+@router.post("/ingestions/docling-preview", response_model=DoclingPreviewResponse)
+async def preview_docling_ingestion(
+    pdf: UploadFile = File(...),
+    document_class: str | None = Query(default=None),
+    extraction_profile: str | None = Query(default=None),
+    evaluation_profile: str | None = Query(default=None),
+    extractor_strategy: str | None = Query(default="docling"),
+) -> DoclingPreviewResponse:
+    if not pdf.filename or not pdf.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="A PDF file is required.")
+
+    pdf_bytes = await pdf.read()
+    if not pdf_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded PDF cannot be empty.")
+
+    try:
+        payload = service.preview_docling(
+            pdf_bytes=pdf_bytes,
+            pdf_name=pdf.filename,
+            document_class=document_class,
+            extraction_profile=extraction_profile,
+            evaluation_profile=evaluation_profile,
+            extractor_strategy=extractor_strategy,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Docling preview failed: {exc}") from exc
+
+    return DoclingPreviewResponse.model_validate(payload)
 
 
 @router.get("/ingestions/runs", response_model=IngestionRunListResponse)

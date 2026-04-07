@@ -1,6 +1,6 @@
 "use client";
 
-import { createElement, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createElement, Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
   collectCollapsibleNodeIds,
@@ -12,6 +12,7 @@ import {
   getXmlViewerParsedSegments,
   getDefaultCollapsedNodeIds,
   isXmlViewerEquationNode,
+  isXmlViewerGlossaryType,
   parseXmlViewerDocument,
   toggleCollapsedNode,
   type XmlViewerNode,
@@ -19,6 +20,7 @@ import {
 } from "../lib/xml-viewer";
 
 const INLINE_FLOW_TAGS = new Set(["p", "li", "entry", "title", "sptc", "num"]);
+const PARSED_BLOCK_TAGS = new Set(["clause", "subclause", "ol", "ul", "table", "table-reference", "tgroup", "thead", "tbody", "row", "tr"]);
 const XML_TABLE_SECTION_TAGS = new Set(["thead", "tbody"]);
 
 export type XmlViewerTableModel = {
@@ -34,6 +36,20 @@ function fileKey(file: File): string {
   return `${file.name}:${file.size}:${file.lastModified}`;
 }
 
+/**
+ * Web pages cannot start another browser. Saving the file lets the OS open it with the
+ * default handler for .xml (often a separate browser or editor)—double-click the download.
+ */
+function openXmlInExternalBrowser(file: File): void {
+  const url = URL.createObjectURL(file);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = file.name;
+  anchor.rel = "noopener noreferrer";
+  anchor.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 function renderTagOpen(tagName: string, attributes: Array<{ name: string; value: string }>): string {
   const attributeText = attributes.map((attribute) => `${attribute.name}="${attribute.value}"`).join(" ");
   return attributeText ? `<${tagName} ${attributeText}>` : `<${tagName}>`;
@@ -45,10 +61,6 @@ function summarizeDescendantPreview(value: string, maxLength = 180): string {
     return normalized;
   }
   return `${normalized.slice(0, maxLength).trimEnd()}...`;
-}
-
-function isGlossaryNode(node: XmlViewerNode): boolean {
-  return node.attributes.some((attribute) => attribute.name === "type" && attribute.value === "abcb-glossentry");
 }
 
 function previewHeadlineTags(tagName: string): string[] {
@@ -67,6 +79,55 @@ function normalizedTagName(tagName: string): string {
 
 function isInlineFlowTag(tagName: string): boolean {
   return INLINE_FLOW_TAGS.has(normalizedTagName(tagName));
+}
+
+/** Xrefs, glossary terms, sup/sub, and track-change tags must stay inline — block wrappers break wrapping and can drop spaces. */
+function isParsedInlinePhrasing(childNode: XmlViewerNode): boolean {
+  if (isXmlViewerGlossaryType(childNode)) {
+    return true;
+  }
+  const t = normalizedTagName(childNode.tagName);
+  if (t === "xref" || t === "sup" || t === "sub" || t === "ph" || t === "glossterm") {
+    return true;
+  }
+  if (t === "instext" || t === "deltext") {
+    return true;
+  }
+  if (t.includes(":") && (t.endsWith("instext") || t.endsWith("deltext"))) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Inline-flow parents such as paragraphs frequently contain lightweight wrapper tags that are semantically
+ * phrasing content even when we do not know the exact tag name ahead of time. Keep those inline unless they
+ * contain obviously block-shaped descendants like lists, tables, clauses, or display equations.
+ */
+export function shouldRenderParsedInlineFlowChild(childNode: XmlViewerNode): boolean {
+  if (isParsedInlinePhrasing(childNode)) {
+    return true;
+  }
+
+  if (isXmlViewerEquationNode(childNode) || isXmlViewerTableReferenceNode(childNode) || isXmlViewerTableNode(childNode)) {
+    return false;
+  }
+
+  const t = normalizedTagName(childNode.tagName);
+  if (PARSED_BLOCK_TAGS.has(t)) {
+    return false;
+  }
+
+  return childNode.children.every((grandchild) => {
+    if (
+      isXmlViewerEquationNode(grandchild) ||
+      isXmlViewerTableReferenceNode(grandchild) ||
+      isXmlViewerTableNode(grandchild)
+    ) {
+      return false;
+    }
+    return !PARSED_BLOCK_TAGS.has(normalizedTagName(grandchild.tagName));
+  });
 }
 
 function isInlineEquationNode(node: XmlViewerNode): boolean {
@@ -420,26 +481,45 @@ export function XmlUploadViewer({ files }: { files: File[] }) {
   ): ReactNode[] {
     return segments.map((segment, index) => {
       const isSelected = segment.kind === "text" && segment.id === activeSelectedSourceTextId;
-      const className = `xml-parsed-segment ${segment.kind === "child" ? "xml-parsed-segment-child" : ""} ${segment.isGlossaryEntry ? "xml-parsed-segment-glossary" : ""} ${isSelected ? "xml-parsed-segment-selected" : ""}`;
-      return segment.kind === "text" ? (
-        <button
-          key={`${keyPrefix}-${segment.id}`}
-          type="button"
-          className={`${className} xml-parsed-segment-button`}
-          aria-pressed={isSelected}
-          onClick={() => activateSourceTextSelection(getNextXmlViewerSourceTextSelection(activeSelectedSourceTextId, segment))}
-          ref={(element) => {
-            parsedSegmentButtonRefs.current[segment.id] = element;
-          }}
-        >
-          {segment.text}
-          {index < segments.length - 1 ? " " : ""}
-        </button>
-      ) : (
-        <span key={`${keyPrefix}-${segment.id}`} className={className}>
-          {segment.text}
-          {index < segments.length - 1 ? " " : ""}
-        </span>
+      const className = `xml-parsed-segment ${segment.kind === "child" ? "xml-parsed-segment-child" : ""} ${segment.isGlossaryEntry ? "xml-parsed-segment-glossary" : ""} ${segment.isStructuralHighlight ? "xml-parsed-segment-structural" : ""} ${isSelected ? "xml-parsed-segment-selected" : ""}`;
+      const next = segments[index + 1];
+      const prev = segments[index - 1];
+      const trailingAfterNonGlossary =
+        !segment.isGlossaryEntry && index < segments.length - 1 && !next?.isGlossaryEntry ? " " : "";
+
+      const core =
+        segment.kind === "text" ? (
+          <button
+            type="button"
+            className={`${className} xml-parsed-segment-button`}
+            aria-pressed={isSelected}
+            onClick={() => activateSourceTextSelection(getNextXmlViewerSourceTextSelection(activeSelectedSourceTextId, segment))}
+            ref={(element) => {
+              parsedSegmentButtonRefs.current[segment.id] = element;
+            }}
+          >
+            {segment.text}
+          </button>
+        ) : (
+          <span className={className}>{segment.text}</span>
+        );
+
+      if (segment.isGlossaryEntry) {
+        const showLeadingSpace = index === 0 || !prev?.isGlossaryEntry;
+        return (
+          <Fragment key={`${keyPrefix}-seg-${segment.id}`}>
+            {showLeadingSpace ? " " : null}
+            {core}
+            {" "}
+          </Fragment>
+        );
+      }
+
+      return (
+        <Fragment key={`${keyPrefix}-seg-${segment.id}`}>
+          {core}
+          {trailingAfterNonGlossary}
+        </Fragment>
       );
     });
   }
@@ -539,7 +619,8 @@ export function XmlUploadViewer({ files }: { files: File[] }) {
               text: entry.text,
               kind: "text",
               sourceNodeId: node.id,
-              isGlossaryEntry: isGlossaryNode(node),
+              isGlossaryEntry: isXmlViewerGlossaryType(node),
+              isStructuralHighlight: false,
             },
           ],
           `${keyPrefix}-text-${index}`
@@ -608,8 +689,12 @@ export function XmlUploadViewer({ files }: { files: File[] }) {
         return;
       }
 
-      if (isGlossaryNode(childNode) || childNode.tagName === "xref" || childNode.tagName === "sup" || childNode.tagName === "sub") {
-        parts.push(...renderParsedSegments(getXmlViewerParsedSegments(childNode), `${keyPrefix}-${childNode.id}`));
+      if (isParsedInlinePhrasing(childNode) || (keepsInlineFlow && shouldRenderParsedInlineFlowChild(childNode))) {
+        parts.push(
+          <span key={`${keyPrefix}-${childNode.id}-inline`} className="xml-parsed-inline-run">
+            {renderParsedSegments(getXmlViewerParsedSegments(childNode), `${keyPrefix}-${childNode.id}`)}
+          </span>
+        );
         return;
       }
 
@@ -663,7 +748,11 @@ export function XmlUploadViewer({ files }: { files: File[] }) {
                   role="tab"
                   className={`xml-reader-filetab ${activeFileKey === key ? "active" : ""}`}
                   aria-selected={activeFileKey === key}
-                  onClick={() => setPreferredActiveFileKey(key)}
+                  title="Select this file and download it—open the file from your system to use your default XML app or browser"
+                  onClick={() => {
+                    setPreferredActiveFileKey(key);
+                    openXmlInExternalBrowser(file);
+                  }}
                 >
                   <span>{file.name}</span>
                   <span className={`xml-reader-filetab-status xml-reader-filetab-status-${status}`}>{status}</span>
@@ -720,7 +809,7 @@ export function XmlUploadViewer({ files }: { files: File[] }) {
                           </span>
                           <button
                             type="button"
-                            className={`xml-tree-text-card xml-tree-text-button ${isSelected ? "is-selected" : ""}`}
+                            className={`xml-tree-text-card xml-tree-text-button ${isSelected ? "is-selected" : ""} ${row.isGlossaryEntry ? "xml-parsed-segment-glossary" : ""}`}
                             onClick={() => activateSourceTextSelection(activeSelectedSourceTextId === row.id ? null : row.id)}
                             aria-pressed={isSelected}
                             ref={(element) => {

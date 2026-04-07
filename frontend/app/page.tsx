@@ -5,6 +5,7 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "re
 import { BaselineCorpusPanel } from "../components/baseline-corpus-panel";
 import { CandidateReviewWorkspace } from "../components/candidate-review-workspace";
 import { ConsoleNavigation } from "../components/console-navigation";
+import { DoclingSourceOutputViewer, type DoclingViewPayload } from "../components/docling-source-output-viewer";
 import { PdfUploadViewer } from "../components/pdf-upload-viewer";
 import { ReviewMetricsStrip } from "../components/review-metrics-strip";
 import { ValidationViewer } from "../components/validation-viewer";
@@ -28,6 +29,7 @@ type IngestionResponse = {
     pdf_validation: Record<string, any>;
   };
   raw_metrics: Record<string, any>;
+  docling_view?: DoclingViewPayload | null;
   lineage?: {
     xml_nodes?: {
       node_id: string;
@@ -118,6 +120,11 @@ type IngestionResponse = {
   };
 };
 
+type DoclingPreviewResponse = {
+  docling_view: DoclingViewPayload;
+  raw_metrics?: Record<string, unknown>;
+};
+
 type RunRecord = {
   ingestion_run_id: string;
   document_family_id: string;
@@ -172,8 +179,12 @@ export default function HomePage() {
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [xmlFile, setXmlFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingAction, setLoadingAction] = useState<"validate" | "docling" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [response, setResponse] = useState<IngestionResponse | null>(null);
+  const [doclingPreview, setDoclingPreview] = useState<DoclingViewPayload | null>(null);
+  const [doclingStatusMessage, setDoclingStatusMessage] = useState<string | null>(null);
+  const [doclingError, setDoclingError] = useState<string | null>(null);
   const [runs, setRuns] = useState<RunRecord[]>([]);
   const [runLoading, setRunLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -193,13 +204,21 @@ export default function HomePage() {
 
   const summaryText = useMemo(() => {
     if (loading) {
+      if (loadingAction === "docling") {
+        return xmlFile
+          ? `Running Docling extraction for ${pdfFile?.name ?? "selected PDF"} against ${xmlFile.name}...`
+          : `Running Docling extraction for ${pdfFile?.name ?? "selected PDF"}...`;
+      }
       return `Validating ${pdfFile?.name ?? "selected PDF"} against ${xmlFile?.name ?? "selected XML"}...`;
+    }
+    if (doclingPreview && !response) {
+      return `Docling preview loaded for ${pdfFile?.name ?? "selected PDF"}.`;
     }
     if (!response) {
       return "Upload a PDF and XML pair to validate the linked NCC representations.";
     }
     return `XML: ${response.summary.xml_status} | PDF: ${response.summary.pdf_status} | Can Progress: ${response.summary.can_progress}`;
-  }, [loading, pdfFile, response, xmlFile]);
+  }, [doclingPreview, loading, loadingAction, pdfFile, response, xmlFile]);
 
   const activeRunCount = useMemo(
     () => runs.filter((run) => run.status === "active").length,
@@ -232,6 +251,8 @@ export default function HomePage() {
       }),
     [hiddenRunIds, runs, showInactiveRuns]
   );
+
+  const activeDoclingView = useMemo(() => doclingPreview ?? response?.docling_view ?? null, [doclingPreview, response]);
 
   const latestRun = runs[0] ?? null;
   const loadedRunId = response?.summary.ingestion_run_id ?? null;
@@ -292,6 +313,12 @@ export default function HomePage() {
   useEffect(() => {
     setReviewOutputTab("candidates");
   }, [response?.summary.ingestion_run_id]);
+
+  useEffect(() => {
+    setDoclingPreview(null);
+    setDoclingStatusMessage(null);
+    setDoclingError(null);
+  }, [pdfFile, xmlFile]);
 
   useEffect(() => {
     if (!loading || validationStartedAt === null) {
@@ -542,15 +569,19 @@ export default function HomePage() {
     }
   }
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function runValidation(options?: { extractorStrategy?: string; actionLabel?: "validate" | "docling" }): Promise<void> {
     if (!pdfFile || !xmlFile) {
       setError("Choose both a PDF and an XML file.");
       return;
     }
 
     setLoading(true);
+    setLoadingAction(options?.actionLabel ?? "validate");
     setError(null);
+    if (options?.actionLabel === "docling") {
+      setDoclingError(null);
+      setDoclingStatusMessage("Starting Docling validation...");
+    }
     setValidationStartedAt(Date.now());
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -560,7 +591,12 @@ export default function HomePage() {
     formData.append("xml", xmlFile);
 
     try {
-      const result = await fetch(`${API_BASE_URL}/api/ingestions/validate`, {
+      const requestUrl = new URL(`${API_BASE_URL}/api/ingestions/validate`);
+      if (options?.extractorStrategy) {
+        requestUrl.searchParams.set("extractor_strategy", options.extractorStrategy);
+      }
+
+      const result = await fetch(requestUrl.toString(), {
         method: "POST",
         body: formData,
         signal: controller.signal,
@@ -572,7 +608,13 @@ export default function HomePage() {
       }
 
       const payload = (await result.json()) as IngestionResponse;
+      setDoclingPreview(null);
       setResponse(payload);
+      if (options?.actionLabel === "docling") {
+        const blockCount = payload.docling_view?.blocks?.length ?? 0;
+        const tableCount = payload.docling_view?.tables?.length ?? 0;
+        setDoclingStatusMessage(`Docling output loaded: ${blockCount} blocks and ${tableCount} tables.`);
+      }
       persistLastRunId(payload.summary.ingestion_run_id);
       setRestoreStatus("restored");
       setWorkspaceRestoreMessage(null);
@@ -580,11 +622,84 @@ export default function HomePage() {
     } catch (submissionError) {
       if (submissionError instanceof Error && submissionError.name === "AbortError") {
         setError("Validation cancelled.");
+        if (options?.actionLabel === "docling") {
+          setDoclingStatusMessage("Docling run cancelled.");
+        }
       } else {
-        setError(submissionError instanceof Error ? submissionError.message : "Unknown error");
+        const message = submissionError instanceof Error ? submissionError.message : "Unknown error";
+        setError(message);
+        if (options?.actionLabel === "docling") {
+          setDoclingError(message);
+          setDoclingStatusMessage(null);
+        }
       }
     } finally {
       setLoading(false);
+      setLoadingAction(null);
+      setValidationStartedAt(null);
+      abortControllerRef.current = null;
+    }
+  }
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await runValidation({ actionLabel: "validate" });
+  }
+
+  async function runDoclingInspection(): Promise<void> {
+    if (!pdfFile) {
+      setError("Choose a PDF file.");
+      return;
+    }
+    if (xmlFile) {
+      await runValidation({
+        extractorStrategy: "docling",
+        actionLabel: "docling",
+      });
+      return;
+    }
+
+    setLoading(true);
+    setLoadingAction("docling");
+    setError(null);
+    setDoclingError(null);
+    setDoclingStatusMessage("Starting Docling validation...");
+    setValidationStartedAt(Date.now());
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    const formData = new FormData();
+    formData.append("pdf", pdfFile);
+
+    try {
+      const result = await fetch(`${API_BASE_URL}/api/ingestions/docling-preview`, {
+        method: "POST",
+        body: formData,
+        signal: controller.signal,
+      });
+
+      if (!result.ok) {
+        const payload = await result.json().catch(() => ({}));
+        throw new Error(payload.detail ?? "Docling preview request failed.");
+      }
+
+      const payload = (await result.json()) as DoclingPreviewResponse;
+      setDoclingPreview(payload.docling_view ?? null);
+      const blockCount = payload.docling_view?.blocks?.length ?? 0;
+      const tableCount = payload.docling_view?.tables?.length ?? 0;
+      setDoclingStatusMessage(`Docling output loaded: ${blockCount} blocks and ${tableCount} tables.`);
+    } catch (submissionError) {
+      if (submissionError instanceof Error && submissionError.name === "AbortError") {
+        setError("Docling preview cancelled.");
+        setDoclingStatusMessage("Docling run cancelled.");
+      } else {
+        const message = submissionError instanceof Error ? submissionError.message : "Unknown error";
+        setError(message);
+        setDoclingError(message);
+        setDoclingStatusMessage(null);
+      }
+    } finally {
+      setLoading(false);
+      setLoadingAction(null);
       setValidationStartedAt(null);
       abortControllerRef.current = null;
     }
@@ -692,7 +807,10 @@ export default function HomePage() {
             </div>
             <div className="action-row">
               <button type="submit" disabled={loading}>
-                {loading ? "Validating..." : "Validate ingestion"}
+                {loading && loadingAction === "validate" ? "Validating..." : "Validate ingestion"}
+              </button>
+              <button type="button" className="button-secondary" disabled={loading || !pdfFile} onClick={() => void runDoclingInspection()}>
+                {loading && loadingAction === "docling" ? "Running Docling..." : "Run Docling"}
               </button>
               {loading ? (
                 <button type="button" className="button-secondary" onClick={cancelValidation}>
@@ -730,11 +848,12 @@ export default function HomePage() {
               <div>
                 <h2>Validation in progress</h2>
                 <p>
-                  Running XML validation, PDF extraction, alignment, and transitional review payload assembly.
-                  Exact stage progress is not yet available.
+                  {loadingAction === "docling"
+                    ? "Running Docling extraction and assembling the source/output inspection payload. Exact stage progress is not yet available."
+                    : "Running XML validation, PDF extraction, alignment, and transitional review payload assembly. Exact stage progress is not yet available."}
                 </p>
               </div>
-              <span className="status warn">Working</span>
+              <span className="status warn">{loadingAction === "docling" ? "Docling" : "Working"}</span>
             </div>
             <div className="progress-indicator" />
             <div className="grid two-column">
@@ -764,6 +883,16 @@ export default function HomePage() {
 
       <XmlUploadViewer files={xmlFile ? [xmlFile] : []} />
       <PdfUploadViewer file={pdfFile} />
+      <DoclingSourceOutputViewer
+        file={pdfFile}
+        doclingView={activeDoclingView}
+        onRelinkPdf={handleRelinkPdf}
+        onRunDocling={() => void runDoclingInspection()}
+        canRunDocling={Boolean(pdfFile) && !loading}
+        isRunningDocling={loading && loadingAction === "docling"}
+        doclingStatusMessage={doclingStatusMessage}
+        doclingError={doclingError}
+      />
 
       {response ? (
         <>

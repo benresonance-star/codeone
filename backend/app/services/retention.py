@@ -113,6 +113,8 @@ class RetentionService:
             document_strategy=payload["summary"].get("document_strategy", {}),
             parity_scaffold=lineage.get("parity_scaffold", {}),
             candidate_runtime={
+                "structured_blocks": lineage.get("structured_blocks", []),
+                "docling_tables": lineage.get("docling_tables", []),
                 "xml_semantic_units": lineage.get("xml_semantic_units", []),
                 "pdf_evidence_packets": lineage.get("pdf_evidence_packets", []),
                 "candidate_objects": lineage.get("candidate_objects", []),
@@ -191,6 +193,8 @@ class RetentionService:
             evaluation_payload.get("candidate_runtime", {}) if isinstance(evaluation_payload, dict) else {}
         )
         schema_runtime = candidate_runtime.get("schema_runtime") if isinstance(candidate_runtime, dict) else {}
+        structured_blocks = candidate_runtime.get("structured_blocks") or []
+        docling_tables = candidate_runtime.get("docling_tables") or []
         semantic_units = candidate_runtime.get("xml_semantic_units") or xml_context.get("semantic_units") or []
         review_decisions = self.list_review_decisions(session, run_id)
 
@@ -199,7 +203,7 @@ class RetentionService:
         pdf_evidence_packets = candidate_runtime.get("pdf_evidence_packets") or ingestion_service._build_pdf_evidence_packets(
             semantic_units=semantic_units,
             fragments=fragments,
-            structured_blocks=[],
+            structured_blocks=structured_blocks,
             alignments=alignments,
             xml_validation=xml_validation,
             pdf_validation=pdf_validation,
@@ -234,7 +238,7 @@ class RetentionService:
             xml_nodes=xml_context["xml_nodes"],
             semantic_units=semantic_units,
             fragments=fragments,
-            structured_blocks=[],
+            structured_blocks=structured_blocks,
             alignments=alignments,
             candidates=candidate_objects,
             canonical_snippets=canonical_snippets,
@@ -282,6 +286,11 @@ class RetentionService:
             "graph_readiness": graph_readiness,
             "foundational_baseline_corpus": foundational_baseline_corpus,
         }
+        docling_view = ingestion_service._build_docling_view(
+            structured_blocks=structured_blocks,
+            tables=docling_tables,
+            strategy=document_strategy if isinstance(document_strategy, dict) else {},
+        )
 
         return {
             "summary": {
@@ -323,7 +332,8 @@ class RetentionService:
                 "xml_nodes": [self._serialize_xml_node(node) for node in xml_context["xml_nodes"]],
                 "xml_semantic_units": semantic_units,
                 "pdf_fragments": [self._serialize_fragment(fragment) for fragment in fragments],
-                "structured_blocks": [],
+                "structured_blocks": structured_blocks,
+                "docling_tables": docling_tables,
                 "alignments": alignments,
                 "parity_scaffold": parity_scaffold if isinstance(parity_scaffold, dict) else {},
                 "pdf_evidence_packets": pdf_evidence_packets,
@@ -343,6 +353,7 @@ class RetentionService:
                 "schema_runtime": schema_runtime if isinstance(schema_runtime, dict) else {},
             },
             "review_workspace": review_workspace,
+            "docling_view": docling_view,
         }
 
     def resolve_run_pdf(self, session: Session, run_id: str) -> tuple[Path, str, str]:

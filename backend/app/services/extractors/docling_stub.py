@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -8,6 +9,7 @@ import re
 
 from app.models.document_strategy import DocumentStrategyDecision, ExtractedPdf, ExtractedTable, StructuredBlock
 from app.services.extractors.pdfplumber_extractor import PdfPlumberExtractor
+from app.services.extractors.pymupdf_style_extractor import PyMuPdfStyleExtractor
 
 try:
     from docling.datamodel.base_models import InputFormat
@@ -31,6 +33,7 @@ class DoclingExtractor:
     def __init__(self) -> None:
         self._fallback = PdfPlumberExtractor()
         self._converters: dict[tuple[bool, bool, bool], DocumentConverter] = {}
+        self._style_extractor = PyMuPdfStyleExtractor()
 
     def extract(self, pdf_bytes: bytes, *, decision: DocumentStrategyDecision) -> ExtractedPdf:
         if not self.is_available():
@@ -42,6 +45,7 @@ class DoclingExtractor:
             result = self._convert_pdf_bytes(converter, pdf_bytes)
             blocks = self._collect_blocks(result)
             tables = self._collect_tables(result, decision)
+            blocks, style_notes = self._apply_style_enrichment(pdf_bytes, blocks)
             if not blocks:
                 return self._fallback_extract(pdf_bytes, decision, reason="Docling returned no structured blocks.")
 
@@ -52,7 +56,7 @@ class DoclingExtractor:
                 tables=tables,
                 strategy_name="docling",
                 runtime_mode=self._runtime_mode(runtime_flags),
-                notes=list(self._notes_for_runtime_mode(runtime_flags)),
+                notes=[*self._notes_for_runtime_mode(runtime_flags), *style_notes],
             )
         except Exception as exc:  # noqa: BLE001
             return self._fallback_extract(pdf_bytes, decision, reason=f"Docling conversion failed: {exc}")
@@ -148,18 +152,200 @@ class DoclingExtractor:
 
     def _fallback_extract(self, pdf_bytes: bytes, decision: DocumentStrategyDecision, *, reason: str) -> ExtractedPdf:
         extracted = self._fallback.extract(pdf_bytes, decision=decision)
+        blocks, style_notes = self._apply_style_enrichment(pdf_bytes, extracted.blocks)
         notes = list(extracted.notes)
         notes.append(reason)
         notes.append("pdfplumber fallback used after Docling path was attempted.")
+        notes.extend(style_notes)
         return ExtractedPdf(
             pages_processed=extracted.pages_processed,
             total_words=extracted.total_words,
-            blocks=extracted.blocks,
+            blocks=blocks,
             tables=extracted.tables,
             strategy_name="docling",
             runtime_mode="fallback_pdfplumber",
             notes=notes,
         )
+
+    def _apply_style_enrichment(
+        self,
+        pdf_bytes: bytes,
+        blocks: list[StructuredBlock],
+    ) -> tuple[list[StructuredBlock], list[str]]:
+        if not blocks:
+            return blocks, []
+        if not self._style_extractor.is_available():
+            return blocks, ["pymupdf_style:unavailable"]
+
+        try:
+            style_spans = self._style_extractor.extract(pdf_bytes)
+        except Exception as exc:  # noqa: BLE001
+            return blocks, [f"pymupdf_style:failed:{exc}"]
+
+        spans_by_page: dict[int, list[dict[str, Any]]] = {}
+        for span in style_spans:
+            page = int(span.get("page") or 0)
+            if page <= 0:
+                continue
+            spans_by_page.setdefault(page, []).append(span)
+
+        enriched_blocks: list[StructuredBlock] = []
+        matched_blocks = 0
+        for block in blocks:
+            matched_spans = [
+                span
+                for span in spans_by_page.get(block.page, [])
+                if self._span_matches_block(span_bbox=span.get("bbox"), block_bbox=block.bbox)
+            ]
+            style_payload = self._style_payload_for_block(block, matched_spans)
+            if not style_payload:
+                enriched_blocks.append(block)
+                continue
+            metadata = dict(block.metadata)
+            metadata.update(style_payload)
+            enriched_blocks.append(replace(block, metadata=metadata))
+            matched_blocks += 1
+
+        notes = [
+            f"pymupdf_style:spans={len(style_spans)}",
+            f"pymupdf_style:matched_blocks={matched_blocks}",
+        ]
+        if matched_blocks == 0:
+            notes.append("pymupdf_style:no_block_matches")
+        return enriched_blocks, notes
+
+    def _style_payload_for_block(self, block: StructuredBlock, matched_spans: list[dict[str, Any]]) -> dict[str, Any]:
+        if not matched_spans or not block.text:
+            return {}
+
+        sorted_spans = sorted(
+            matched_spans,
+            key=lambda span: (
+                float((span.get("bbox") or [0.0, 0.0, 0.0, 0.0])[1]),
+                float((span.get("bbox") or [0.0, 0.0, 0.0, 0.0])[0]),
+            ),
+        )
+
+        style_spans: list[dict[str, Any]] = []
+        cursor = 0
+        matched_characters = 0
+        weighted_styles: dict[tuple[Any, ...], int] = {}
+
+        for span in sorted_spans:
+            span_text = str(span.get("text") or "").strip()
+            if not span_text:
+                continue
+            start = self._find_span_start(block.text, span_text, cursor)
+            if start is None:
+                continue
+            end = start + len(span_text)
+            cursor = end
+            matched_characters += len(span_text)
+
+            style_entry = {
+                "start": start,
+                "end": end,
+                "bbox": span.get("bbox") or [0.0, 0.0, 0.0, 0.0],
+                "font_name": span.get("font_name"),
+                "font_size_pt": span.get("font_size_pt"),
+                "text_color_rgb": span.get("text_color_rgb"),
+                "text_color_hex": span.get("text_color_hex"),
+                "is_bold": bool(span.get("is_bold")),
+                "is_italic": bool(span.get("is_italic")),
+            }
+            style_spans.append(style_entry)
+
+            style_key = (
+                style_entry["font_name"],
+                style_entry["font_size_pt"],
+                tuple(style_entry["text_color_rgb"] or []),
+                style_entry["text_color_hex"],
+                style_entry["is_bold"],
+                style_entry["is_italic"],
+            )
+            weighted_styles[style_key] = weighted_styles.get(style_key, 0) + len(span_text)
+
+        merged_spans = self._merge_adjacent_style_spans(style_spans)
+        if not merged_spans:
+            return {}
+
+        dominant_key = max(weighted_styles.items(), key=lambda item: item[1])[0]
+        confidence = round(matched_characters / max(len(block.text), 1), 3)
+
+        return {
+            "style_summary": {
+                "source": "pymupdf",
+                "font_name": dominant_key[0],
+                "font_size_pt": dominant_key[1],
+                "text_color_rgb": list(dominant_key[2]) if dominant_key[2] else None,
+                "text_color_hex": dominant_key[3],
+                "is_bold": dominant_key[4],
+                "is_italic": dominant_key[5],
+                "confidence": confidence,
+                "span_count": len(merged_spans),
+            },
+            "style_spans": merged_spans,
+        }
+
+    def _merge_adjacent_style_spans(self, spans: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        if not spans:
+            return []
+        merged: list[dict[str, Any]] = [dict(spans[0])]
+        for span in spans[1:]:
+            current = merged[-1]
+            if (
+                current["end"] == span["start"]
+                and current.get("font_name") == span.get("font_name")
+                and current.get("font_size_pt") == span.get("font_size_pt")
+                and current.get("text_color_hex") == span.get("text_color_hex")
+                and current.get("is_bold") == span.get("is_bold")
+                and current.get("is_italic") == span.get("is_italic")
+            ):
+                current["end"] = span["end"]
+                current["bbox"] = self._merge_bbox(current.get("bbox"), span.get("bbox"))
+                continue
+            merged.append(dict(span))
+        return merged
+
+    def _merge_bbox(self, left: Any, right: Any) -> list[float]:
+        left_bbox = left if isinstance(left, list) and len(left) == 4 else [0.0, 0.0, 0.0, 0.0]
+        right_bbox = right if isinstance(right, list) and len(right) == 4 else [0.0, 0.0, 0.0, 0.0]
+        return [
+            round(min(float(left_bbox[0]), float(right_bbox[0])), 2),
+            round(min(float(left_bbox[1]), float(right_bbox[1])), 2),
+            round(max(float(left_bbox[2]), float(right_bbox[2])), 2),
+            round(max(float(left_bbox[3]), float(right_bbox[3])), 2),
+        ]
+
+    def _find_span_start(self, block_text: str, span_text: str, cursor: int) -> int | None:
+        direct_match = block_text.find(span_text, cursor)
+        if direct_match >= 0:
+            return direct_match
+        fallback_match = block_text.find(span_text)
+        if fallback_match >= 0 and fallback_match >= cursor:
+            return fallback_match
+        return None
+
+    def _span_matches_block(self, span_bbox: Any, block_bbox: list[float]) -> bool:
+        normalized_span_bbox = self._normalize_bbox(span_bbox)
+        normalized_block_bbox = self._normalize_bbox(block_bbox)
+        if normalized_span_bbox is None or normalized_block_bbox is None:
+            return False
+        span_x0, span_y0, span_x1, span_y1 = normalized_span_bbox
+        block_x0, block_y0, block_x1, block_y1 = normalized_block_bbox
+
+        center_x = (span_x0 + span_x1) / 2
+        center_y = (span_y0 + span_y1) / 2
+        if block_x0 <= center_x <= block_x1 and block_y0 <= center_y <= block_y1:
+            return True
+
+        overlap_width = max(0.0, min(span_x1, block_x1) - max(span_x0, block_x0))
+        overlap_height = max(0.0, min(span_y1, block_y1) - max(span_y0, block_y0))
+        intersection_area = overlap_width * overlap_height
+        span_area = max((span_x1 - span_x0) * (span_y1 - span_y0), 0.0)
+        if span_area <= 0:
+            return False
+        return (intersection_area / span_area) >= 0.5
 
     def _item_text(self, item: Any) -> str:
         text = getattr(item, "text", None)
@@ -180,11 +366,27 @@ class DoclingExtractor:
         bbox = getattr(provenance, "bbox", None)
         if bbox is None:
             return [0.0, 0.0, 0.0, 0.0]
+        return self._normalize_bbox(
+            [
+                round(float(getattr(bbox, "l", 0.0)), 2),
+                round(float(getattr(bbox, "t", 0.0)), 2),
+                round(float(getattr(bbox, "r", 0.0)), 2),
+                round(float(getattr(bbox, "b", 0.0)), 2),
+            ]
+        ) or [0.0, 0.0, 0.0, 0.0]
+
+    def _normalize_bbox(self, bbox: Any) -> list[float] | None:
+        if not isinstance(bbox, list) or len(bbox) != 4:
+            return None
+        try:
+            x0, y0, x1, y1 = (float(value) for value in bbox)
+        except (TypeError, ValueError):
+            return None
         return [
-            round(float(getattr(bbox, "l", 0.0)), 2),
-            round(float(getattr(bbox, "t", 0.0)), 2),
-            round(float(getattr(bbox, "r", 0.0)), 2),
-            round(float(getattr(bbox, "b", 0.0)), 2),
+            round(min(x0, x1), 2),
+            round(min(y0, y1), 2),
+            round(max(x0, x1), 2),
+            round(max(y0, y1), 2),
         ]
 
     def _label_name(self, item: Any) -> str:

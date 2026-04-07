@@ -158,6 +158,7 @@ describe("xml-viewer helpers", () => {
         sourceNodeId: "0.1",
         text: "Leading copy",
         isGlossaryEntry: false,
+        isStructuralHighlight: false,
       },
       {
         id: "0.1.0::descendant",
@@ -165,6 +166,7 @@ describe("xml-viewer helpers", () => {
         sourceNodeId: "0.1.0",
         text: "Alpha beta",
         isGlossaryEntry: false,
+        isStructuralHighlight: false,
       },
       {
         id: "0.1.1::descendant",
@@ -172,6 +174,7 @@ describe("xml-viewer helpers", () => {
         sourceNodeId: "0.1.1",
         text: "Gamma",
         isGlossaryEntry: false,
+        isStructuralHighlight: false,
       },
     ]);
   });
@@ -197,6 +200,7 @@ describe("xml-viewer helpers", () => {
         sourceNodeId: "0",
         text: "A doorway in a",
         isGlossaryEntry: false,
+        isStructuralHighlight: false,
       },
       {
         id: "0.0::descendant",
@@ -204,6 +208,7 @@ describe("xml-viewer helpers", () => {
         sourceNodeId: "0.0",
         text: "resident use area",
         isGlossaryEntry: true,
+        isStructuralHighlight: false,
       },
       {
         id: "0.t1",
@@ -211,6 +216,112 @@ describe("xml-viewer helpers", () => {
         sourceNodeId: "0",
         text: "must comply.",
         isGlossaryEntry: false,
+        isStructuralHighlight: false,
+      },
+    ]);
+  });
+
+  it("marks parsed segments sourced from glossterm xrefs like abcb-glossentry", () => {
+    const glossaryTree = element("p", {
+      children: [
+        text("See"),
+        element("xref", {
+          attributes: [{ name: "type", value: "glossterm" }],
+          children: [text("sole-occupancy unit")],
+        }),
+        text("for details."),
+      ],
+    });
+
+    const document = buildXmlViewerDocument(glossaryTree);
+
+    expect(getXmlViewerParsedSegments(document.root)).toEqual([
+      {
+        id: "0.t0",
+        kind: "text",
+        sourceNodeId: "0",
+        text: "See",
+        isGlossaryEntry: false,
+        isStructuralHighlight: false,
+      },
+      {
+        id: "0.0::descendant",
+        kind: "child",
+        sourceNodeId: "0.0",
+        text: "sole-occupancy unit",
+        isGlossaryEntry: true,
+        isStructuralHighlight: false,
+      },
+      {
+        id: "0.t1",
+        kind: "text",
+        sourceNodeId: "0",
+        text: "for details.",
+        isGlossaryEntry: false,
+        isStructuralHighlight: false,
+      },
+    ]);
+  });
+
+  it("marks parsed segments sourced from ncc-clause and part type wrappers for structural highlighting", () => {
+    const structuralTree = element("p", {
+      children: [
+        text("See"),
+        element("xref", {
+          attributes: [{ name: "type", value: "ncc-clause" }],
+          children: [text("J2D3")],
+        }),
+        text("and"),
+        element("xref", {
+          attributes: [{ name: "type", value: "part" }],
+          children: [text("Part H8")],
+        }),
+        text("for more."),
+      ],
+    });
+
+    const document = buildXmlViewerDocument(structuralTree);
+
+    expect(getXmlViewerParsedSegments(document.root)).toEqual([
+      {
+        id: "0.t0",
+        kind: "text",
+        sourceNodeId: "0",
+        text: "See",
+        isGlossaryEntry: false,
+        isStructuralHighlight: false,
+      },
+      {
+        id: "0.0::descendant",
+        kind: "child",
+        sourceNodeId: "0.0",
+        text: "J2D3",
+        isGlossaryEntry: false,
+        isStructuralHighlight: true,
+      },
+      {
+        id: "0.t1",
+        kind: "text",
+        sourceNodeId: "0",
+        text: "and",
+        isGlossaryEntry: false,
+        isStructuralHighlight: false,
+      },
+      {
+        id: "0.1::descendant",
+        kind: "child",
+        sourceNodeId: "0.1",
+        text: "Part H8",
+        isGlossaryEntry: false,
+        isStructuralHighlight: true,
+      },
+      {
+        id: "0.t2",
+        kind: "text",
+        sourceNodeId: "0",
+        text: "for more.",
+        isGlossaryEntry: false,
+        isStructuralHighlight: false,
       },
     ]);
   });
@@ -272,6 +383,7 @@ describe("xml-viewer helpers", () => {
         sourceNodeId: "0",
         text: "The calculated reliability index",
         isGlossaryEntry: false,
+        isStructuralHighlight: false,
       },
       {
         id: "0.0::descendant",
@@ -279,6 +391,7 @@ describe("xml-viewer helpers", () => {
         sourceNodeId: "0.0",
         text: "β = 3",
         isGlossaryEntry: false,
+        isStructuralHighlight: false,
       },
       {
         id: "0.t1",
@@ -286,6 +399,7 @@ describe("xml-viewer helpers", () => {
         sourceNodeId: "0",
         text: "must be used.",
         isGlossaryEntry: false,
+        isStructuralHighlight: false,
       },
     ]);
   });

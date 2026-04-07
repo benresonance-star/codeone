@@ -36,6 +36,12 @@ class IngestionResponse(BaseModel):
     raw_metrics: dict[str, Any] = Field(default_factory=dict)
     lineage: dict[str, Any] = Field(default_factory=dict)
     review_workspace: dict[str, Any] = Field(default_factory=dict)
+    docling_view: dict[str, Any] = Field(default_factory=dict)
+
+
+class DoclingPreviewResponse(BaseModel):
+    docling_view: dict[str, Any] = Field(default_factory=dict)
+    raw_metrics: dict[str, Any] = Field(default_factory=dict)
 
 
 class IngestionRunRecord(BaseModel):

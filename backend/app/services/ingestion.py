@@ -13,6 +13,7 @@ from app.core.contracts import load_contracts, validate_payload
 from app.models.document_strategy import (
     DocumentStrategyDecision,
     ExtractedPdf,
+    ExtractedTable,
     ReviewPolicy,
     StructuredBlock,
 )
@@ -270,6 +271,11 @@ class IngestionService:
             "graph_readiness": graph_readiness,
             "foundational_baseline_corpus": foundational_baseline_corpus,
         }
+        docling_view = self._build_docling_view(
+            structured_blocks=pdf_context["structured_blocks"],
+            tables=pdf_context["tables"],
+            strategy=pdf_context["strategy"],
+        )
 
         return {
             "summary": {
@@ -301,6 +307,7 @@ class IngestionService:
                 "xml_semantic_units": semantic_units,
                 "pdf_fragments": pdf_context["fragments"],
                 "structured_blocks": pdf_context["structured_blocks"],
+                "docling_tables": pdf_context["tables"],
                 "alignments": pdf_context["alignments"],
                 "parity_scaffold": pdf_context["parity_scaffold"],
                 "pdf_evidence_packets": pdf_evidence_packets,
@@ -320,6 +327,44 @@ class IngestionService:
                 "schema_runtime": xml_context["metrics"].get("schema_runtime", {}),
             },
             "review_workspace": review_workspace,
+            "docling_view": docling_view,
+        }
+
+    def preview_docling(
+        self,
+        *,
+        pdf_bytes: bytes,
+        pdf_name: str,
+        document_class: str | None = None,
+        extraction_profile: str | None = None,
+        evaluation_profile: str | None = None,
+        extractor_strategy: str | None = None,
+    ) -> dict[str, Any]:
+        strategy = self.router.route(
+            pdf_name=pdf_name,
+            xml_name="",
+            requested_document_class=document_class,
+            requested_extraction_profile=extraction_profile,
+            requested_evaluation_profile=evaluation_profile,
+            requested_extractor_strategy=extractor_strategy or "docling",
+        )
+        strategy = self._resolve_runtime_strategy(strategy)
+        extracted = self._extract_pdf(pdf_bytes, strategy)
+        structured_blocks = [self._serialize_block(block) for block in extracted.blocks]
+        tables = [self._serialize_extracted_table(table) for table in extracted.tables]
+        strategy_payload = self._serialize_strategy(strategy, extracted)
+        return {
+            "docling_view": self._build_docling_view(
+                structured_blocks=structured_blocks,
+                tables=tables,
+                strategy=strategy_payload,
+            ),
+            "raw_metrics": {
+                "structured_block_count": len(structured_blocks),
+                "table_count": len(tables),
+                "runtime_mode": extracted.runtime_mode,
+                "runtime_strategy": extracted.strategy_name,
+            },
         }
 
     def _validate_xml(self, xml_bytes: bytes, xml_name: str) -> dict[str, Any]:
@@ -1246,6 +1291,7 @@ class IngestionService:
             },
             "fragments": fragments,
             "structured_blocks": [self._serialize_block(block) for block in scoped_blocks],
+            "tables": [self._serialize_extracted_table(table) for table in scoped_tables],
             "alignments": alignments,
             "strategy": self._serialize_strategy(strategy, extracted),
             "parity_scaffold": parity_scaffold,
@@ -1467,6 +1513,82 @@ class IngestionService:
             "heading_level": block.heading_level,
             "source_strategy": block.source_strategy,
             "metadata": block.metadata,
+        }
+
+    def _serialize_extracted_table(self, table: ExtractedTable) -> dict[str, Any]:
+        return {
+            "table_id": table.table_id,
+            "rows": table.rows,
+            "headers_present": table.headers_present,
+            "related_block_id": table.related_block_id,
+            "bbox": table.bbox or [],
+            "metadata": table.metadata,
+        }
+
+    def _build_docling_view(
+        self,
+        *,
+        structured_blocks: list[dict[str, Any]],
+        tables: list[dict[str, Any]],
+        strategy: dict[str, Any],
+    ) -> dict[str, Any]:
+        page_index: dict[int, dict[str, Any]] = {}
+
+        for block in structured_blocks:
+            page = int(block.get("page") or 0)
+            if page <= 0:
+                continue
+            page_entry = page_index.setdefault(
+                page,
+                {
+                    "page": page,
+                    "block_ids": [],
+                    "table_ids": [],
+                    "block_types": [],
+                },
+            )
+            block_id = str(block.get("block_id") or "")
+            if block_id:
+                page_entry["block_ids"].append(block_id)
+            block_type = str(block.get("block_type") or "")
+            if block_type and block_type not in page_entry["block_types"]:
+                page_entry["block_types"].append(block_type)
+
+        for table in tables:
+            metadata = table.get("metadata", {}) if isinstance(table.get("metadata"), dict) else {}
+            page = int(metadata.get("page") or 0)
+            if page <= 0:
+                continue
+            page_entry = page_index.setdefault(
+                page,
+                {
+                    "page": page,
+                    "block_ids": [],
+                    "table_ids": [],
+                    "block_types": [],
+                },
+            )
+            table_id = str(table.get("table_id") or "")
+            if table_id:
+                page_entry["table_ids"].append(table_id)
+
+        pages = [
+            {
+                "page": page,
+                "block_count": len(entry["block_ids"]),
+                "table_count": len(entry["table_ids"]),
+                "block_types": entry["block_types"],
+                "block_ids": entry["block_ids"],
+                "table_ids": entry["table_ids"],
+            }
+            for page, entry in sorted(page_index.items())
+        ]
+
+        return {
+            "blocks": structured_blocks,
+            "tables": tables,
+            "strategy": strategy,
+            "page_index": pages,
         }
 
     def _serialize_strategy(self, strategy: DocumentStrategyDecision, extracted: ExtractedPdf) -> dict[str, Any]:

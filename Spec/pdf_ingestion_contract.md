@@ -236,6 +236,8 @@ Companion ingestion metadata may additionally surface:
 - extractor strategy
 - extractor options such as Docling runtime mode
 - runtime notes explaining whether text-first or table-aware extraction was used
+- additive Docling inspection payloads such as `docling_view.blocks`, `docling_view.tables`, and `docling_view.page_index` for source/output inspection UIs
+- optional block-level style enrichments under block metadata, such as `style_summary` and `style_spans`, when a secondary PDF appearance pass is available
 - candidate-stage readiness notes while the schema remains backward-compatible
 
 Companion ingestion responses may additionally surface **candidate robustness** payloads (additive, backward-compatible): `lineage.candidate_quality` (unit/evidence/candidate/review/snippet/baseline coverage counts), `lineage.graph_readiness` (inspectable gates and `ready_for_graph_handoff`), and `lineage.foundational_baseline_corpus` (deterministic baseline slice for glossary/title/interpretive categories). The same keys may appear on `review_workspace` for UI tabs. Graph-readiness gates are conservative and deterministic; they do not override PDF or XML validation outcomes. See `Spec/Candidate_Extraction_Layer.md` section 14 for authority vs heuristic enrichment markers on candidates.
@@ -309,6 +311,9 @@ Current-state expectation for UI validation feedback:
 - the current review console may require an explicit `Relink PDF` action in the original preview panel so the operator can reattach the local PDF in the current browser session
 - when the operator relinks the PDF locally, the embedded preview should preserve page-level candidate navigation, while exact in-page highlighting remains optional follow-on behavior
 - the review sidebar may support filter tabs, explicit sort modes such as confidence, issue type, and XML/PDF emphasis, plus pagination for larger surfaced candidate sets
+- the extraction inspection console may expose a Docling source/output viewer with PDF source on the left and Docling-derived output on the right
+- the right-side Docling inspection pane may offer separate tabs for raw Docling output and an enhanced rendering backed by additive PDF style enrichment
+- the enhanced rendering may visually apply extracted span-level font and color metadata, but this is additive UI behavior and must not replace the underlying Docling structural payload as the authoritative source-output view
 
 Current-state expectation for `table_validation`:
 - `table_id`, extraction counts, status, and confidence are required for emitted table entries
