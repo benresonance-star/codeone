@@ -43,8 +43,9 @@ class DoclingExtractor:
             runtime_flags = self._runtime_flags(decision)
             converter = self._get_converter(runtime_flags)
             result = self._convert_pdf_bytes(converter, pdf_bytes)
-            blocks = self._collect_blocks(result)
-            tables = self._collect_tables(result, decision)
+            page_heights = self._page_heights(result)
+            blocks = self._collect_blocks(result, page_heights=page_heights)
+            tables = self._collect_tables(result, decision, page_heights=page_heights)
             blocks, style_notes = self._apply_style_enrichment(pdf_bytes, blocks)
             if not blocks:
                 return self._fallback_extract(pdf_bytes, decision, reason="Docling returned no structured blocks.")
@@ -85,7 +86,7 @@ class DoclingExtractor:
         finally:
             temp_path.unlink(missing_ok=True)
 
-    def _collect_blocks(self, result: Any) -> list[StructuredBlock]:
+    def _collect_blocks(self, result: Any, *, page_heights: dict[int, float]) -> list[StructuredBlock]:
         document = result.document
         blocks: list[StructuredBlock] = []
         for index, (item, level) in enumerate(document.iterate_items(), start=1):
@@ -94,8 +95,8 @@ class DoclingExtractor:
                 continue
 
             provenance = self._primary_provenance(item)
-            bbox = self._bbox_from_provenance(provenance)
             page_number = int(getattr(provenance, "page_no", 1) or 1)
+            bbox = self._bbox_from_provenance(provenance, page_height=page_heights.get(page_number))
             label = self._label_name(item)
             blocks.append(
                 StructuredBlock(
@@ -115,7 +116,13 @@ class DoclingExtractor:
             )
         return blocks
 
-    def _collect_tables(self, result: Any, decision: DocumentStrategyDecision) -> list[ExtractedTable]:
+    def _collect_tables(
+        self,
+        result: Any,
+        decision: DocumentStrategyDecision,
+        *,
+        page_heights: dict[int, float],
+    ) -> list[ExtractedTable]:
         document = result.document
         items = list(document.iterate_items())
         tables: list[ExtractedTable] = []
@@ -137,7 +144,7 @@ class DoclingExtractor:
                     rows=rows,
                     headers_present=self._headers_present(rows),
                     related_block_id=f"docling_{page_number}_{item_index + 1}",
-                    bbox=self._bbox_from_provenance(provenance),
+                    bbox=self._bbox_from_provenance(provenance, page_height=page_heights.get(page_number)),
                     metadata={
                         "source": "docling",
                         "page": page_number,
@@ -362,10 +369,13 @@ class DoclingExtractor:
             return provenance[0]
         return None
 
-    def _bbox_from_provenance(self, provenance: Any | None) -> list[float]:
+    def _bbox_from_provenance(self, provenance: Any | None, *, page_height: float | None = None) -> list[float]:
         bbox = getattr(provenance, "bbox", None)
         if bbox is None:
             return [0.0, 0.0, 0.0, 0.0]
+        converted_bbox = self._coerce_bbox_to_top_left(bbox, page_height=page_height)
+        if converted_bbox is not None:
+            return converted_bbox
         return self._normalize_bbox(
             [
                 round(float(getattr(bbox, "l", 0.0)), 2),
@@ -374,6 +384,76 @@ class DoclingExtractor:
                 round(float(getattr(bbox, "b", 0.0)), 2),
             ]
         ) or [0.0, 0.0, 0.0, 0.0]
+
+    def _coerce_bbox_to_top_left(self, bbox: Any, *, page_height: float | None) -> list[float] | None:
+        to_top_left_origin = getattr(bbox, "to_top_left_origin", None)
+        if callable(to_top_left_origin) and page_height is not None:
+            try:
+                converted = to_top_left_origin(page_height=page_height)
+                return self._normalize_bbox(
+                    [
+                        round(float(getattr(converted, "l", 0.0)), 2),
+                        round(float(getattr(converted, "t", 0.0)), 2),
+                        round(float(getattr(converted, "r", 0.0)), 2),
+                        round(float(getattr(converted, "b", 0.0)), 2),
+                    ]
+                )
+            except Exception:  # noqa: BLE001
+                return None
+
+        coord_origin = getattr(bbox, "coord_origin", None)
+        origin_name = str(getattr(coord_origin, "name", coord_origin or "")).upper()
+        raw_bbox = [
+            round(float(getattr(bbox, "l", 0.0)), 2),
+            round(float(getattr(bbox, "t", 0.0)), 2),
+            round(float(getattr(bbox, "r", 0.0)), 2),
+            round(float(getattr(bbox, "b", 0.0)), 2),
+        ]
+        if origin_name.endswith("BOTTOMLEFT") and page_height is not None:
+            x0, top_from_bottom, x1, bottom_from_bottom = raw_bbox
+            return self._normalize_bbox([x0, page_height - top_from_bottom, x1, page_height - bottom_from_bottom])
+        return None
+
+    def _page_heights(self, result: Any) -> dict[int, float]:
+        heights: dict[int, float] = {}
+        for index, page in enumerate(getattr(result, "pages", []) or [], start=1):
+            page_number = int(getattr(page, "page_no", index) or index)
+            height = self._page_height(page)
+            if height is not None:
+                heights[page_number] = height
+        return heights
+
+    def _page_height(self, page: Any) -> float | None:
+        direct_height = getattr(page, "height", None)
+        if isinstance(direct_height, (int, float)) and float(direct_height) > 0:
+            return float(direct_height)
+
+        size = getattr(page, "size", None)
+        if isinstance(size, (list, tuple)) and len(size) >= 2:
+            try:
+                height = float(size[1])
+                if height > 0:
+                    return height
+            except (TypeError, ValueError):
+                pass
+        for attr_name in ("height", "h"):
+            size_height = getattr(size, attr_name, None)
+            if isinstance(size_height, (int, float)) and float(size_height) > 0:
+                return float(size_height)
+
+        page_bbox = getattr(page, "bbox", None)
+        for attr_name in ("height", "h"):
+            bbox_height = getattr(page_bbox, attr_name, None)
+            if isinstance(bbox_height, (int, float)) and float(bbox_height) > 0:
+                return float(bbox_height)
+        for start_attr, end_attr in (("t", "b"), ("y0", "y1")):
+            start = getattr(page_bbox, start_attr, None)
+            end = getattr(page_bbox, end_attr, None)
+            if isinstance(start, (int, float)) and isinstance(end, (int, float)):
+                height = abs(float(end) - float(start))
+                if height > 0:
+                    return height
+        return None
 
     def _normalize_bbox(self, bbox: Any) -> list[float] | None:
         if not isinstance(bbox, list) or len(bbox) != 4:

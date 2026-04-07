@@ -240,6 +240,12 @@ Companion ingestion metadata may additionally surface:
 - optional block-level style enrichments under block metadata, such as `style_summary` and `style_spans`, when a secondary PDF appearance pass is available
 - candidate-stage readiness notes while the schema remains backward-compatible
 
+Current-state expectation for additive PDF appearance enrichment:
+- appearance enrichment is optional and additive; it must not replace structural extraction or weaken blocking validation rules
+- when appearance enrichment joins a secondary PDF engine to Docling structural blocks, bbox comparison must normalize both coordinate ordering and coordinate origin before overlap checks are applied
+- implementations must account for provenance bboxes that may be emitted in top-left or bottom-left page coordinates and convert them to a common page-space before style matching
+- page-height-aware origin conversion is acceptable implementation detail so long as the resulting enrichment remains traceable to the original extracted block and page
+
 Companion ingestion responses may additionally surface **candidate robustness** payloads (additive, backward-compatible): `lineage.candidate_quality` (unit/evidence/candidate/review/snippet/baseline coverage counts), `lineage.graph_readiness` (inspectable gates and `ready_for_graph_handoff`), and `lineage.foundational_baseline_corpus` (deterministic baseline slice for glossary/title/interpretive categories). The same keys may appear on `review_workspace` for UI tabs. Graph-readiness gates are conservative and deterministic; they do not override PDF or XML validation outcomes. See `Spec/Candidate_Extraction_Layer.md` section 14 for authority vs heuristic enrichment markers on candidates.
 
 Companion ingestion responses may additionally surface a candidate-first review payload for UI review workspaces, including:

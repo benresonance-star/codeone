@@ -18,6 +18,26 @@ class _FakeStyleExtractor:
         return list(self._spans)
 
 
+class _FakeCoordOrigin:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
+class _FakeBBox:
+    def __init__(self, l: float, t: float, r: float, b: float, coord_origin: str) -> None:
+        self.l = l
+        self.t = t
+        self.r = r
+        self.b = b
+        self.coord_origin = _FakeCoordOrigin(coord_origin)
+
+
+class _FakeProvenance:
+    def __init__(self, page_no: int, bbox: _FakeBBox) -> None:
+        self.page_no = page_no
+        self.bbox = bbox
+
+
 class DoclingStyleEnrichmentTests(unittest.TestCase):
     def test_apply_style_enrichment_attaches_summary_and_spans(self) -> None:
         extractor = DoclingExtractor()
@@ -121,6 +141,17 @@ class DoclingStyleEnrichmentTests(unittest.TestCase):
         self.assertEqual(metadata["style_summary"]["font_size_pt"], 14.0)
         self.assertEqual(metadata["style_summary"]["text_color_hex"], "#000000")
         self.assertIn("pymupdf_style:matched_blocks=1", notes)
+
+    def test_bbox_from_provenance_converts_bottom_left_origin_to_top_left(self) -> None:
+        extractor = DoclingExtractor()
+        provenance = _FakeProvenance(
+            page_no=1,
+            bbox=_FakeBBox(54.96, 702.97, 271.37, 716.15, "BOTTOMLEFT"),
+        )
+
+        bbox = extractor._bbox_from_provenance(provenance, page_height=842.0)
+
+        self.assertEqual(bbox, [54.96, 125.85, 271.37, 139.03])
 
 
 if __name__ == "__main__":
