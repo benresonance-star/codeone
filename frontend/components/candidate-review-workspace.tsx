@@ -1,12 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 
 import {
   filterCandidatesByRelationState,
   mapCandidateObjectToCandidate,
   mapReviewUnitToCandidate,
   sortCandidates,
+  type AssembledClause,
+  type CandidateDisplayProjection,
+  type ClauseStyleSpan,
+  type RenderedClauseBlock,
 } from "../lib/candidate-review-workspace-logic";
 
 type ValidationItem = {
@@ -185,6 +189,7 @@ type ReviewDecision = {
 
 type CandidateObject = {
   candidate_id: string;
+  semantic_unit_id?: string;
   xml_node_id?: string | null;
   title?: string;
   candidate_type?: string;
@@ -235,6 +240,8 @@ type CandidateObject = {
   graph_edges?: GraphEdgePayload[];
   enrichment_hints?: SemanticEnrichment["enrichment_hints"];
   depends_on?: string[];
+  assembled_clause?: AssembledClause | null;
+  display_projection?: CandidateDisplayProjection | null;
 };
 
 type CandidateRecord = {
@@ -276,6 +283,8 @@ type CandidateRecord = {
   semanticEnrichment: SemanticEnrichment | null;
   enrichmentHints: SemanticEnrichment["enrichment_hints"] | null;
   dependsOn: string[];
+  assembledClause: AssembledClause | null;
+  displayProjection: CandidateDisplayProjection | null;
 };
 
 type CandidateWithDisplayStatus = CandidateRecord & {
@@ -318,6 +327,7 @@ type IngestionResponseLike = {
     pdf_fragments?: PdfFragment[];
     alignments?: AlignmentRecord[];
     pdf_evidence_packets?: Array<Record<string, unknown>>;
+    pdf_clause_candidates?: AssembledClause[];
     candidate_objects?: CandidateObject[];
     canonical_snippets?: CanonicalSnippet[];
     candidate_relations?: ExplicitCandidateRelation[];
@@ -330,6 +340,8 @@ type IngestionResponseLike = {
     xml_nodes?: XmlNode[];
     xml_semantic_units?: Array<Record<string, unknown>>;
     pdf_fragments?: PdfFragment[];
+    pdf_evidence_packets?: Array<Record<string, unknown>>;
+    pdf_clause_candidates?: AssembledClause[];
     alignments?: AlignmentRecord[];
     candidates?: CandidateObject[];
     canonical_snippets?: CanonicalSnippet[];
@@ -567,6 +579,92 @@ function renderHighlightedText(text: string, emphasisTerms: string[], className:
     });
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function asNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function formatProjectionValue(value: unknown): string {
+  if (value == null) {
+    return "n/a";
+  }
+  if (typeof value === "string") {
+    return value || "n/a";
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? String(value) : "n/a";
+  }
+  if (typeof value === "boolean") {
+    return value ? "true" : "false";
+  }
+  if (Array.isArray(value)) {
+    return value.length ? value.map((entry) => formatProjectionValue(entry)).join(", ") : "none";
+  }
+  return JSON.stringify(value);
+}
+
+function styleSpanCss(span: ClauseStyleSpan) {
+  const css: Record<string, string | number> = {};
+  if (span.text_color_hex) {
+    css.color = span.text_color_hex;
+  }
+  if (span.font_name) {
+    css.fontFamily = `"${span.font_name}", "Segoe UI", sans-serif`;
+  }
+  if (typeof span.font_size_pt === "number") {
+    css.fontSize = `${Math.max(11, Math.min(Math.round((span.font_size_pt * 4) / 3), 28))}px`;
+  }
+  if (span.is_bold) {
+    css.fontWeight = 700;
+  }
+  if (span.is_italic) {
+    css.fontStyle = "italic";
+  }
+  return css;
+}
+
+function renderStyledClauseText(block: RenderedClauseBlock) {
+  const styleSpans = Array.isArray(block.style_spans) ? block.style_spans : [];
+  if (!styleSpans.length) {
+    return block.content_text || block.text;
+  }
+  const fragments: ReactNode[] = [];
+  const sourceText = block.content_text || block.text;
+  let cursor = 0;
+  styleSpans.forEach((span, index) => {
+    const start = Math.max(cursor, Math.min(asNumber(span.start) ?? cursor, sourceText.length));
+    const end = Math.max(start, Math.min(asNumber(span.end) ?? start, sourceText.length));
+    if (start > cursor) {
+      fragments.push(<span key={`${block.block_id}-plain-${index}-${cursor}`}>{sourceText.slice(cursor, start)}</span>);
+    }
+    if (end > start) {
+      fragments.push(
+        <span key={`${block.block_id}-styled-${index}-${start}`} style={styleSpanCss(span)}>
+          {sourceText.slice(start, end)}
+        </span>
+      );
+    }
+    cursor = end;
+  });
+  if (cursor < sourceText.length) {
+    fragments.push(<span key={`${block.block_id}-tail-${cursor}`}>{sourceText.slice(cursor)}</span>);
+  }
+  return fragments;
+}
+
 function formatWorkspaceLabel(value: string | null | undefined): string {
   if (!value) {
     return "n/a";
@@ -748,6 +846,8 @@ function buildCandidateJson(candidate: CandidateWithDisplayStatus): Record<strin
     graphEdges: candidate.graphEdges,
     semanticEnrichment: candidate.semanticEnrichment,
     enrichmentHints: candidate.enrichmentHints,
+    assembledClause: candidate.assembledClause,
+    displayProjection: candidate.displayProjection,
   };
 }
 
@@ -868,6 +968,8 @@ function buildLegacyCandidates(response: IngestionResponseLike): CandidateRecord
       semanticEnrichment: null,
       enrichmentHints: null,
       dependsOn: [],
+      assembledClause: null,
+      displayProjection: null,
     });
 
     return candidates;
@@ -899,6 +1001,7 @@ export function CandidateReviewWorkspace({
   const [currentPage, setCurrentPage] = useState(1);
   const [statusOverrides, setStatusOverrides] = useState<Record<string, ReviewStatus>>({});
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
+  const [rawInspectorTab, setRawInspectorTab] = useState<"candidate" | "evidence" | "clause" | "xml">("candidate");
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [decisionError, setDecisionError] = useState<string | null>(null);
   const [decisionsLoading, setDecisionsLoading] = useState(false);
@@ -908,6 +1011,8 @@ export function CandidateReviewWorkspace({
   const decisionsPersisted = Boolean(runId);
   const workspaceMode = response.review_workspace?.mode ?? null;
   const workspaceReason = response.review_workspace?.reason ?? null;
+  const isPdfOnlyWorkspace = workspaceMode === "pdf_only";
+  const hasXmlReference = Boolean((response.review_workspace?.xml_nodes ?? response.lineage?.xml_nodes ?? []).length);
   const alignmentDisplayed = response.review_workspace?.alignment_displayed ?? 0;
   const alignmentTotal = response.review_workspace?.alignment_total ?? 0;
   const candidateCreated = response.review_workspace?.candidate_total ?? alignmentTotal;
@@ -1051,6 +1156,16 @@ export function CandidateReviewWorkspace({
   const selectedCandidate =
     paginatedCandidates.find((candidate) => candidate.id === selectedCandidateId) ?? paginatedCandidates[0] ?? null;
 
+  useEffect(() => {
+    setRawInspectorTab("candidate");
+  }, [selectedCandidate?.id]);
+
+  useEffect(() => {
+    if (rawInspectorTab === "xml" && !hasXmlReference) {
+      setRawInspectorTab("candidate");
+    }
+  }, [hasXmlReference, rawInspectorTab]);
+
   const workspaceRelations = useMemo(
     () => response.review_workspace?.candidate_relations ?? response.lineage?.candidate_relations ?? [],
     [response]
@@ -1157,7 +1272,143 @@ export function CandidateReviewWorkspace({
     [selectedCandidate]
   );
 
+  const candidateSourceObjects = response.review_workspace?.candidates ?? response.lineage?.candidate_objects ?? [];
+  const evidencePackets = response.review_workspace?.pdf_evidence_packets ?? response.lineage?.pdf_evidence_packets ?? [];
+  const workspaceXmlNodes = response.review_workspace?.xml_nodes ?? response.lineage?.xml_nodes ?? [];
+
+  const selectedCandidateSourceObject = useMemo(
+    () =>
+      selectedCandidate ? candidateSourceObjects.find((candidate) => candidate.candidate_id === selectedCandidate.id) ?? null : null,
+    [candidateSourceObjects, selectedCandidate]
+  );
+
+  const selectedEvidencePacket = useMemo(() => {
+    if (!selectedCandidateSourceObject) {
+      return null;
+    }
+    const semanticUnitId = selectedCandidateSourceObject.semantic_unit_id ?? null;
+    const nodeId = selectedCandidateSourceObject.xml_node_id ?? null;
+    return (
+      evidencePackets.find((packet) => {
+        const record = asRecord(packet);
+        if (!record) {
+          return false;
+        }
+        if (semanticUnitId && record.unit_id === semanticUnitId) {
+          return true;
+        }
+        return Boolean(nodeId && record.node_id === nodeId);
+      }) ?? null
+    );
+  }, [evidencePackets, selectedCandidateSourceObject]);
+
+  const selectedXmlNodeRecord = useMemo(
+    () =>
+      selectedCandidate
+        ? workspaceXmlNodes.find((node) => node.node_id === selectedCandidate.nodeId) ?? null
+        : null,
+    [selectedCandidate, workspaceXmlNodes]
+  );
+
+  const selectedAssembledClause = useMemo(
+    () => selectedCandidateSourceObject?.assembled_clause ?? selectedCandidate?.assembledClause ?? null,
+    [selectedCandidate, selectedCandidateSourceObject]
+  );
+
   const selectedSnippetJson = useMemo(() => buildSnippetJson(selectedSnippet), [selectedSnippet]);
+
+  const selectedDisplayProjection = useMemo(
+    () => selectedCandidateSourceObject?.display_projection ?? selectedCandidate?.displayProjection ?? null,
+    [selectedCandidate, selectedCandidateSourceObject]
+  );
+
+  const projectionAddedFieldRows = useMemo<ComparisonRow[]>(() => {
+    const addedFields = asRecord(selectedDisplayProjection?.added_fields);
+    if (!addedFields) {
+      return [];
+    }
+    return Object.entries(addedFields).map(([label, value]) => ({
+      label: label.replace(/_/g, " "),
+      value: formatProjectionValue(value),
+    }));
+  }, [selectedDisplayProjection]);
+
+  const projectionReviewSignalRows = useMemo<ComparisonRow[]>(() => {
+    const reviewSignals = asRecord(selectedDisplayProjection?.review_signals);
+    if (!reviewSignals) {
+      return [];
+    }
+    return Object.entries(reviewSignals).map(([label, value]) => ({
+      label: label.replace(/_/g, " "),
+      value: formatProjectionValue(value),
+    }));
+  }, [selectedDisplayProjection]);
+
+  const projectionSourceRows = useMemo<ComparisonRow[]>(() => {
+    const sourceProvenance = asRecord(selectedDisplayProjection?.source_provenance);
+    if (!sourceProvenance) {
+      return [];
+    }
+    return Object.entries(sourceProvenance).map(([label, value]) => ({
+      label: label.replace(/_/g, " "),
+      value: formatProjectionValue(value),
+    }));
+  }, [selectedDisplayProjection]);
+
+  const projectionHeaderBlocks = useMemo<RenderedClauseBlock[]>(() => {
+    const explicitBlocks = selectedDisplayProjection?.header_blocks ?? [];
+    if (explicitBlocks.length) {
+      return explicitBlocks;
+    }
+    return (selectedDisplayProjection?.rendered_blocks ?? []).filter((block) => block.render_role === "header");
+  }, [selectedDisplayProjection]);
+
+  const projectionMarginaliaBlocks = useMemo<RenderedClauseBlock[]>(() => {
+    const explicitBlocks = selectedDisplayProjection?.marginalia_blocks ?? [];
+    if (explicitBlocks.length) {
+      return explicitBlocks;
+    }
+    return (selectedDisplayProjection?.rendered_blocks ?? []).filter((block) => block.render_role === "annotation");
+  }, [selectedDisplayProjection]);
+
+  const projectionBodyBlocks = useMemo<RenderedClauseBlock[]>(() => {
+    const renderedBlocks = selectedDisplayProjection?.rendered_blocks ?? [];
+    if (!renderedBlocks.length) {
+      return [];
+    }
+    return renderedBlocks.filter((block) => !["header", "annotation"].includes(block.render_role ?? ""));
+  }, [selectedDisplayProjection]);
+
+  const rawInspectorTabs = useMemo(
+    () =>
+      [
+        { key: "candidate", label: "Candidate" },
+        { key: "evidence", label: "Evidence" },
+        { key: "clause", label: "Assembled Clause" },
+        ...(hasXmlReference ? [{ key: "xml", label: isPdfOnlyWorkspace ? "XML Reference" : "XML Node" }] : []),
+      ] as Array<{ key: "candidate" | "evidence" | "clause" | "xml"; label: string }>,
+    [hasXmlReference, isPdfOnlyWorkspace]
+  );
+
+  const rawInspectorPayload = useMemo(() => {
+    switch (rawInspectorTab) {
+      case "evidence":
+        return selectedEvidencePacket ?? { state: "no_evidence_packet" };
+      case "clause":
+        return selectedAssembledClause ?? { state: "no_assembled_clause" };
+      case "xml":
+        return selectedXmlNodeRecord ?? { state: "no_matched_xml_node" };
+      default:
+        return selectedCandidateSourceObject ?? selectedCandidateJson ?? { state: "no_candidate" };
+    }
+  }, [
+    rawInspectorTab,
+    selectedAssembledClause,
+    selectedCandidateJson,
+    selectedCandidateSourceObject,
+    selectedEvidencePacket,
+    selectedXmlNodeRecord,
+  ]);
 
   const candidateComparisonRows = useMemo<ComparisonRow[]>(() => {
     if (!selectedCandidate) {
@@ -1169,10 +1420,23 @@ export function CandidateReviewWorkspace({
       { label: "PDF evidence class", value: selectedCandidate.pdfEvidenceClass },
       { label: "Issue class", value: selectedCandidate.reviewIssueClass.replace(/_/g, " ") },
       { label: "Source emphasis", value: selectedCandidate.reviewSourceEmphasis },
-      { label: "Link status", value: selectedCandidate.nodeId ? "Linked to XML node" : "No XML node linked" },
+      {
+        label: "Link status",
+        value: isPdfOnlyWorkspace
+          ? selectedCandidate.nodeId
+            ? "PDF-native candidate with XML reference"
+            : "PDF-native candidate"
+          : selectedCandidate.nodeId
+            ? "Linked to XML node"
+            : "No XML node linked",
+      },
       {
         label: "Approval state",
-        value: selectedSnippet ? "Promoted snippet exists" : "No promoted snippet yet",
+        value: isPdfOnlyWorkspace
+          ? "Snippet promotion disabled in PDF-only review"
+          : selectedSnippet
+            ? "Promoted snippet exists"
+            : "No promoted snippet yet",
       },
       { label: "Display status", value: selectedCandidate.displayStatus },
       { label: "Base status", value: selectedCandidate.baseStatus },
@@ -1184,15 +1448,15 @@ export function CandidateReviewWorkspace({
       { label: "Candidate page", value: selectedCandidate.page ? String(selectedCandidate.page) : "n/a" },
       { label: "BBox", value: formatBbox(selectedCandidate.bbox) },
     ];
-  }, [selectedCandidate, selectedReconciliations.length, selectedRelationSummary.total, selectedSnippet]);
+  }, [isPdfOnlyWorkspace, selectedCandidate, selectedReconciliations.length, selectedRelationSummary.total, selectedSnippet]);
 
   const xmlComparisonRows = useMemo<ComparisonRow[]>(() => {
     if (!selectedCandidate) {
       return [];
     }
     return [
-      { label: "XML path", value: selectedCandidate.xmlPath },
-      { label: "Full XML path", value: selectedCandidate.xmlFullPath },
+      { label: isPdfOnlyWorkspace ? "Reference XML path" : "XML path", value: selectedCandidate.xmlPath },
+      { label: isPdfOnlyWorkspace ? "Reference full XML path" : "Full XML path", value: selectedCandidate.xmlFullPath },
       { label: "Context signature", value: selectedCandidate.xmlContextPathSignature ?? "n/a" },
       { label: "Parent node", value: selectedCandidate.xmlParentNodeId ?? "n/a" },
       { label: "Root node", value: selectedCandidate.xmlRootNodeId ?? "n/a" },
@@ -1201,7 +1465,7 @@ export function CandidateReviewWorkspace({
       { label: "Raw XML-only terms", value: formatList(selectedCandidate.rawXmlOnlyTerms) },
       { label: "XML text length", value: String(cleanText(selectedCandidate.xmlText).length) },
     ];
-  }, [selectedCandidate]);
+  }, [isPdfOnlyWorkspace, selectedCandidate]);
 
   const pdfComparisonRows = useMemo<ComparisonRow[]>(() => {
     if (!selectedCandidate) {
@@ -1234,12 +1498,12 @@ export function CandidateReviewWorkspace({
     }
     return [
       { label: "Blocked by validation issue", value: selectedCandidate.issues.some((issue) => issue.includes("Validation warnings or errors")) ? "Yes" : "No" },
-      { label: "Missing in XML", value: formatList(selectedCandidate.pdfOnlyTerms) },
-      { label: "Missing in PDF", value: formatList(selectedCandidate.xmlOnlyTerms) },
+      { label: isPdfOnlyWorkspace ? "PDF-only additions" : "Missing in XML", value: formatList(selectedCandidate.pdfOnlyTerms) },
+      { label: isPdfOnlyWorkspace ? "Reference XML-only terms" : "Missing in PDF", value: formatList(selectedCandidate.xmlOnlyTerms) },
       { label: "Ignored structural terms", value: formatList(selectedCandidate.ignoredStructuralTerms) },
       { label: "Issue summary", value: selectedCandidate.issues[0] ?? "No review issues flagged" },
     ];
-  }, [selectedCandidate]);
+  }, [isPdfOnlyWorkspace, selectedCandidate]);
 
   const selectedQueueIndex = useMemo(() => {
     if (!selectedCandidate) {
@@ -1263,6 +1527,12 @@ export function CandidateReviewWorkspace({
   );
 
   const needsHumanReviewCount = counts.review;
+
+  useEffect(() => {
+    if (filter === "review" && counts.review === 0 && counts.all > 0) {
+      setFilter("all");
+    }
+  }, [counts.all, counts.review, filter]);
 
   const candidatePageSummary = useMemo(
     () => summarizePages(candidates.map((candidate) => candidate.page)),
@@ -1591,7 +1861,18 @@ export function CandidateReviewWorkspace({
               </button>
             ))
           ) : (
-            <div className="empty-state">No candidates in this view yet.</div>
+            <div className="empty-state candidate-empty-state">
+              <p>
+                {filter === "review" && counts.all > 0
+                  ? "No candidates currently need human review. Switch to All Candidates to inspect the full surfaced set."
+                  : "No candidates in this view yet."}
+              </p>
+              {filter !== "all" && counts.all > 0 ? (
+                <button type="button" className="button-secondary" onClick={() => setFilter("all")}>
+                  Show All Candidates
+                </button>
+              ) : null}
+            </div>
           )}
           {sortedCandidates.length > CANDIDATE_PAGE_SIZE ? (
             <div className="panel-muted candidate-pagination">
@@ -1705,67 +1986,93 @@ export function CandidateReviewWorkspace({
                   </p>
                 ) : null}
 
-                <section className="panel-muted candidate-lineage-panel">
-                  <div className="section-header compact">
-                    <div>
-                      <h4>XML Context</h4>
-                      <p className="muted">
-                        Breadcrumbs and lineage keep this candidate anchored to its XML parent and root context.
-                      </p>
+                {isPdfOnlyWorkspace ? (
+                  <section className="panel-muted candidate-lineage-panel">
+                    <div className="section-header compact">
+                      <div>
+                        <h4>PDF Review Context</h4>
+                        <p className="muted">
+                          This workspace is anchored to PDF-native candidates. XML, when present, is shown only as
+                          secondary reference context.
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="detail-list">
-                    <div>
-                      <strong>Context breadcrumb</strong>: {summarizeXmlLineage(selectedCandidate)}
+                    <div className="detail-list">
+                      <div>
+                        <strong>Reference XML available</strong>: {hasXmlReference ? "Yes" : "No"}
+                      </div>
+                      <div>
+                        <strong>Candidate fragment</strong>: {selectedCandidate.fragmentId}
+                      </div>
+                      <div>
+                        <strong>Candidate page</strong>: {selectedCandidate.page ?? "n/a"}
+                      </div>
                     </div>
-                    <div>
-                      <strong>Ancestor node ids</strong>: {formatList(selectedCandidate.xmlAncestorNodeIds)}
+                  </section>
+                ) : (
+                  <section className="panel-muted candidate-lineage-panel">
+                    <div className="section-header compact">
+                      <div>
+                        <h4>XML Context</h4>
+                        <p className="muted">
+                          Breadcrumbs and lineage keep this candidate anchored to its XML parent and root context.
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <strong>Full XML path</strong>:{" "}
-                      <code className="baseline-inline-code">{selectedCandidate.xmlFullPath}</code>
+                    <div className="detail-list">
+                      <div>
+                        <strong>Context breadcrumb</strong>: {summarizeXmlLineage(selectedCandidate)}
+                      </div>
+                      <div>
+                        <strong>Ancestor node ids</strong>: {formatList(selectedCandidate.xmlAncestorNodeIds)}
+                      </div>
+                      <div>
+                        <strong>Full XML path</strong>:{" "}
+                        <code className="baseline-inline-code">{selectedCandidate.xmlFullPath}</code>
+                      </div>
                     </div>
-                  </div>
-                  <div className="action-row candidate-context-actions">
-                    <button
-                      type="button"
-                      className="button-secondary"
-                      disabled={!selectedCandidate.xmlParentNodeId}
-                      onClick={() =>
-                        selectedCandidate.xmlParentNodeId
-                          ? setContextFilter({ mode: "parent", value: selectedCandidate.xmlParentNodeId })
-                          : undefined
-                      }
-                    >
-                      Same parent ({parentContextCount || 0})
-                    </button>
-                    <button
-                      type="button"
-                      className="button-secondary"
-                      disabled={!selectedCandidate.xmlRootNodeId}
-                      onClick={() =>
-                        selectedCandidate.xmlRootNodeId
-                          ? setContextFilter({ mode: "root", value: selectedCandidate.xmlRootNodeId })
-                          : undefined
-                      }
-                    >
-                      Same root ({rootContextCount || 0})
-                    </button>
-                    {contextFilter ? (
-                      <button type="button" className="button-secondary" onClick={() => setContextFilter(null)}>
-                        Clear context filter
+                    <div className="action-row candidate-context-actions">
+                      <button
+                        type="button"
+                        className="button-secondary"
+                        disabled={!selectedCandidate.xmlParentNodeId}
+                        onClick={() =>
+                          selectedCandidate.xmlParentNodeId
+                            ? setContextFilter({ mode: "parent", value: selectedCandidate.xmlParentNodeId })
+                            : undefined
+                        }
+                      >
+                        Same parent ({parentContextCount || 0})
                       </button>
-                    ) : null}
-                  </div>
-                </section>
+                      <button
+                        type="button"
+                        className="button-secondary"
+                        disabled={!selectedCandidate.xmlRootNodeId}
+                        onClick={() =>
+                          selectedCandidate.xmlRootNodeId
+                            ? setContextFilter({ mode: "root", value: selectedCandidate.xmlRootNodeId })
+                            : undefined
+                        }
+                      >
+                        Same root ({rootContextCount || 0})
+                      </button>
+                      {contextFilter ? (
+                        <button type="button" className="button-secondary" onClick={() => setContextFilter(null)}>
+                          Clear context filter
+                        </button>
+                      ) : null}
+                    </div>
+                  </section>
+                )}
 
                 <section className="panel-muted relation-ledger-panel">
                   <div className="section-header compact">
                     <div>
                       <h4>Dependency and Reconciliation</h4>
                       <p className="muted">
-                        A compact ledger of authoritative XML links, text-derived references, and review-stage
-                        reconciliation outcomes for this candidate.
+                        {isPdfOnlyWorkspace
+                          ? "XML-derived relation, reconciliation, and promotion signals are downgraded in PDF-only mode."
+                          : "A compact ledger of authoritative XML links, text-derived references, and review-stage reconciliation outcomes for this candidate."}
                       </p>
                     </div>
                   </div>
@@ -1890,9 +2197,156 @@ export function CandidateReviewWorkspace({
                 <section className="comparison-section">
                   <div className="section-header compact">
                     <div>
+                      <h4>Candidate Inspector</h4>
+                      <p className="muted">
+                        Raw backend payloads stay on the left, while a clause-like rendering keeps source text,
+                        added fields, and review signals separated on the right.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="candidate-inspector-grid">
+                    <div className="evidence-panel candidate-raw-panel">
+                      <div className="candidate-raw-panel-header">
+                        <h4>Raw JSON</h4>
+                        <div className="candidate-raw-tab-row">
+                          {rawInspectorTabs.map((tab) => (
+                            <button
+                              key={tab.key}
+                              type="button"
+                              className={rawInspectorTab === tab.key ? "button-secondary active" : "button-secondary"}
+                              onClick={() => setRawInspectorTab(tab.key as "candidate" | "evidence" | "clause" | "xml")}
+                            >
+                              {tab.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <pre className="candidate-raw-json">{JSON.stringify(rawInspectorPayload, null, 2)}</pre>
+                    </div>
+
+                    <div className="evidence-panel candidate-rendered-panel">
+                      <div className="section-header compact">
+                        <div>
+                          <h4>Rendered Clause</h4>
+                          <p className="muted">
+                            Clause-like projection grounded in assembled PDF blocks, with derived metadata surfaced
+                            separately for review.
+                          </p>
+                        </div>
+                      </div>
+
+                      <section className="panel-muted clause-render-panel">
+                        <div className="section-header compact">
+                          <div>
+                            <h5>Source Clause</h5>
+                            <p className="muted">
+                              {selectedDisplayProjection?.clause_path?.length
+                                ? `Path: ${selectedDisplayProjection.clause_path.join(" > ")}`
+                                : "No numbered clause path was inferred for this candidate."}
+                            </p>
+                          </div>
+                          {selectedDisplayProjection?.clause_label ? (
+                            <span className="candidate-context-chip">{selectedDisplayProjection.clause_label}</span>
+                          ) : null}
+                        </div>
+                        {(selectedDisplayProjection?.clause_code || selectedDisplayProjection?.heading_text) ? (
+                          <div className="comparison-field-list relation-field-list">
+                            <div className="comparison-field-row">
+                              <strong>Clause code</strong>
+                              <span>{selectedDisplayProjection?.clause_code ?? "n/a"}</span>
+                            </div>
+                            <div className="comparison-field-row">
+                              <strong>Heading</strong>
+                              <span>{selectedDisplayProjection?.heading_text ?? "n/a"}</span>
+                            </div>
+                          </div>
+                        ) : null}
+                        {projectionMarginaliaBlocks.length ? (
+                          <div className="comparison-field-list relation-field-list">
+                            <div className="comparison-field-row">
+                              <strong>Annotations</strong>
+                              <span>{projectionMarginaliaBlocks.map((block) => block.text).join(" | ")}</span>
+                            </div>
+                          </div>
+                        ) : null}
+                        {projectionHeaderBlocks.length ? (
+                          <div className="rendered-clause-block-list">
+                            {projectionHeaderBlocks.map((block) => (
+                              <div
+                                key={`${block.block_id}-${block.render_role ?? "block"}`}
+                                className={`rendered-clause-block rendered-clause-block-${block.render_role ?? "continuation"} rendered-clause-depth-${block.relative_depth ?? 0}`}
+                              >
+                                {block.label ? <span className="rendered-clause-label">{block.label}</span> : null}
+                                <div className="rendered-clause-text">{renderStyledClauseText(block)}</div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                        <div className="rendered-clause-block-list">
+                          {projectionBodyBlocks.length ? (
+                            projectionBodyBlocks.map((block) => (
+                              <div
+                                key={`${block.block_id}-${block.render_role ?? "block"}`}
+                                className={`rendered-clause-block rendered-clause-block-${block.render_role ?? "continuation"} rendered-clause-depth-${block.relative_depth ?? 0}`}
+                              >
+                                {block.label ? <span className="rendered-clause-label">{block.label}</span> : null}
+                                <div className="rendered-clause-text">{renderStyledClauseText(block)}</div>
+                              </div>
+                            ))
+                          ) : (selectedDisplayProjection?.rendered_blocks ?? []).length ? (
+                            (selectedDisplayProjection?.rendered_blocks ?? []).map((block) => (
+                              <div
+                                key={`${block.block_id}-${block.render_role ?? "block"}`}
+                                className={`rendered-clause-block rendered-clause-block-${block.render_role ?? "continuation"} rendered-clause-depth-${block.relative_depth ?? 0}`}
+                              >
+                                {block.label ? <span className="rendered-clause-label">{block.label}</span> : null}
+                                <div className="rendered-clause-text">{renderStyledClauseText(block)}</div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="empty-state comparison-empty-state">
+                              No clause projection is available yet for this candidate.
+                            </div>
+                          )}
+                        </div>
+                      </section>
+
+                      <div className="comparison-grid candidate-rendered-metadata-grid">
+                        <div className="evidence-panel">
+                          <h4>Added Fields</h4>
+                          {projectionAddedFieldRows.length ? (
+                            renderComparisonRows(projectionAddedFieldRows)
+                          ) : (
+                            <p className="muted">No added fields were attached to this projection.</p>
+                          )}
+                        </div>
+                        <div className="evidence-panel">
+                          <h4>Review Signals</h4>
+                          {projectionReviewSignalRows.length ? (
+                            renderComparisonRows(projectionReviewSignalRows)
+                          ) : (
+                            <p className="muted">No review signals were attached to this projection.</p>
+                          )}
+                        </div>
+                        <div className="evidence-panel">
+                          <h4>Source Provenance</h4>
+                          {projectionSourceRows.length ? (
+                            renderComparisonRows(projectionSourceRows)
+                          ) : (
+                            <p className="muted">No source provenance is available for this projection.</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="section-header compact">
+                    <div>
                       <h4>Candidate Comparison</h4>
                       <p className="muted">
-                        Structured comparison first, with raw JSON available below for inspection.
+                        {isPdfOnlyWorkspace
+                          ? "PDF-native evidence remains primary below, with XML shown only when a reference file was supplied."
+                          : "Structured XML, PDF, and snippet comparison remains available below."}
                       </p>
                     </div>
                   </div>
@@ -1902,7 +2356,7 @@ export function CandidateReviewWorkspace({
                       {renderComparisonRows(candidateComparisonRows)}
                     </div>
                     <div className="evidence-panel">
-                      <h4>XML Evidence</h4>
+                      <h4>{isPdfOnlyWorkspace ? "XML Reference" : "XML Evidence"}</h4>
                       {renderComparisonRows(xmlComparisonRows)}
                       <div className="evidence-text comparison-evidence-text">
                         {selectedCandidate.xmlText
@@ -1911,7 +2365,9 @@ export function CandidateReviewWorkspace({
                               selectedCandidate.xmlOnlyTerms,
                               "token-xml-only"
                             )
-                          : "No XML node linked yet."}
+                          : isPdfOnlyWorkspace
+                            ? "No XML reference was supplied for this run."
+                            : "No XML node linked yet."}
                       </div>
                     </div>
                     <div className="evidence-panel">
@@ -1927,7 +2383,7 @@ export function CandidateReviewWorkspace({
                     </div>
                     <div className="evidence-panel">
                       <h4>Promoted Snippet</h4>
-                      {selectedSnippet ? (
+                      {selectedSnippet && !isPdfOnlyWorkspace ? (
                         <>
                           {renderComparisonRows(snippetComparisonRows)}
                           <div className="evidence-text comparison-evidence-text">
@@ -1936,7 +2392,9 @@ export function CandidateReviewWorkspace({
                         </>
                       ) : (
                         <div className="empty-state comparison-empty-state">
-                          No promoted snippet for this candidate yet.
+                          {isPdfOnlyWorkspace
+                            ? "Snippet promotion is disabled in PDF-only review mode."
+                            : "No promoted snippet for this candidate yet."}
                         </div>
                       )}
                     </div>
@@ -1959,10 +2417,6 @@ export function CandidateReviewWorkspace({
                       )}
                     </div>
                   </div>
-                  <details className="detail-disclosure">
-                    <summary>Open candidate JSON</summary>
-                    <pre>{JSON.stringify(selectedCandidateJson, null, 2)}</pre>
-                  </details>
                   <details className="detail-disclosure">
                     <summary>Open promoted snippet JSON</summary>
                     <pre>{JSON.stringify(selectedSnippetJson ?? { state: "no_promoted_snippet" }, null, 2)}</pre>

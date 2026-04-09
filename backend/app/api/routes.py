@@ -311,6 +311,46 @@ async def validate_ingestion(
     return IngestionResponse.model_validate(payload)
 
 
+@router.post("/ingestions/pdf-review", response_model=IngestionResponse)
+async def review_pdf_only_ingestion(
+    pdf: UploadFile = File(...),
+    xml: UploadFile | None = File(default=None),
+    document_class: str | None = Query(default=None),
+    extraction_profile: str | None = Query(default=None),
+    evaluation_profile: str | None = Query(default=None),
+    extractor_strategy: str | None = Query(default=None),
+) -> IngestionResponse:
+    if not pdf.filename or not pdf.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="A PDF file is required.")
+    if xml and xml.filename and not xml.filename.lower().endswith(".xml"):
+        raise HTTPException(status_code=400, detail="Optional XML reference uploads must be XML files.")
+
+    pdf_bytes = await pdf.read()
+    xml_bytes = await xml.read() if xml is not None else None
+    if not pdf_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded PDF cannot be empty.")
+    if xml is not None and xml.filename and not xml_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded XML reference cannot be empty.")
+
+    try:
+        payload = service.process_pdf_only(
+            pdf_bytes=pdf_bytes,
+            pdf_name=pdf.filename,
+            xml_bytes=xml_bytes,
+            xml_name=xml.filename if xml is not None else None,
+            document_class=document_class,
+            extraction_profile=extraction_profile,
+            evaluation_profile=evaluation_profile,
+            extractor_strategy=extractor_strategy,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"PDF review failed: {exc}") from exc
+
+    return IngestionResponse.model_validate(payload)
+
+
 @router.post("/ingestions/docling-preview", response_model=DoclingPreviewResponse)
 async def preview_docling_ingestion(
     pdf: UploadFile = File(...),

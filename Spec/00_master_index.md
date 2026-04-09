@@ -108,3 +108,4 @@ This separation is required to support high-reliability human and agentic questi
 - `2026-04-04`: Created the master index, established document precedence, and superseded umbrella narrative specs with a root-level normative structure.
 - `2026-04-07`: Updated the PDF ingestion contract to reflect the Docling inspection viewer, additive PyMuPDF style enrichment, and raw-vs-enhanced output tabs in the current console implementation.
 - `2026-04-07`: Clarified in the PDF ingestion contract that additive style enrichment must normalize Docling provenance bbox coordinate origin and ordering before joining PyMuPDF appearance spans to structural blocks.
+- `2026-04-09`: Updated the PDF ingestion and candidate-layer specs to document temporary `pdf_only` review payloads plus structured clause header recovery (`clause_code`, `heading_text`, `header_blocks`, `marginalia_blocks`) so editorial annotations do not become candidate titles.

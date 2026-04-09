@@ -200,6 +200,10 @@ class RetentionService:
 
         pdf_tables = self._table_payloads(session, run_id, "pdf")
         xml_tables = self._table_payloads(session, run_id, "xml")
+        assembled_clauses = candidate_runtime.get("pdf_clause_candidates") or ingestion_service._build_assembled_clauses(
+            structured_blocks,
+            alignments=alignments,
+        )
         pdf_evidence_packets = candidate_runtime.get("pdf_evidence_packets") or ingestion_service._build_pdf_evidence_packets(
             semantic_units=semantic_units,
             fragments=fragments,
@@ -211,6 +215,7 @@ class RetentionService:
         candidate_objects = candidate_runtime.get("candidate_objects") or ingestion_service._build_candidate_objects(
             semantic_units=semantic_units,
             pdf_evidence_packets=pdf_evidence_packets,
+            assembled_clauses=assembled_clauses,
         )
         xml_metrics = xml_context.get("metrics") or {}
 
@@ -232,6 +237,10 @@ class RetentionService:
             can_progress_to_semantic_layer=ingestion_service._can_progress_to_candidate_promotion(pdf_validation),
             review_decisions=review_decisions,
         )
+        candidate_objects = ingestion_service._attach_clause_projections_to_candidates(
+            candidates=candidate_objects,
+            assembled_clauses=assembled_clauses,
+        )
         review_workspace = ingestion_service._build_review_workspace(
             pdf_name=pdf_document.file_name,
             xml_name=xml_document.file_name,
@@ -239,6 +248,7 @@ class RetentionService:
             semantic_units=semantic_units,
             fragments=fragments,
             structured_blocks=structured_blocks,
+            assembled_clauses=assembled_clauses,
             alignments=alignments,
             candidates=candidate_objects,
             canonical_snippets=canonical_snippets,
@@ -289,6 +299,7 @@ class RetentionService:
         docling_view = ingestion_service._build_docling_view(
             structured_blocks=structured_blocks,
             tables=docling_tables,
+            assembled_clauses=assembled_clauses,
             strategy=document_strategy if isinstance(document_strategy, dict) else {},
         )
 
@@ -333,6 +344,7 @@ class RetentionService:
                 "xml_semantic_units": semantic_units,
                 "pdf_fragments": [self._serialize_fragment(fragment) for fragment in fragments],
                 "structured_blocks": structured_blocks,
+                "pdf_clause_candidates": assembled_clauses,
                 "docling_tables": docling_tables,
                 "alignments": alignments,
                 "parity_scaffold": parity_scaffold if isinstance(parity_scaffold, dict) else {},

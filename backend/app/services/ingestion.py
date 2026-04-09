@@ -107,6 +107,15 @@ _XML_SCHEMA_FAMILY_REGISTRY = (
 _BASELINE_SEMANTIC_CLASSES = frozenset({"definition", "title", "context_key", "note"})
 _BASELINE_PATH_MARKERS = ("intro-part", "/intro", "subtitle", "/note[", "/title[")
 _MAX_BASELINE_CORPUS_ITEMS = 500
+_CLAUSE_LABEL_PAREN_PATTERN = re.compile(r"^\(([^)]+)\)\s*")
+_CLAUSE_CODE_PATTERN = re.compile(r"^([A-Z]\d[A-Z]\d+[A-Z]?)\b")
+_ROMAN_TOKEN_PATTERN = re.compile(r"^(?=[ivxlcdm]+$)(?:i|ii|iii|iv|v|vi|vii|viii|ix|x|xi|xii|xiii|xiv|xv)$", re.IGNORECASE)
+_NON_CLAUSE_LEAD_PATTERN = re.compile(r"^(?:notes?|table|figure|source)\b[:\s]", re.IGNORECASE)
+_BRACKETED_MARGINALIA_PATTERN = re.compile(r"^\[[^\]]{1,80}\]$")
+_EDITORIAL_MARGINALIA_PATTERN = re.compile(
+    r"^(?:new\s+for\s+\d{4}|amend(?:ed|ment)?(?:\s+no\.?\s*\d+)?|deleted|inserted|repealed)\b",
+    re.IGNORECASE,
+)
 
 # Deterministic applicability / implicit-relation patterns (conservative, inspectable)
 _CLIMATE_ZONE_PATTERN = re.compile(r"(?i)climate\s+zone\s*([0-9]{1,2}[a-z]?)")
@@ -203,6 +212,7 @@ class IngestionService:
         candidate_objects = self._build_candidate_objects(
             semantic_units=semantic_units,
             pdf_evidence_packets=pdf_evidence_packets,
+            assembled_clauses=pdf_context["assembled_clauses"],
         )
         (
             candidate_objects,
@@ -222,6 +232,10 @@ class IngestionService:
             can_progress_to_semantic_layer=self._can_progress_to_candidate_promotion(pdf_context["result"]),
             review_decisions=None,
         )
+        candidate_objects = self._attach_clause_projections_to_candidates(
+            candidates=candidate_objects,
+            assembled_clauses=pdf_context["assembled_clauses"],
+        )
         review_workspace = self._build_review_workspace(
             pdf_name=pdf_name,
             xml_name=xml_name,
@@ -229,6 +243,7 @@ class IngestionService:
             semantic_units=semantic_units,
             fragments=pdf_context["fragments"],
             structured_blocks=pdf_context["structured_blocks"],
+            assembled_clauses=pdf_context["assembled_clauses"],
             alignments=pdf_context["alignments"],
             candidates=candidate_objects,
             canonical_snippets=canonical_snippets,
@@ -274,6 +289,7 @@ class IngestionService:
         docling_view = self._build_docling_view(
             structured_blocks=pdf_context["structured_blocks"],
             tables=pdf_context["tables"],
+            assembled_clauses=pdf_context["assembled_clauses"],
             strategy=pdf_context["strategy"],
         )
 
@@ -307,6 +323,7 @@ class IngestionService:
                 "xml_semantic_units": semantic_units,
                 "pdf_fragments": pdf_context["fragments"],
                 "structured_blocks": pdf_context["structured_blocks"],
+                "pdf_clause_candidates": pdf_context["assembled_clauses"],
                 "docling_tables": pdf_context["tables"],
                 "alignments": pdf_context["alignments"],
                 "parity_scaffold": pdf_context["parity_scaffold"],
@@ -325,6 +342,197 @@ class IngestionService:
                 "graph_readiness": graph_readiness,
                 "foundational_baseline_corpus": foundational_baseline_corpus,
                 "schema_runtime": xml_context["metrics"].get("schema_runtime", {}),
+            },
+            "review_workspace": review_workspace,
+            "docling_view": docling_view,
+        }
+
+    def process_pdf_only(
+        self,
+        *,
+        pdf_bytes: bytes,
+        pdf_name: str,
+        xml_bytes: bytes | None = None,
+        xml_name: str | None = None,
+        document_class: str | None = None,
+        extraction_profile: str | None = None,
+        evaluation_profile: str | None = None,
+        extractor_strategy: str | None = None,
+    ) -> dict[str, Any]:
+        xml_context = self._reference_xml_context(xml_bytes=xml_bytes, xml_name=xml_name)
+        strategy = self.router.route(
+            pdf_name=pdf_name,
+            xml_name="",
+            requested_document_class=document_class,
+            requested_extraction_profile=extraction_profile,
+            requested_evaluation_profile=evaluation_profile,
+            requested_extractor_strategy=extractor_strategy,
+        )
+        strategy = self._resolve_runtime_strategy(strategy)
+        extracted = self._extract_pdf(pdf_bytes, strategy)
+        fragments = self._fragments_from_blocks(extracted.blocks, extracted.tables)
+        structured_blocks = [self._serialize_block(block) for block in extracted.blocks]
+        tables = [self._serialize_extracted_table(table) for table in extracted.tables]
+        assembled_clauses = self._build_assembled_clauses(structured_blocks)
+        pdf_context = self._build_pdf_only_context(
+            pdf_name=pdf_name,
+            extracted=extracted,
+            strategy=strategy,
+            fragments=fragments,
+            structured_blocks=structured_blocks,
+            tables=tables,
+            assembled_clauses=assembled_clauses,
+        )
+        pdf_units = self._build_pdf_candidate_units(
+            structured_blocks=structured_blocks,
+            assembled_clauses=assembled_clauses,
+        )
+        pdf_evidence_packets = self._build_pdf_native_evidence_packets(
+            units=pdf_units,
+            fragments=fragments,
+            structured_blocks=structured_blocks,
+            pdf_validation=pdf_context["result"],
+        )
+        candidate_objects = self._build_candidate_objects(
+            semantic_units=pdf_units,
+            pdf_evidence_packets=pdf_evidence_packets,
+            assembled_clauses=assembled_clauses,
+        )
+        (
+            candidate_objects,
+            candidate_relations,
+            reconciliation_records,
+            graph_edges,
+            enrichment_summary,
+            candidate_validation_results,
+            candidate_validation_summary,
+            canonical_snippets,
+        ) = self._run_candidate_runtime(
+            xml_bytes=None,
+            xml_metrics={},
+            semantic_units=pdf_units,
+            pdf_evidence_packets=pdf_evidence_packets,
+            candidate_objects=candidate_objects,
+            can_progress_to_semantic_layer=False,
+            review_decisions=None,
+        )
+        candidate_objects = self._attach_clause_projections_to_candidates(
+            candidates=candidate_objects,
+            assembled_clauses=assembled_clauses,
+        )
+        review_workspace = self._build_review_workspace(
+            pdf_name=pdf_name,
+            xml_name=xml_name or "",
+            xml_nodes=xml_context["xml_nodes"],
+            semantic_units=pdf_units,
+            fragments=fragments,
+            structured_blocks=structured_blocks,
+            assembled_clauses=assembled_clauses,
+            alignments=[],
+            candidates=candidate_objects,
+            canonical_snippets=canonical_snippets,
+            xml_validation=xml_context["result"],
+            pdf_validation=pdf_context["result"],
+            candidate_relations=candidate_relations,
+            reconciliation_records=reconciliation_records,
+            graph_edges=graph_edges,
+            enrichment_summary=enrichment_summary,
+            candidate_validation_results=candidate_validation_results,
+            candidate_validation_summary=candidate_validation_summary,
+            review_decisions=[],
+            pdf_evidence_packets=pdf_evidence_packets,
+        )
+        foundational_baseline_corpus = self._build_foundational_baseline_corpus_slice(
+            semantic_units=pdf_units,
+            candidate_objects=candidate_objects,
+        )
+        candidate_quality = self._build_candidate_quality_metrics(
+            semantic_units=pdf_units,
+            pdf_evidence_packets=pdf_evidence_packets,
+            candidate_objects=candidate_objects,
+            review_units=review_workspace["review_units"],
+            canonical_snippets=canonical_snippets,
+            foundational_baseline_corpus=foundational_baseline_corpus,
+            candidate_validation_results=candidate_validation_results,
+        )
+        graph_readiness = self._build_graph_readiness_summary(
+            enrichment_summary=enrichment_summary,
+            xml_validation=xml_context["result"],
+            pdf_validation=pdf_context["result"],
+            candidate_quality=candidate_quality,
+            candidate_validation_summary=candidate_validation_summary,
+        )
+        review_workspace = {
+            **review_workspace,
+            "candidate_quality": candidate_quality,
+            "graph_readiness": graph_readiness,
+            "foundational_baseline_corpus": foundational_baseline_corpus,
+            "xml_reference_available": bool(xml_bytes),
+        }
+        docling_view = self._build_docling_view(
+            structured_blocks=structured_blocks,
+            tables=tables,
+            assembled_clauses=assembled_clauses,
+            strategy=pdf_context["strategy"],
+        )
+        return {
+            "summary": {
+                "ingestion_run_status": "transient_pdf_only",
+                "xml_status": xml_context["result"].get("overall_status") or "NOT_PROVIDED",
+                "pdf_status": pdf_context["result"]["overall_status"],
+                "can_progress": False,
+                "paired_document_id": None,
+                "schema_family_id": None,
+                "schema_family_version": None,
+                "schema_registry_version": None,
+                "schema_normalizer_version": None,
+                "schema_recheck_status": "not_applicable",
+                "document_strategy": pdf_context["strategy"],
+                "parity_summary": pdf_context["parity_scaffold"]["summary"],
+                "created_at": utc_now_iso(),
+                "ingestion_run_id": None,
+                "xml_source_document_id": self._slugify(xml_name or "xml_not_provided") if xml_name else None,
+                "pdf_source_document_id": self._slugify(pdf_name),
+            },
+            "results": {
+                "xml_validation": xml_context["result"],
+                "pdf_validation": pdf_context["result"],
+            },
+            "raw_metrics": {
+                "xml": xml_context["metrics"],
+                "pdf": pdf_context["metrics"],
+            },
+            "lineage": {
+                "document_family_id": self._build_document_family_id(
+                    pdf_name=pdf_name,
+                    xml_name=xml_name or "pdf_only_reference",
+                ),
+                "workspace_mode": "pdf_only",
+                "xml_nodes": xml_context["xml_nodes"],
+                "xml_semantic_units": [],
+                "reference_xml_semantic_units": xml_context["semantic_units"],
+                "pdf_semantic_units": pdf_units,
+                "pdf_fragments": fragments,
+                "structured_blocks": structured_blocks,
+                "pdf_clause_candidates": assembled_clauses,
+                "docling_tables": tables,
+                "alignments": [],
+                "parity_scaffold": pdf_context["parity_scaffold"],
+                "pdf_evidence_packets": pdf_evidence_packets,
+                "candidate_objects": candidate_objects,
+                "candidate_relations": candidate_relations,
+                "reconciliation_records": reconciliation_records,
+                "candidate_validation_results": candidate_validation_results,
+                "candidate_validation_summary": candidate_validation_summary,
+                "graph_edges": graph_edges,
+                "enrichment_summary": enrichment_summary,
+                "canonical_snippets": canonical_snippets,
+                "pdf_tables": pdf_context["result"].get("table_validation", []),
+                "xml_tables": xml_context["result"].get("table_validation", []),
+                "candidate_quality": candidate_quality,
+                "graph_readiness": graph_readiness,
+                "foundational_baseline_corpus": foundational_baseline_corpus,
+                "schema_runtime": {},
             },
             "review_workspace": review_workspace,
             "docling_view": docling_view,
@@ -353,17 +561,183 @@ class IngestionService:
         structured_blocks = [self._serialize_block(block) for block in extracted.blocks]
         tables = [self._serialize_extracted_table(table) for table in extracted.tables]
         strategy_payload = self._serialize_strategy(strategy, extracted)
+        assembled_clauses = self._build_assembled_clauses(structured_blocks)
         return {
             "docling_view": self._build_docling_view(
                 structured_blocks=structured_blocks,
                 tables=tables,
+                assembled_clauses=assembled_clauses,
                 strategy=strategy_payload,
             ),
             "raw_metrics": {
                 "structured_block_count": len(structured_blocks),
+                "assembled_clause_count": len(assembled_clauses),
                 "table_count": len(tables),
                 "runtime_mode": extracted.runtime_mode,
                 "runtime_strategy": extracted.strategy_name,
+            },
+        }
+
+    def _reference_xml_context(self, *, xml_bytes: bytes | None, xml_name: str | None) -> dict[str, Any]:
+        if not xml_bytes or not xml_name:
+            return {
+                "result": {
+                    "validation_id": "xml_reference_not_provided",
+                    "document": {
+                        "doc_id": "xml_reference_not_provided",
+                        "schema_family_id": None,
+                    },
+                    "overall_status": "NOT_PROVIDED",
+                    "gate_decision": {
+                        "can_progress_to_alignment_layer": False,
+                        "blocked": False,
+                        "reason": "XML was not supplied for PDF-only review.",
+                    },
+                    "warnings": [],
+                    "errors": [],
+                    "table_validation": [],
+                    "rule_results": [],
+                },
+                "metrics": {
+                    "schema_family_id": None,
+                    "metadata": {},
+                    "warnings": [],
+                    "errors": [],
+                    "reference_mode": "not_provided",
+                },
+                "xml_nodes": [],
+                "semantic_units": [],
+            }
+        context = self._validate_xml(xml_bytes, xml_name)
+        metrics = dict(context.get("metrics") or {})
+        metrics["reference_mode"] = "secondary_reference"
+        return {
+            "result": context["result"],
+            "metrics": metrics,
+            "xml_nodes": context["xml_nodes"],
+            "semantic_units": context["semantic_units"],
+        }
+
+    def _build_pdf_only_context(
+        self,
+        *,
+        pdf_name: str,
+        extracted: ExtractedPdf,
+        strategy: DocumentStrategyDecision,
+        fragments: list[PdfFragment],
+        structured_blocks: list[dict[str, Any]],
+        tables: list[dict[str, Any]],
+        assembled_clauses: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        table_validation = [
+            {
+                "table_id": table.get("table_id"),
+                "status": "PASS" if table.get("rows") else "FAIL",
+                "rows_expected": len(table.get("rows") or []),
+                "rows_extracted": len(table.get("rows") or []),
+                "confidence": 0.99 if table.get("rows") else 0.0,
+            }
+            for table in tables
+        ]
+        overall_confidence = round(
+            average(
+                [
+                    1.0 if fragments else 0.0,
+                    1.0 if structured_blocks else 0.0,
+                    1.0 if not tables or all(table.get("rows") for table in tables) else 0.6,
+                ]
+            ),
+            3,
+        )
+        warnings = [
+            {
+                "code": "PDF_ONLY_REVIEW_MODE",
+                "severity": "warning",
+                "message": "Candidate inventory is derived from the PDF parsing engine only; XML remains secondary reference data.",
+                "rule_id": "PDF_ONLY_REVIEW",
+            }
+        ]
+        result = {
+            "validation_id": f"pdf_only_{self._slugify(pdf_name)}",
+            "contract": {
+                "contract_id": self.contracts["pdf_contract"]["contract_id"],
+                "contract_version": self.contracts["pdf_contract"]["contract_version"],
+            },
+            "document": {
+                "doc_id": self._slugify(pdf_name),
+                "paired_document_id": None,
+                "paired_xml_doc_id": None,
+                "pages_processed": extracted.pages_processed,
+                "fragments_extracted": len(fragments),
+                "tables_extracted": len(tables),
+            },
+            "overall_status": "PASS_WITH_WARNINGS" if fragments else "FAIL",
+            "gate_decision": {
+                "can_progress_to_semantic_layer": False,
+                "blocked": False,
+                "reason": "PDF-only workspace is review-only and does not promote canonical snippets.",
+            },
+            "confidence": {
+                "overall": overall_confidence,
+                "sources": {
+                    "block_structure": 1.0 if structured_blocks else 0.0,
+                    "table_structure": 1.0 if not tables or all(table.get("rows") for table in tables) else 0.6,
+                    "xml_alignment": 0.0,
+                    "metadata": 1.0 if structured_blocks else 0.0,
+                },
+            },
+            "alignment_summary": {
+                "aligned": 0,
+                "unresolved": len(fragments),
+                "average_confidence": 0.0,
+            },
+            "warnings": warnings,
+            "errors": [] if fragments else [{"code": "NO_PDF_FRAGMENTS", "severity": "error", "message": "No PDF fragments were extracted."}],
+            "rule_results": [
+                {
+                    "rule_id": "PDF_ONLY_REVIEW",
+                    "status": "PASS_WITH_WARNINGS" if fragments else "FAIL",
+                    "details": {
+                        "structured_block_count": len(structured_blocks),
+                        "assembled_clause_count": len(assembled_clauses),
+                        "fragment_count": len(fragments),
+                    },
+                }
+            ],
+            "table_validation": table_validation,
+            "trace_sample": [
+                {
+                    "fragment_id": fragment.fragment_id,
+                    "page": fragment.page,
+                    "bbox": fragment.bbox,
+                }
+                for fragment in fragments[:10]
+            ],
+        }
+        return {
+            "result": result,
+            "metrics": {
+                "pages_processed": extracted.pages_processed,
+                "total_words": extracted.total_words,
+                "structured_block_count": len(structured_blocks),
+                "assembled_clause_count": len(assembled_clauses),
+                "table_count": len(tables),
+                "quality_score": overall_confidence,
+                "runtime_mode": extracted.runtime_mode,
+            },
+            "fragments": fragments,
+            "structured_blocks": structured_blocks,
+            "assembled_clauses": assembled_clauses,
+            "tables": tables,
+            "alignments": [],
+            "strategy": self._serialize_strategy(strategy, extracted),
+            "parity_scaffold": {
+                "mode": "pdf_only",
+                "summary": {
+                    "parity_mode": "pdf_only_review",
+                    "alignment_count": 0,
+                    "fragment_count": len(fragments),
+                },
             },
         }
 
@@ -1001,6 +1375,9 @@ class IngestionService:
         )
         overall_confidence = round(average([block_structure_score, table_score, alignment_score, metadata_score]), 3)
         parity_scaffold = self._build_parity_scaffold(strategy, fragments, alignments, xml_nodes)
+        serialized_blocks = [self._serialize_block(block) for block in scoped_blocks]
+        serialized_tables = [self._serialize_extracted_table(table) for table in scoped_tables]
+        assembled_clauses = self._build_assembled_clauses(serialized_blocks, alignments=alignments)
 
         rule_results: list[dict[str, Any]] = []
         warnings: list[dict[str, Any]] = []
@@ -1290,8 +1667,9 @@ class IngestionService:
                 "runtime_mode": extracted.runtime_mode,
             },
             "fragments": fragments,
-            "structured_blocks": [self._serialize_block(block) for block in scoped_blocks],
-            "tables": [self._serialize_extracted_table(table) for table in scoped_tables],
+            "structured_blocks": serialized_blocks,
+            "assembled_clauses": assembled_clauses,
+            "tables": serialized_tables,
             "alignments": alignments,
             "strategy": self._serialize_strategy(strategy, extracted),
             "parity_scaffold": parity_scaffold,
@@ -1530,6 +1908,7 @@ class IngestionService:
         *,
         structured_blocks: list[dict[str, Any]],
         tables: list[dict[str, Any]],
+        assembled_clauses: list[dict[str, Any]],
         strategy: dict[str, Any],
     ) -> dict[str, Any]:
         page_index: dict[int, dict[str, Any]] = {}
@@ -1587,8 +1966,741 @@ class IngestionService:
         return {
             "blocks": structured_blocks,
             "tables": tables,
+            "assembled_clauses": assembled_clauses,
             "strategy": strategy,
             "page_index": pages,
+        }
+
+    def _build_assembled_clauses(
+        self,
+        structured_blocks: list[dict[str, Any]],
+        *,
+        alignments: list[dict[str, Any]] | None = None,
+    ) -> list[dict[str, Any]]:
+        ordered_blocks = [
+            dict(block)
+            for block in sorted(structured_blocks, key=self._structured_block_sort_key)
+            if str(block.get("block_type") or "") in {"heading", "paragraph", "list_item"}
+            and clean_text(str(block.get("text") or ""))
+        ]
+        if not ordered_blocks:
+            return []
+
+        anchor_entries: list[dict[str, Any]] = []
+        anchor_by_position: dict[int, dict[str, Any]] = {}
+        clause_path_stack: list[str] = []
+        previous_block_type: str | None = None
+
+        for index, block in enumerate(ordered_blocks):
+            anchor = self._classify_clause_anchor(block, previous_block_type=previous_block_type)
+            previous_block_type = str(block.get("block_type") or "")
+            if not anchor.get("is_anchor"):
+                continue
+            if str(block.get("block_type") or "") == "heading":
+                clause_path_stack = []
+                clause_path: list[str] = []
+            elif anchor.get("label_key") and anchor.get("depth"):
+                depth = int(anchor["depth"])
+                clause_path_stack = clause_path_stack[: max(depth - 1, 0)]
+                clause_path_stack.append(str(anchor["label_key"]))
+                clause_path = list(clause_path_stack)
+            else:
+                clause_path = []
+            entry = {
+                "position": index,
+                "block": block,
+                "block_type": str(block.get("block_type") or ""),
+                "label": anchor.get("label"),
+                "label_key": anchor.get("label_key"),
+                "label_type": anchor.get("label_type"),
+                "depth": anchor.get("depth"),
+                "title_or_lead": anchor.get("content_text") or clean_text(str(block.get("text") or "")),
+                "clause_path": clause_path,
+            }
+            anchor_entries.append(entry)
+            anchor_by_position[index] = entry
+
+        if not anchor_entries:
+            return []
+
+        alignments_by_fragment: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for alignment in alignments or []:
+            fragment_id = str(alignment.get("fragment_id") or "")
+            if fragment_id:
+                alignments_by_fragment[fragment_id].append(alignment)
+
+        clauses: list[dict[str, Any]] = []
+        for entry in anchor_entries:
+            start_position = int(entry["position"])
+            current_depth = entry.get("depth")
+            rendered_blocks: list[dict[str, Any]] = []
+            child_items: list[dict[str, Any]] = []
+            source_block_ids: list[str] = []
+            pages: list[int] = []
+            bboxes: list[list[float]] = []
+            active_relative_depth = 0
+
+            for position in range(start_position, len(ordered_blocks)):
+                block = ordered_blocks[position]
+                nested_anchor = anchor_by_position.get(position)
+                if position > start_position and nested_anchor and self._should_end_assembled_clause(
+                    current_anchor=entry,
+                    next_anchor=nested_anchor,
+                ):
+                    break
+
+                page = int(block.get("page") or 0)
+                bbox = self._normalized_bbox(block.get("bbox"))
+                block_id = str(block.get("block_id") or "")
+                if block_id:
+                    source_block_ids.append(block_id)
+                if page > 0:
+                    pages.append(page)
+                if bbox:
+                    bboxes.append(bbox)
+
+                if position == start_position:
+                    label = entry.get("label")
+                    relative_depth = 0
+                    render_role = "anchor"
+                    active_relative_depth = 0
+                elif nested_anchor and nested_anchor.get("depth") and current_depth and int(nested_anchor["depth"]) > int(current_depth):
+                    label = nested_anchor.get("label")
+                    relative_depth = max(1, int(nested_anchor["depth"]) - int(current_depth))
+                    render_role = "child_item"
+                    active_relative_depth = relative_depth
+                else:
+                    label = None
+                    relative_depth = active_relative_depth
+                    render_role = "continuation"
+
+                render_block = self._build_clause_render_block(
+                    block=block,
+                    label=label,
+                    render_role=render_role,
+                    relative_depth=relative_depth,
+                )
+                rendered_blocks.append(render_block)
+                if render_role == "child_item":
+                    child_items.append(
+                        {
+                            "block_id": render_block["block_id"],
+                            "label": render_block.get("label"),
+                            "text": render_block["text"],
+                            "content_text": render_block["content_text"],
+                            "page": render_block["page"],
+                            "bbox": render_block["bbox"],
+                            "relative_depth": render_block["relative_depth"],
+                        }
+                    )
+
+            alignment_summary = self._assembled_clause_alignment_summary(
+                source_block_ids=source_block_ids,
+                alignments_by_fragment=alignments_by_fragment,
+            )
+            header_summary = self._assembled_clause_header_summary(
+                entry=entry,
+                rendered_blocks=rendered_blocks,
+            )
+            style_evidence = self._assembled_clause_style_evidence(header_summary["rendered_blocks"])
+            confidence = self._assembled_clause_confidence(
+                anchor=entry,
+                rendered_blocks=header_summary["rendered_blocks"],
+                alignment_confidence=alignment_summary["alignment_confidence"],
+            )
+            clauses.append(
+                {
+                    "clause_candidate_id": f"assembled_clause:{entry['block'].get('block_id')}",
+                    "anchor": {
+                        "block_id": entry["block"].get("block_id"),
+                        "page": entry["block"].get("page"),
+                        "bbox": self._normalized_bbox(entry["block"].get("bbox")),
+                        "block_type": entry["block"].get("block_type"),
+                        "label": entry.get("label"),
+                        "title_or_lead": header_summary["title_or_lead"],
+                    },
+                    "clause_path": list(entry.get("clause_path") or []),
+                    "label": entry.get("label"),
+                    "label_type": entry.get("label_type"),
+                    "clause_code": header_summary["clause_code"],
+                    "heading_text": header_summary["heading_text"],
+                    "title_or_lead": header_summary["title_or_lead"],
+                    "header_blocks": header_summary["header_blocks"],
+                    "body_blocks": header_summary["body_blocks"],
+                    "marginalia_blocks": header_summary["marginalia_blocks"],
+                    "rendered_blocks": header_summary["rendered_blocks"],
+                    "child_items": child_items,
+                    "bbox": self._merge_bboxes(bboxes),
+                    "pages": sorted({page for page in pages if page > 0}),
+                    "style_evidence": style_evidence,
+                    "confidence": confidence,
+                    "source_block_ids": source_block_ids,
+                    "matched_xml_node_id": alignment_summary["matched_xml_node_id"],
+                    "alignment_confidence": alignment_summary["alignment_confidence"],
+                }
+            )
+        return clauses
+
+    def _structured_block_sort_key(self, block: dict[str, Any]) -> tuple[int, float, float, str]:
+        bbox = self._normalized_bbox(block.get("bbox"))
+        return (
+            int(block.get("page") or 0),
+            float(bbox[1] if len(bbox) == 4 else 0.0),
+            float(bbox[0] if len(bbox) == 4 else 0.0),
+            str(block.get("block_id") or ""),
+        )
+
+    def _normalized_bbox(self, bbox: Any) -> list[float]:
+        if not isinstance(bbox, list) or len(bbox) != 4:
+            return []
+        try:
+            x0, y0, x1, y1 = [round(float(value), 2) for value in bbox]
+        except (TypeError, ValueError):
+            return []
+        return [min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)]
+
+    def _is_editorial_marginalia_text(self, text: str) -> bool:
+        cleaned = clean_text(text)
+        if not cleaned:
+            return False
+        if _BRACKETED_MARGINALIA_PATTERN.match(cleaned):
+            return True
+        return bool(_EDITORIAL_MARGINALIA_PATTERN.match(cleaned.strip("()[] ")))
+
+    def _looks_like_heading_text(self, text: str, block: dict[str, Any]) -> bool:
+        cleaned = clean_text(text)
+        if not cleaned or len(cleaned) > 120:
+            return False
+        if self._is_editorial_marginalia_text(cleaned):
+            return False
+        if cleaned.endswith((".", ";", ":", "-", "\u2014")):
+            return False
+        words = re.findall(r"[A-Za-z][A-Za-z0-9'-]*", cleaned)
+        if not words:
+            return False
+        title_like = sum(1 for word in words if word[:1].isupper())
+        metadata = block.get("metadata", {}) if isinstance(block.get("metadata"), dict) else {}
+        style_summary = metadata.get("style_summary") if isinstance(metadata.get("style_summary"), dict) else {}
+        emphasized = bool(style_summary.get("is_bold") or style_summary.get("is_italic"))
+        return emphasized or title_like >= max(2, int(len(words) * 0.6))
+
+    def _should_promote_post_heading_anchor(self, block: dict[str, Any], *, previous_block_type: str | None) -> bool:
+        if previous_block_type != "heading":
+            return False
+        text = clean_text(str(block.get("text") or ""))
+        if not text or self._is_editorial_marginalia_text(text) or _NON_CLAUSE_LEAD_PATTERN.match(text):
+            return False
+        return self._looks_like_heading_text(text, block)
+
+    def _extract_clause_code_and_heading(self, text: str) -> tuple[str | None, str]:
+        cleaned = clean_text(text)
+        code_match = _CLAUSE_CODE_PATTERN.match(cleaned)
+        if not code_match:
+            return None, cleaned
+        clause_code = clean_text(code_match.group(1))
+        remainder = clean_text(cleaned[len(code_match.group(0)) :])
+        return clause_code, remainder
+
+    def _blocks_share_header_band(self, left_block: dict[str, Any], right_block: dict[str, Any]) -> bool:
+        left_bbox = self._normalized_bbox(left_block.get("bbox"))
+        right_bbox = self._normalized_bbox(right_block.get("bbox"))
+        if len(left_bbox) != 4 or len(right_bbox) != 4:
+            return False
+        if int(left_block.get("page") or 0) != int(right_block.get("page") or 0):
+            return False
+        same_row = abs(left_bbox[1] - right_bbox[1]) <= 14 or abs(left_bbox[3] - right_bbox[3]) <= 14
+        near_row = 0 <= right_bbox[1] - left_bbox[3] <= 18
+        return same_row or near_row
+
+    def _assembled_clause_header_summary(
+        self,
+        *,
+        entry: dict[str, Any],
+        rendered_blocks: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        projected_blocks = [dict(block) for block in rendered_blocks]
+        if not projected_blocks:
+            return {
+                "clause_code": None,
+                "heading_text": None,
+                "title_or_lead": entry.get("title_or_lead"),
+                "header_blocks": [],
+                "body_blocks": [],
+                "marginalia_blocks": [],
+                "rendered_blocks": [],
+            }
+
+        marginalia_ids = {
+            str(block.get("block_id") or "")
+            for block in projected_blocks
+            if self._is_editorial_marginalia_text(str(block.get("text") or ""))
+        }
+        clause_code: str | None = None
+        heading_text: str | None = None
+        header_block_ids: set[str] = set()
+
+        anchor_block = projected_blocks[0]
+        anchor_code, anchor_remainder = self._extract_clause_code_and_heading(str(anchor_block.get("text") or ""))
+        if anchor_code:
+            clause_code = anchor_code
+            header_block_ids.add(str(anchor_block.get("block_id") or ""))
+            if anchor_remainder and self._looks_like_heading_text(anchor_remainder, anchor_block):
+                heading_text = anchor_remainder
+        elif str(entry.get("label_type") or "") == "clause_code":
+            clause_code = str(entry.get("label") or "") or None
+            header_block_ids.add(str(anchor_block.get("block_id") or ""))
+
+        non_marginal_blocks = [
+            block
+            for block in projected_blocks
+            if str(block.get("block_id") or "") not in marginalia_ids and str(block.get("render_role") or "") != "child_item"
+        ]
+        if clause_code:
+            for block in non_marginal_blocks[1:4]:
+                if not self._blocks_share_header_band(anchor_block, block):
+                    break
+                if self._extract_clause_code_and_heading(str(block.get("text") or ""))[0]:
+                    continue
+                if self._looks_like_heading_text(str(block.get("text") or ""), block):
+                    heading_text = clean_text(str(block.get("text") or ""))
+                    header_block_ids.add(str(block.get("block_id") or ""))
+                    break
+        elif str(anchor_block.get("block_type") or "") == "heading":
+            header_block_ids.add(str(anchor_block.get("block_id") or ""))
+            if self._looks_like_heading_text(str(anchor_block.get("text") or ""), anchor_block):
+                heading_text = clean_text(str(anchor_block.get("text") or ""))
+
+        title_or_lead = clean_text(str(entry.get("title_or_lead") or ""))
+        if clause_code and heading_text:
+            title_or_lead = clean_text(f"{clause_code} {heading_text}")
+        elif heading_text:
+            title_or_lead = heading_text
+
+        header_blocks: list[dict[str, Any]] = []
+        body_blocks: list[dict[str, Any]] = []
+        marginalia_blocks: list[dict[str, Any]] = []
+        for block in projected_blocks:
+            block_id = str(block.get("block_id") or "")
+            next_block = dict(block)
+            if block_id in marginalia_ids:
+                next_block["render_role"] = "annotation"
+                next_block["relative_depth"] = 0
+                marginalia_blocks.append(next_block)
+            elif block_id in header_block_ids:
+                next_block["render_role"] = "header"
+                next_block["relative_depth"] = 0
+                header_blocks.append(next_block)
+            else:
+                body_blocks.append(next_block)
+
+        return {
+            "clause_code": clause_code,
+            "heading_text": heading_text,
+            "title_or_lead": title_or_lead,
+            "header_blocks": header_blocks,
+            "body_blocks": body_blocks,
+            "marginalia_blocks": marginalia_blocks,
+            "rendered_blocks": [*header_blocks, *marginalia_blocks, *body_blocks],
+        }
+
+    def _classify_clause_anchor(
+        self,
+        block: dict[str, Any],
+        *,
+        previous_block_type: str | None,
+    ) -> dict[str, Any]:
+        block_type = str(block.get("block_type") or "")
+        text = clean_text(str(block.get("text") or ""))
+        label_info = self._extract_clause_label(text)
+        content_text = self._strip_leading_clause_label(text, label_info["label"]) if label_info["label"] else text
+        if block_type == "heading":
+            return {
+                "is_anchor": True,
+                "label": label_info["label"],
+                "label_key": label_info["label_key"],
+                "label_type": "heading",
+                "depth": 0,
+                "content_text": text,
+            }
+        if label_info["label"]:
+            return {
+                "is_anchor": True,
+                "label": label_info["label"],
+                "label_key": label_info["label_key"],
+                "label_type": label_info["label_type"],
+                "depth": label_info["depth"],
+                "content_text": content_text,
+            }
+        if _NON_CLAUSE_LEAD_PATTERN.match(text) or self._is_editorial_marginalia_text(text):
+            return {
+                "is_anchor": False,
+                "label": None,
+                "label_key": None,
+                "label_type": None,
+                "depth": None,
+                "content_text": text,
+            }
+        return {
+            "is_anchor": self._should_promote_post_heading_anchor(block, previous_block_type=previous_block_type),
+            "label": None,
+            "label_key": None,
+            "label_type": None,
+            "depth": None,
+            "content_text": text,
+        }
+
+    def _extract_clause_label(self, text: str) -> dict[str, Any]:
+        match = _CLAUSE_LABEL_PAREN_PATTERN.match(text)
+        if match:
+            token = clean_text(match.group(1))
+            if not token or self._is_editorial_marginalia_text(token):
+                return {"label": None, "label_key": None, "label_type": None, "depth": None}
+            normalized = normalize_text(token).replace(" ", "")
+            if token.isdigit():
+                return {"label": f"({token})", "label_key": normalized, "label_type": "numeric", "depth": 1}
+            if _ROMAN_TOKEN_PATTERN.match(token):
+                return {"label": f"({token})", "label_key": normalized, "label_type": "roman", "depth": 3}
+            if len(token) == 1 and token.isalpha():
+                return {"label": f"({token})", "label_key": normalized, "label_type": "alpha", "depth": 2}
+            if " " in token or len(normalized) > 4:
+                return {"label": None, "label_key": None, "label_type": None, "depth": None}
+            return {"label": f"({token})", "label_key": normalized, "label_type": "alphanumeric", "depth": 2}
+        code_match = _CLAUSE_CODE_PATTERN.match(text)
+        if code_match:
+            token = clean_text(code_match.group(1))
+            return {"label": token, "label_key": normalize_text(token).replace(" ", ""), "label_type": "clause_code", "depth": 1}
+        return {"label": None, "label_key": None, "label_type": None, "depth": None}
+
+    def _strip_leading_clause_label(self, text: str, label: str | None) -> str:
+        cleaned = clean_text(text)
+        if not label:
+            return cleaned
+        if cleaned.startswith(label):
+            return clean_text(cleaned[len(label) :])
+        return cleaned
+
+    def _should_end_assembled_clause(
+        self,
+        *,
+        current_anchor: dict[str, Any],
+        next_anchor: dict[str, Any],
+    ) -> bool:
+        current_block_type = str(current_anchor.get("block_type") or "")
+        next_block_type = str(next_anchor.get("block_type") or "")
+        if next_block_type == "heading":
+            return True
+        if current_block_type == "heading":
+            return True
+        current_depth = current_anchor.get("depth")
+        next_depth = next_anchor.get("depth")
+        if current_depth is None or next_depth is None:
+            return True
+        return int(next_depth) <= int(current_depth)
+
+    def _build_clause_render_block(
+        self,
+        *,
+        block: dict[str, Any],
+        label: str | None,
+        render_role: str,
+        relative_depth: int,
+    ) -> dict[str, Any]:
+        metadata = block.get("metadata", {}) if isinstance(block.get("metadata"), dict) else {}
+        text = clean_text(str(block.get("text") or ""))
+        content_text = self._strip_leading_clause_label(text, label)
+        return {
+            "block_id": str(block.get("block_id") or ""),
+            "page": int(block.get("page") or 0),
+            "bbox": self._normalized_bbox(block.get("bbox")),
+            "block_type": str(block.get("block_type") or ""),
+            "text": text,
+            "label": label,
+            "content_text": content_text,
+            "render_role": render_role,
+            "relative_depth": relative_depth,
+            "style_summary": metadata.get("style_summary") if isinstance(metadata.get("style_summary"), dict) else None,
+            "style_spans": self._project_clause_style_spans(
+                text=text,
+                content_text=content_text,
+                label=label,
+                style_spans=metadata.get("style_spans") if isinstance(metadata.get("style_spans"), list) else [],
+            ),
+        }
+
+    def _project_clause_style_spans(
+        self,
+        *,
+        text: str,
+        content_text: str,
+        label: str | None,
+        style_spans: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        if not style_spans:
+            return []
+        label_offset = 0
+        if label and text.startswith(label):
+            label_offset = len(label)
+            while label_offset < len(text) and text[label_offset].isspace():
+                label_offset += 1
+
+        projected: list[dict[str, Any]] = []
+        for span in style_spans:
+            if not isinstance(span, dict):
+                continue
+            try:
+                start = int(span.get("start", 0)) - label_offset
+                end = int(span.get("end", 0)) - label_offset
+            except (TypeError, ValueError):
+                continue
+            start = max(0, start)
+            end = min(len(content_text), max(start, end))
+            if end <= start:
+                continue
+            projected.append(
+                {
+                    **span,
+                    "start": start,
+                    "end": end,
+                }
+            )
+        return projected
+
+    def _merge_bboxes(self, bboxes: list[list[float]]) -> list[float]:
+        normalized = [bbox for bbox in bboxes if len(bbox) == 4]
+        if not normalized:
+            return []
+        return [
+            round(min(bbox[0] for bbox in normalized), 2),
+            round(min(bbox[1] for bbox in normalized), 2),
+            round(max(bbox[2] for bbox in normalized), 2),
+            round(max(bbox[3] for bbox in normalized), 2),
+        ]
+
+    def _assembled_clause_alignment_summary(
+        self,
+        *,
+        source_block_ids: list[str],
+        alignments_by_fragment: dict[str, list[dict[str, Any]]],
+    ) -> dict[str, Any]:
+        matched_alignments: list[dict[str, Any]] = []
+        for block_id in source_block_ids:
+            matched_alignments.extend(
+                alignment
+                for alignment in alignments_by_fragment.get(block_id, [])
+                if alignment.get("matched") and alignment.get("node_id")
+            )
+        if not matched_alignments:
+            return {"matched_xml_node_id": None, "alignment_confidence": 0.0}
+
+        grouped: dict[str, list[float]] = defaultdict(list)
+        for alignment in matched_alignments:
+            grouped[str(alignment["node_id"])].append(float(alignment.get("confidence", 0.0)))
+        node_id, scores = max(grouped.items(), key=lambda item: (sum(item[1]), len(item[1]), average(item[1])))
+        return {
+            "matched_xml_node_id": node_id,
+            "alignment_confidence": round(average(scores), 3),
+        }
+
+    def _assembled_clause_style_evidence(self, rendered_blocks: list[dict[str, Any]]) -> dict[str, Any]:
+        styled_blocks = [block for block in rendered_blocks if block.get("style_summary") or block.get("style_spans")]
+        span_count = sum(len(block.get("style_spans") or []) for block in styled_blocks)
+        primary_font = next(
+            (
+                block.get("style_summary", {}).get("font_name")
+                for block in styled_blocks
+                if isinstance(block.get("style_summary"), dict) and block.get("style_summary", {}).get("font_name")
+            ),
+            None,
+        )
+        return {
+            "styled_block_count": len(styled_blocks),
+            "style_span_count": span_count,
+            "primary_font_name": primary_font,
+            "has_emphasis": any(
+                isinstance(block.get("style_summary"), dict)
+                and (block["style_summary"].get("is_bold") or block["style_summary"].get("is_italic"))
+                for block in styled_blocks
+            ),
+        }
+
+    def _assembled_clause_confidence(
+        self,
+        *,
+        anchor: dict[str, Any],
+        rendered_blocks: list[dict[str, Any]],
+        alignment_confidence: float,
+    ) -> float:
+        base = 0.7
+        if anchor.get("label"):
+            base += 0.12
+        if str(anchor.get("block_type") or "") == "heading":
+            base += 0.08
+        if len(rendered_blocks) > 1:
+            base += min(0.1, 0.02 * (len(rendered_blocks) - 1))
+        if alignment_confidence > 0:
+            base += min(0.07, alignment_confidence * 0.07)
+        return round(min(base, 0.99), 3)
+
+    def _attach_clause_projections_to_candidates(
+        self,
+        *,
+        candidates: list[dict[str, Any]],
+        assembled_clauses: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        if not candidates:
+            return []
+        clause_by_anchor_block_id = {
+            str(clause.get("anchor", {}).get("block_id")): clause
+            for clause in assembled_clauses
+            if str(clause.get("anchor", {}).get("block_id") or "")
+        }
+        clauses_by_source_block_id: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for clause in assembled_clauses:
+            for block_id in clause.get("source_block_ids") or []:
+                clauses_by_source_block_id[str(block_id)].append(clause)
+
+        enriched: list[dict[str, Any]] = []
+        for candidate in candidates:
+            matched_clause = self._match_clause_to_candidate(
+                candidate=candidate,
+                clause_by_anchor_block_id=clause_by_anchor_block_id,
+                clauses_by_source_block_id=clauses_by_source_block_id,
+            )
+            next_candidate = dict(candidate)
+            next_candidate["assembled_clause"] = matched_clause
+            next_candidate["display_projection"] = self._build_candidate_display_projection(
+                candidate=next_candidate,
+                clause=matched_clause,
+            )
+            enriched.append(next_candidate)
+        return enriched
+
+    def _match_clause_to_candidate(
+        self,
+        *,
+        candidate: dict[str, Any],
+        clause_by_anchor_block_id: dict[str, dict[str, Any]],
+        clauses_by_source_block_id: dict[str, list[dict[str, Any]]],
+    ) -> dict[str, Any] | None:
+        source = candidate.get("source", {}) if isinstance(candidate.get("source"), dict) else {}
+        primary_fragment_id = str(
+            source.get("pdf_fragment_id")
+            or next((item.get("fragment_id") for item in (candidate.get("evidence") or []) if item.get("fragment_id")), "")
+            or ""
+        )
+        evidence_ids = {
+            str(item.get("fragment_id"))
+            for item in (candidate.get("evidence") or [])
+            if isinstance(item, dict) and item.get("fragment_id")
+        }
+        if primary_fragment_id:
+            evidence_ids.add(primary_fragment_id)
+        if primary_fragment_id and primary_fragment_id in clause_by_anchor_block_id:
+            return dict(clause_by_anchor_block_id[primary_fragment_id])
+
+        best_clause: dict[str, Any] | None = None
+        best_score = -1.0
+        candidate_node_id = str(candidate.get("xml_node_id") or "")
+        considered = {
+            id(clause): clause
+            for block_id in evidence_ids
+            for clause in clauses_by_source_block_id.get(block_id, [])
+        }.values()
+        for clause in considered:
+            score = 0.0
+            source_block_ids = {str(block_id) for block_id in (clause.get("source_block_ids") or [])}
+            overlap = len(source_block_ids.intersection(evidence_ids))
+            score += overlap * 3.0
+            if primary_fragment_id and primary_fragment_id in source_block_ids:
+                score += 5.0
+            if candidate_node_id and candidate_node_id == str(clause.get("matched_xml_node_id") or ""):
+                score += 2.5
+            score += float(clause.get("alignment_confidence") or 0.0)
+            if score > best_score:
+                best_score = score
+                best_clause = clause
+        return dict(best_clause) if best_clause else None
+
+    def _build_candidate_display_projection(
+        self,
+        *,
+        candidate: dict[str, Any],
+        clause: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        evidence = candidate.get("evidence") or []
+        primary_evidence = evidence[0] if evidence else {}
+        review = candidate.get("review", {}) if isinstance(candidate.get("review"), dict) else {}
+        relation_count = len(candidate.get("candidate_relations") or [])
+        reconciliation_count = len(candidate.get("reconciliation_records") or [])
+        if clause:
+            rendered_blocks = list(clause.get("rendered_blocks") or [])
+            source_provenance = {
+                "pages": list(clause.get("pages") or []),
+                "bbox": list(clause.get("bbox") or []),
+                "source_block_ids": list(clause.get("source_block_ids") or []),
+                "matched_xml_node_id": clause.get("matched_xml_node_id") or candidate.get("xml_node_id"),
+                "alignment_confidence": clause.get("alignment_confidence"),
+                "marginalia_count": len(clause.get("marginalia_blocks") or []),
+            }
+        else:
+            fallback_text = clean_text(str(primary_evidence.get("text") or candidate.get("proposed", {}).get("content") or ""))
+            rendered_blocks = [
+                {
+                    "block_id": str(primary_evidence.get("fragment_id") or ""),
+                    "page": int(primary_evidence.get("page") or 0),
+                    "bbox": list(primary_evidence.get("bbox") or []),
+                    "block_type": str(primary_evidence.get("pdf_evidence_class") or "paragraph"),
+                    "text": fallback_text,
+                    "label": None,
+                    "content_text": fallback_text,
+                    "render_role": "anchor",
+                    "relative_depth": 0,
+                    "style_summary": None,
+                    "style_spans": [],
+                }
+            ]
+            source_provenance = {
+                "pages": [int(primary_evidence.get("page") or 0)] if primary_evidence.get("page") else [],
+                "bbox": list(primary_evidence.get("bbox") or []),
+                "source_block_ids": [str(primary_evidence.get("fragment_id") or "")] if primary_evidence.get("fragment_id") else [],
+                "matched_xml_node_id": candidate.get("xml_node_id"),
+                "alignment_confidence": candidate.get("confidence", {}).get("overall"),
+                "marginalia_count": 0,
+            }
+
+        return {
+            "title": candidate.get("title") or candidate.get("candidate_id"),
+            "clause_label": clause.get("label") if clause else None,
+            "clause_path": list(clause.get("clause_path") or []) if clause else [],
+            "clause_code": clause.get("clause_code") if clause else candidate.get("pdf_clause_code"),
+            "heading_text": clause.get("heading_text") if clause else candidate.get("pdf_heading_text"),
+            "header_blocks": list(clause.get("header_blocks") or []) if clause else [],
+            "marginalia_blocks": list(clause.get("marginalia_blocks") or []) if clause else [],
+            "rendered_blocks": rendered_blocks,
+            "source_provenance": source_provenance,
+            "added_fields": {
+                "candidate_id": candidate.get("candidate_id"),
+                "semantic_unit_id": candidate.get("semantic_unit_id"),
+                "xml_node_id": candidate.get("xml_node_id"),
+                "candidate_type": candidate.get("candidate_type"),
+                "candidate_semantic_class": candidate.get("candidate_semantic_class"),
+                "confidence": candidate.get("confidence", {}).get("overall"),
+                "depends_on": list(candidate.get("depends_on") or []),
+                "xml_path": candidate.get("xml_path"),
+                "clause_code": clause.get("clause_code") if clause else candidate.get("pdf_clause_code"),
+                "heading_text": clause.get("heading_text") if clause else candidate.get("pdf_heading_text"),
+            },
+            "review_signals": {
+                "base_status": review.get("base_status"),
+                "needs_human_review": review.get("needs_human_review"),
+                "issue_class": review.get("issue_class"),
+                "source_emphasis": review.get("source_emphasis"),
+                "issues": list(review.get("issues") or []),
+                "xml_only_terms": list(review.get("xml_only_terms") or []),
+                "pdf_only_terms": list(review.get("pdf_only_terms") or []),
+                "relation_count": relation_count,
+                "reconciliation_count": reconciliation_count,
+            },
         }
 
     def _serialize_strategy(self, strategy: DocumentStrategyDecision, extracted: ExtractedPdf) -> dict[str, Any]:
@@ -2333,7 +3445,12 @@ class IngestionService:
         status = str(validation.get("overall_status") or "")
         if not status:
             return True
-        return status in {"PASS", "PASS_WITH_WARNINGS"}
+        return status in {"PASS", "PASS_WITH_WARNINGS", "NOT_PROVIDED", "REFERENCE_ONLY"}
+
+    def _semantic_inventory_mode(self, semantic_units: list[dict[str, Any]]) -> str:
+        if semantic_units and all(str(unit.get("source_kind") or "") == "pdf" for unit in semantic_units):
+            return "pdf_only"
+        return "xml"
 
     def _build_graph_readiness_summary(
         self,
@@ -2450,6 +3567,7 @@ class IngestionService:
         semantic_units: list[dict[str, Any]] | None = None,
         fragments: list[PdfFragment],
         structured_blocks: list[dict[str, Any]] | None = None,
+        assembled_clauses: list[dict[str, Any]] | None = None,
         alignments: list[dict[str, Any]],
         candidates: list[dict[str, Any]] | None = None,
         canonical_snippets: list[dict[str, Any]],
@@ -2464,38 +3582,54 @@ class IngestionService:
         graph_edges: list[dict[str, Any]] | None = None,
         enrichment_summary: dict[str, Any] | None = None,
         review_decisions: list[dict[str, Any]] | None = None,
+        pdf_evidence_packets: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         workspace_mode = "full"
         workspace_reason = "default_full_lineage_review"
         review_alignments = list(alignments)
-
-        if self._should_focus_review_workspace(xml_name=xml_name, xml_nodes=xml_nodes, fragments=fragments):
-            workspace_mode = "focused"
-            workspace_reason = "narrow_xml_artifact_focus"
-            review_alignments = self._focused_review_alignments(alignments, xml_nodes)
-
-        review_fragment_ids = {item["fragment_id"] for item in review_alignments}
-        review_node_ids = {item["node_id"] for item in review_alignments if item.get("node_id")}
-        review_xml_nodes = [node for node in xml_nodes if node.node_id in review_node_ids] if review_node_ids else []
-        review_fragments = [fragment for fragment in fragments if fragment.fragment_id in review_fragment_ids]
-        review_snippets = [
-            snippet
-            for snippet in canonical_snippets
-            if snippet.get("fragment_id") in review_fragment_ids
-        ]
         semantic_units = semantic_units or self._semantic_units_from_xml_nodes(xml_nodes)
-        pdf_packets = self._build_pdf_evidence_packets(
-            semantic_units=semantic_units,
-            fragments=fragments,
-            structured_blocks=structured_blocks,
-            alignments=alignments,
-            xml_validation=xml_validation,
-            pdf_validation=pdf_validation,
-        )
+        inventory_mode = self._semantic_inventory_mode(semantic_units)
+
+        if inventory_mode == "pdf_only":
+            workspace_mode = "pdf_only"
+            workspace_reason = "pdf_native_candidate_inventory"
+            review_fragment_ids = {fragment.fragment_id for fragment in fragments}
+            review_node_ids: set[str] = set()
+            review_xml_nodes = list(xml_nodes)
+            review_fragments = list(fragments)
+            review_snippets = list(canonical_snippets)
+        else:
+            if self._should_focus_review_workspace(xml_name=xml_name, xml_nodes=xml_nodes, fragments=fragments):
+                workspace_mode = "focused"
+                workspace_reason = "narrow_xml_artifact_focus"
+                review_alignments = self._focused_review_alignments(alignments, xml_nodes)
+
+            review_fragment_ids = {item["fragment_id"] for item in review_alignments}
+            review_node_ids = {item["node_id"] for item in review_alignments if item.get("node_id")}
+            review_xml_nodes = [node for node in xml_nodes if node.node_id in review_node_ids] if review_node_ids else []
+            review_fragments = [fragment for fragment in fragments if fragment.fragment_id in review_fragment_ids]
+            review_snippets = [
+                snippet
+                for snippet in canonical_snippets
+                if snippet.get("fragment_id") in review_fragment_ids
+            ]
+
+        if pdf_evidence_packets is None:
+            pdf_packets = self._build_pdf_evidence_packets(
+                semantic_units=semantic_units,
+                fragments=fragments,
+                structured_blocks=structured_blocks,
+                alignments=alignments,
+                xml_validation=xml_validation,
+                pdf_validation=pdf_validation,
+            )
+        else:
+            pdf_packets = list(pdf_evidence_packets)
         if candidates is None:
             candidate_objects = self._build_candidate_objects(
                 semantic_units=semantic_units,
                 pdf_evidence_packets=pdf_packets,
+                assembled_clauses=assembled_clauses or [],
             )
             rels: list[dict[str, Any]] = list(candidate_relations or [])
             reconciliations: list[dict[str, Any]] = list(reconciliation_records or [])
@@ -2525,6 +3659,10 @@ class IngestionService:
             validation_summary = dict(candidate_validation_summary or {})
             edges = list(graph_edges or [])
             summary = dict(enrichment_summary or {})
+        candidate_objects = self._attach_clause_projections_to_candidates(
+            candidates=candidate_objects,
+            assembled_clauses=assembled_clauses or [],
+        )
         if workspace_mode == "focused":
             review_candidates = [
                 candidate
@@ -2561,6 +3699,8 @@ class IngestionService:
             "xml_nodes": review_xml_nodes,
             "xml_semantic_units": semantic_units,
             "pdf_fragments": review_fragments,
+            "pdf_evidence_packets": pdf_packets,
+            "pdf_clause_candidates": list(assembled_clauses or []),
             "alignments": review_alignments,
             "candidates": review_candidates,
             "canonical_snippets": review_snippets,
@@ -2671,8 +3811,8 @@ class IngestionService:
                     "page": primary_evidence.get("page"),
                     "fragment_id": primary_evidence.get("fragment_id") or f"xml_only:{candidate.get('xml_node_id')}",
                     "node_id": candidate.get("xml_node_id"),
-                    "xml_path": candidate.get("xml_path", "No XML node linked yet"),
-                    "xml_text": candidate.get("xml_text", ""),
+                    "xml_path": candidate.get("xml_path") or "No XML node linked yet",
+                    "xml_text": candidate.get("xml_text") or "",
                     "pdf_text": primary_evidence.get("text", ""),
                     "bbox": primary_evidence.get("bbox", []),
                     "issues": candidate.get("review", {}).get("issues", []),
@@ -2809,6 +3949,139 @@ class IngestionService:
         ]
         return self._dedupe_semantic_units(units)
 
+    def _build_pdf_candidate_units(
+        self,
+        *,
+        structured_blocks: list[dict[str, Any]],
+        assembled_clauses: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        units: list[dict[str, Any]] = []
+        covered_block_ids: set[str] = set()
+
+        for clause in assembled_clauses:
+            anchor = clause.get("anchor", {}) if isinstance(clause.get("anchor"), dict) else {}
+            anchor_block_id = str(anchor.get("block_id") or "")
+            source_block_ids = [str(block_id) for block_id in (clause.get("source_block_ids") or []) if block_id]
+            covered_block_ids.update(source_block_ids)
+            text = clean_text(" ".join(str(block.get("text") or "") for block in (clause.get("body_blocks") or clause.get("rendered_blocks") or [])))
+            semantic_class = "title" if str(anchor.get("block_type") or "") == "heading" else "rule"
+            clause_code = clean_text(str(clause.get("clause_code") or ""))
+            heading_text = clean_text(str(clause.get("heading_text") or ""))
+            if clause_code and heading_text:
+                title = clean_text(f"{clause_code} {heading_text}")[:160]
+            elif heading_text:
+                title = heading_text[:160]
+            else:
+                title = clean_text(str(clause.get("title_or_lead") or text or anchor_block_id))[:160]
+            units.append(
+                {
+                    "unit_id": f"pdf_clause:{anchor_block_id}",
+                    "node_id": None,
+                    "semantic_class": semantic_class,
+                    "title": title,
+                    "text": text or title,
+                    "path": f"/pdf/clause[{anchor_block_id}]",
+                    "full_path": f"/pdf/clause[{anchor_block_id}]",
+                    "context_descriptor": None,
+                    "source_kind": "pdf",
+                    "anchor_block_id": anchor_block_id,
+                    "source_block_ids": source_block_ids or ([anchor_block_id] if anchor_block_id else []),
+                    "pages": list(clause.get("pages") or []),
+                    "bbox": list(clause.get("bbox") or []),
+                    "pdf_evidence_class": str(anchor.get("block_type") or "paragraph"),
+                    "clause_code": clause_code or None,
+                    "heading_text": heading_text or None,
+                }
+            )
+
+        if units:
+            uncovered_blocks = [
+                block
+                for block in structured_blocks
+                if str(block.get("block_id") or "") not in covered_block_ids
+                and str(block.get("block_type") or "") in {"heading", "paragraph", "list_item"}
+                and clean_text(str(block.get("text") or ""))
+                and not self._is_editorial_marginalia_text(str(block.get("text") or ""))
+            ]
+        else:
+            uncovered_blocks = [
+                block
+                for block in structured_blocks
+                if str(block.get("block_type") or "") in {"heading", "paragraph", "list_item"}
+                and clean_text(str(block.get("text") or ""))
+                and not self._is_editorial_marginalia_text(str(block.get("text") or ""))
+            ]
+
+        for block in uncovered_blocks:
+            block_id = str(block.get("block_id") or "")
+            text = clean_text(str(block.get("text") or ""))
+            semantic_class = "title" if str(block.get("block_type") or "") == "heading" else "rule"
+            units.append(
+                {
+                    "unit_id": f"pdf_block:{block_id}",
+                    "node_id": None,
+                    "semantic_class": semantic_class,
+                    "title": text[:160] or block_id,
+                    "text": text,
+                    "path": f"/pdf/block[{block_id}]",
+                    "full_path": f"/pdf/block[{block_id}]",
+                    "context_descriptor": None,
+                    "source_kind": "pdf",
+                    "anchor_block_id": block_id,
+                    "source_block_ids": [block_id],
+                    "pages": [int(block.get("page") or 0)] if block.get("page") else [],
+                    "bbox": list(block.get("bbox") or []),
+                    "pdf_evidence_class": str(block.get("block_type") or "paragraph"),
+                }
+            )
+
+        return units
+
+    def _build_pdf_native_evidence_packets(
+        self,
+        *,
+        units: list[dict[str, Any]],
+        fragments: list[PdfFragment],
+        structured_blocks: list[dict[str, Any]] | None,
+        pdf_validation: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        fragment_by_id = {fragment.fragment_id: fragment for fragment in fragments}
+        block_by_id = {
+            str(block.get("block_id")): block
+            for block in (structured_blocks or [])
+            if isinstance(block, dict) and block.get("block_id")
+        }
+        linked_issues = self._linked_review_issue_keys({}, pdf_validation)
+        packets: list[dict[str, Any]] = []
+        for unit in units:
+            evidence_fragments: list[dict[str, Any]] = []
+            source_block_ids = [str(block_id) for block_id in (unit.get("source_block_ids") or []) if block_id]
+            unit_confidence = float(unit.get("confidence") or 0.95)
+            for block_id in source_block_ids:
+                fragment = fragment_by_id.get(block_id)
+                if fragment is None:
+                    continue
+                evidence_fragments.append(
+                    {
+                        "fragment_id": fragment.fragment_id,
+                        "page": fragment.page,
+                        "bbox": fragment.bbox,
+                        "text": fragment.text,
+                        "confidence": unit_confidence,
+                        "pdf_evidence_class": self._pdf_evidence_class(fragment, block_by_id.get(fragment.fragment_id)),
+                        "matched": True,
+                    }
+                )
+            packets.append(
+                {
+                    "unit_id": unit["unit_id"],
+                    "node_id": None,
+                    "linked_issue": any(f"fragment:{evidence['fragment_id']}" in linked_issues for evidence in evidence_fragments),
+                    "evidence_fragments": evidence_fragments,
+                }
+            )
+        return packets
+
     def _build_pdf_evidence_packets(
         self,
         *,
@@ -2874,6 +4147,7 @@ class IngestionService:
         *,
         semantic_units: list[dict[str, Any]],
         pdf_evidence_packets: list[dict[str, Any]],
+        assembled_clauses: list[dict[str, Any]] | None = None,
     ) -> list[dict[str, Any]]:
         packet_by_unit_id = {packet["unit_id"]: packet for packet in pdf_evidence_packets}
         candidates: list[dict[str, Any]] = []
@@ -2883,46 +4157,68 @@ class IngestionService:
             primary_evidence = evidence[0] if evidence else {}
             context_descriptor = dict(unit.get("context_descriptor") or {})
             pdf_text = str(primary_evidence.get("text") or "")
-            raw_xml_only_terms, raw_pdf_only_terms = self._review_term_deltas(unit["text"], pdf_text)
-            xml_only_terms, pdf_only_terms, ignored_structural_terms = self._effective_review_term_deltas(
-                xml_only_terms=raw_xml_only_terms,
-                pdf_only_terms=raw_pdf_only_terms,
-                candidate_semantic_class=unit["semantic_class"],
-            )
-            alignment_like = {
-                "matched": bool(primary_evidence),
-                "node_id": unit["node_id"] if primary_evidence else None,
-                "confidence": float(primary_evidence.get("confidence", 0.0)),
-            }
-            issues = self._build_review_issues(
-                alignment=alignment_like,
-                xml_only_terms=xml_only_terms,
-                pdf_only_terms=pdf_only_terms,
-                linked_issue=bool(packet.get("linked_issue")),
-            )
-            review_issue_class = self._review_issue_class(
-                alignment=alignment_like,
-                linked_issue=bool(packet.get("linked_issue")),
-                xml_only_terms=xml_only_terms,
-                pdf_only_terms=pdf_only_terms,
-            )
-            review_source_emphasis = self._review_source_emphasis(
-                xml_only_terms=xml_only_terms,
-                pdf_only_terms=pdf_only_terms,
-            )
-            base_status = self._derive_review_base_status(
-                alignment=alignment_like,
-                issues=issues,
-                approved=False,
-                candidate_semantic_class=unit["semantic_class"],
-            )
+            inventory_mode = str(unit.get("source_kind") or "xml")
+            if inventory_mode == "pdf":
+                raw_xml_only_terms: list[str] = []
+                raw_pdf_only_terms: list[str] = []
+                xml_only_terms = []
+                pdf_only_terms = []
+                ignored_structural_terms = []
+                alignment_like = {
+                    "matched": bool(primary_evidence),
+                    "node_id": primary_evidence.get("fragment_id") if primary_evidence else None,
+                    "confidence": float(primary_evidence.get("confidence", 0.0) or 0.95),
+                }
+                issues = []
+                if not primary_evidence:
+                    issues.append("No PDF evidence fragment was linked to this PDF-native candidate.")
+                if bool(packet.get("linked_issue")):
+                    issues.append("PDF validation warnings or errors reference this candidate.")
+                review_issue_class = "clean_match" if primary_evidence else "unmatched"
+                review_source_emphasis = "pdf"
+                base_status = "match" if primary_evidence else "review required"
+            else:
+                raw_xml_only_terms, raw_pdf_only_terms = self._review_term_deltas(unit["text"], pdf_text)
+                xml_only_terms, pdf_only_terms, ignored_structural_terms = self._effective_review_term_deltas(
+                    xml_only_terms=raw_xml_only_terms,
+                    pdf_only_terms=raw_pdf_only_terms,
+                    candidate_semantic_class=unit["semantic_class"],
+                )
+                alignment_like = {
+                    "matched": bool(primary_evidence),
+                    "node_id": unit["node_id"] if primary_evidence else None,
+                    "confidence": float(primary_evidence.get("confidence", 0.0)),
+                }
+                issues = self._build_review_issues(
+                    alignment=alignment_like,
+                    xml_only_terms=xml_only_terms,
+                    pdf_only_terms=pdf_only_terms,
+                    linked_issue=bool(packet.get("linked_issue")),
+                )
+                review_issue_class = self._review_issue_class(
+                    alignment=alignment_like,
+                    linked_issue=bool(packet.get("linked_issue")),
+                    xml_only_terms=xml_only_terms,
+                    pdf_only_terms=pdf_only_terms,
+                )
+                review_source_emphasis = self._review_source_emphasis(
+                    xml_only_terms=xml_only_terms,
+                    pdf_only_terms=pdf_only_terms,
+                )
+                base_status = self._derive_review_base_status(
+                    alignment=alignment_like,
+                    issues=issues,
+                    approved=False,
+                    candidate_semantic_class=unit["semantic_class"],
+                )
             validation_state = "pass" if base_status == "match" else "requires_review"
-            overall_confidence = float(primary_evidence.get("confidence", 0.0))
+            overall_confidence = float(primary_evidence.get("confidence", 0.0) or (0.95 if inventory_mode == "pdf" else 0.0))
             candidates.append(
                 {
                     "candidate_id": f"candidate:{unit['unit_id']}",
                     "semantic_unit_id": unit["unit_id"],
                     "xml_node_id": unit["node_id"],
+                    "candidate_origin": inventory_mode,
                     "schema_family_id": unit.get("schema_family_id"),
                     "glossary_term": unit.get("glossary_term"),
                     "glossary_definition": unit.get("glossary_definition"),
@@ -2930,21 +4226,26 @@ class IngestionService:
                     "candidate_type": unit["semantic_class"],
                     "xml_structural_class": unit["semantic_class"],
                     "candidate_semantic_class": unit["semantic_class"],
-                    "xml_path": unit["path"],
-                    "xml_full_path": unit.get("full_path") or unit["path"],
+                    "xml_path": unit["path"] if inventory_mode != "pdf" else None,
+                    "xml_full_path": unit.get("full_path") if inventory_mode != "pdf" else None,
                     "xml_parent_node_id": context_descriptor.get("parent_node_id"),
                     "xml_root_node_id": context_descriptor.get("root_node_id"),
                     "xml_ancestor_node_ids": list(context_descriptor.get("ancestor_node_ids") or []),
                     "xml_ancestor_tags": list(context_descriptor.get("ancestor_tags") or []),
                     "xml_context_path_signature": context_descriptor.get("context_path_signature"),
                     "xml_context_descriptor": context_descriptor or None,
-                    "xml_text": unit["text"],
+                    "xml_text": unit["text"] if inventory_mode != "pdf" else "",
+                    "pdf_unit_text": unit["text"],
+                    "pdf_anchor_block_id": unit.get("anchor_block_id"),
+                    "pdf_clause_code": unit.get("clause_code"),
+                    "pdf_heading_text": unit.get("heading_text"),
+                    "source_block_ids": list(unit.get("source_block_ids") or []),
                     "status": "validated" if validation_state == "pass" else "draft",
                     "validation_state": validation_state,
                     "confidence": {
                         "overall": overall_confidence,
                         "sources": {
-                            "alignment": overall_confidence,
+                            "alignment": overall_confidence if inventory_mode != "pdf" else 0.0,
                             "structure": 1.0 if unit["semantic_class"] != "ambiguous" else 0.0,
                         },
                     },
@@ -2975,7 +4276,10 @@ class IngestionService:
                     "depends_on": [],
                 }
             )
-        return candidates
+        return self._attach_clause_projections_to_candidates(
+            candidates=candidates,
+            assembled_clauses=assembled_clauses or [],
+        )
 
     def _can_progress_to_candidate_promotion(self, pdf_validation: dict[str, Any]) -> bool:
         gate_decision = pdf_validation.get("gate_decision") if isinstance(pdf_validation, dict) else {}
@@ -3091,8 +4395,9 @@ class IngestionService:
             source = candidate.get("source") or {}
             review = dict(candidate.get("review") or {})
             issues: list[CandidateValidationIssueRecord] = []
+            candidate_origin = str(candidate.get("candidate_origin") or "xml")
 
-            if not candidate.get("xml_node_id"):
+            if candidate_origin != "pdf" and not candidate.get("xml_node_id"):
                 issues.append(
                     CandidateValidationIssueRecord(
                         code="missing_xml_node",
@@ -3166,7 +4471,10 @@ class IngestionService:
                 advisory_issue_count = len(issues) - blocking_issue_count
 
             promotion_eligible = bool(
-                final_validation_state == "pass" and source.get("pdf_fragment_id") and candidate.get("xml_node_id")
+                candidate_origin != "pdf"
+                and final_validation_state == "pass"
+                and source.get("pdf_fragment_id")
+                and candidate.get("xml_node_id")
             )
 
             review["needs_human_review"] = final_validation_state == "requires_review"

@@ -61,6 +61,81 @@ export type SemanticEnrichment = {
   enrichment_hints?: SemanticEnrichmentHints;
 };
 
+export type ClauseStyleSummary = {
+  source?: string;
+  font_name?: string | null;
+  font_size_pt?: number | null;
+  text_color_rgb?: number[] | null;
+  text_color_hex?: string | null;
+  is_bold?: boolean;
+  is_italic?: boolean;
+  confidence?: number | null;
+  span_count?: number | null;
+};
+
+export type ClauseStyleSpan = {
+  start?: number;
+  end?: number;
+  bbox?: number[];
+  font_name?: string | null;
+  font_size_pt?: number | null;
+  text_color_rgb?: number[] | null;
+  text_color_hex?: string | null;
+  is_bold?: boolean;
+  is_italic?: boolean;
+};
+
+export type RenderedClauseBlock = {
+  block_id: string;
+  page: number;
+  bbox: number[];
+  block_type: string;
+  text: string;
+  label?: string | null;
+  content_text: string;
+  render_role?: string;
+  relative_depth?: number;
+  style_summary?: ClauseStyleSummary | null;
+  style_spans?: ClauseStyleSpan[];
+};
+
+export type AssembledClause = {
+  clause_candidate_id: string;
+  label?: string | null;
+  label_type?: string | null;
+  clause_path?: string[];
+  clause_code?: string | null;
+  heading_text?: string | null;
+  title_or_lead?: string;
+  bbox?: number[];
+  pages?: number[];
+  source_block_ids?: string[];
+  matched_xml_node_id?: string | null;
+  alignment_confidence?: number | null;
+  header_blocks?: RenderedClauseBlock[];
+  rendered_blocks?: RenderedClauseBlock[];
+  body_blocks?: RenderedClauseBlock[];
+  marginalia_blocks?: RenderedClauseBlock[];
+  child_items?: Array<Record<string, unknown>>;
+  style_evidence?: Record<string, unknown>;
+  confidence?: number;
+  anchor?: Record<string, unknown>;
+};
+
+export type CandidateDisplayProjection = {
+  title?: string;
+  clause_label?: string | null;
+  clause_path?: string[];
+  clause_code?: string | null;
+  heading_text?: string | null;
+  header_blocks?: RenderedClauseBlock[];
+  marginalia_blocks?: RenderedClauseBlock[];
+  rendered_blocks?: RenderedClauseBlock[];
+  source_provenance?: Record<string, unknown>;
+  added_fields?: Record<string, unknown>;
+  review_signals?: Record<string, unknown>;
+};
+
 export type CandidateRecord = {
   id: string;
   title: string;
@@ -100,6 +175,8 @@ export type CandidateRecord = {
   semanticEnrichment: SemanticEnrichment | null;
   enrichmentHints: SemanticEnrichmentHints | null | undefined;
   dependsOn: string[];
+  assembledClause: AssembledClause | null;
+  displayProjection: CandidateDisplayProjection | null;
 };
 
 export type CandidateWithDisplayStatus = CandidateRecord & {
@@ -160,6 +237,7 @@ export type ReviewUnitInput = {
 
 export type CandidateObjectInput = {
   candidate_id: string;
+  semantic_unit_id?: string;
   xml_node_id?: string | null;
   title?: string;
   candidate_type?: string;
@@ -209,6 +287,8 @@ export type CandidateObjectInput = {
   graph_edges?: GraphEdgePayload[];
   enrichment_hints?: SemanticEnrichmentHints;
   depends_on?: string[];
+  assembled_clause?: AssembledClause | null;
+  display_projection?: CandidateDisplayProjection | null;
 };
 
 function issueClassPriority(value: string): number {
@@ -424,6 +504,8 @@ export function mapReviewUnitToCandidate(unit: ReviewUnitInput): CandidateRecord
     semanticEnrichment: unit.semantic_enrichment ?? null,
     enrichmentHints: unit.enrichment_hints ?? null,
     dependsOn: [],
+    assembledClause: null,
+    displayProjection: null,
   };
 }
 
@@ -468,5 +550,7 @@ export function mapCandidateObjectToCandidate(candidate: CandidateObjectInput): 
     semanticEnrichment: candidate.semantic_enrichment ?? null,
     enrichmentHints: candidate.enrichment_hints ?? null,
     dependsOn: candidate.depends_on ?? [],
+    assembledClause: candidate.assembled_clause ?? null,
+    displayProjection: candidate.display_projection ?? null,
   };
 }

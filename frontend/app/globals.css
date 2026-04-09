@@ -1905,10 +1905,107 @@ button:disabled {
   gap: 18px;
 }
 
+.candidate-inspector-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.95fr) minmax(420px, 1.35fr);
+  gap: 16px;
+  align-items: start;
+}
+
 .comparison-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 16px;
+}
+
+.candidate-raw-panel,
+.candidate-rendered-panel,
+.clause-render-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.candidate-raw-panel-header {
+  display: grid;
+  gap: 10px;
+}
+
+.candidate-raw-tab-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.button-secondary.active {
+  border-color: rgba(215, 161, 74, 0.4);
+  box-shadow: inset 0 0 0 1px rgba(215, 161, 74, 0.2);
+  color: var(--accent-strong);
+}
+
+.candidate-raw-json {
+  max-height: 640px;
+  overflow: auto;
+  margin: 0;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(153, 174, 197, 0.12);
+  background: rgba(10, 14, 22, 0.94);
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.candidate-rendered-metadata-grid {
+  align-items: start;
+}
+
+.rendered-clause-block-list {
+  display: grid;
+  gap: 10px;
+}
+
+.rendered-clause-block {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid rgba(153, 174, 197, 0.1);
+  border-radius: var(--radius-md);
+  background: rgba(14, 19, 28, 0.82);
+}
+
+.rendered-clause-block-anchor {
+  border-color: rgba(215, 161, 74, 0.22);
+  background:
+    linear-gradient(180deg, rgba(34, 24, 12, 0.46), rgba(14, 19, 28, 0.88));
+}
+
+.rendered-clause-block-child_item,
+.rendered-clause-block-continuation {
+  background: rgba(14, 19, 28, 0.72);
+}
+
+.rendered-clause-depth-1 {
+  margin-left: 18px;
+}
+
+.rendered-clause-depth-2 {
+  margin-left: 36px;
+}
+
+.rendered-clause-depth-3 {
+  margin-left: 54px;
+}
+
+.rendered-clause-label {
+  color: var(--accent-cool);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.rendered-clause-text {
+  color: var(--text);
+  line-height: 1.65;
+  white-space: pre-wrap;
 }
 
 .comparison-field-list {
@@ -2017,6 +2114,11 @@ button:disabled {
 .candidate-lineage-summary {
   display: grid;
   gap: 4px;
+}
+
+.candidate-empty-state {
+  display: grid;
+  gap: 10px;
 }
 
 .candidate-diagnostics-row {

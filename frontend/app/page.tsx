@@ -206,16 +206,18 @@ export default function HomePage() {
     if (loading) {
       if (loadingAction === "docling") {
         return xmlFile
-          ? `Running Docling extraction for ${pdfFile?.name ?? "selected PDF"} against ${xmlFile.name}...`
+          ? `Running Docling PDF review for ${pdfFile?.name ?? "selected PDF"} with ${xmlFile.name} as reference...`
           : `Running Docling extraction for ${pdfFile?.name ?? "selected PDF"}...`;
       }
-      return `Validating ${pdfFile?.name ?? "selected PDF"} against ${xmlFile?.name ?? "selected XML"}...`;
+      return xmlFile
+        ? `Building a PDF-native review workspace for ${pdfFile?.name ?? "selected PDF"} with ${xmlFile.name} as secondary reference...`
+        : `Building a PDF-native review workspace for ${pdfFile?.name ?? "selected PDF"}...`;
     }
     if (doclingPreview && !response) {
       return `Docling preview loaded for ${pdfFile?.name ?? "selected PDF"}.`;
     }
     if (!response) {
-      return "Upload a PDF and XML pair to validate the linked NCC representations.";
+      return "Upload a PDF to build a PDF-native candidate review workspace. XML is optional secondary reference data.";
     }
     return `XML: ${response.summary.xml_status} | PDF: ${response.summary.pdf_status} | Can Progress: ${response.summary.can_progress}`;
   }, [doclingPreview, loading, loadingAction, pdfFile, response, xmlFile]);
@@ -253,6 +255,7 @@ export default function HomePage() {
   );
 
   const activeDoclingView = useMemo(() => doclingPreview ?? response?.docling_view ?? null, [doclingPreview, response]);
+  const hasDoclingOnlyState = Boolean(activeDoclingView && !response);
 
   const latestRun = runs[0] ?? null;
   const loadedRunId = response?.summary.ingestion_run_id ?? null;
@@ -570,8 +573,8 @@ export default function HomePage() {
   }
 
   async function runValidation(options?: { extractorStrategy?: string; actionLabel?: "validate" | "docling" }): Promise<void> {
-    if (!pdfFile || !xmlFile) {
-      setError("Choose both a PDF and an XML file.");
+    if (!pdfFile) {
+      setError("Choose a PDF file.");
       return;
     }
 
@@ -588,10 +591,12 @@ export default function HomePage() {
 
     const formData = new FormData();
     formData.append("pdf", pdfFile);
-    formData.append("xml", xmlFile);
+    if (xmlFile) {
+      formData.append("xml", xmlFile);
+    }
 
     try {
-      const requestUrl = new URL(`${API_BASE_URL}/api/ingestions/validate`);
+      const requestUrl = new URL(`${API_BASE_URL}/api/ingestions/pdf-review`);
       if (options?.extractorStrategy) {
         requestUrl.searchParams.set("extractor_strategy", options.extractorStrategy);
       }
@@ -615,10 +620,17 @@ export default function HomePage() {
         const tableCount = payload.docling_view?.tables?.length ?? 0;
         setDoclingStatusMessage(`Docling output loaded: ${blockCount} blocks and ${tableCount} tables.`);
       }
-      persistLastRunId(payload.summary.ingestion_run_id);
-      setRestoreStatus("restored");
+      if (payload.summary.ingestion_run_id) {
+        persistLastRunId(payload.summary.ingestion_run_id);
+        setRestoreStatus("restored");
+      } else {
+        clearStoredLastRunId();
+        setRestoreStatus("none");
+      }
       setWorkspaceRestoreMessage(null);
-      await refreshRuns();
+      if (payload.summary.ingestion_run_id) {
+        await refreshRuns();
+      }
     } catch (submissionError) {
       if (submissionError instanceof Error && submissionError.name === "AbortError") {
         setError("Validation cancelled.");
@@ -651,58 +663,10 @@ export default function HomePage() {
       setError("Choose a PDF file.");
       return;
     }
-    if (xmlFile) {
-      await runValidation({
-        extractorStrategy: "docling",
-        actionLabel: "docling",
-      });
-      return;
-    }
-
-    setLoading(true);
-    setLoadingAction("docling");
-    setError(null);
-    setDoclingError(null);
-    setDoclingStatusMessage("Starting Docling validation...");
-    setValidationStartedAt(Date.now());
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-    const formData = new FormData();
-    formData.append("pdf", pdfFile);
-
-    try {
-      const result = await fetch(`${API_BASE_URL}/api/ingestions/docling-preview`, {
-        method: "POST",
-        body: formData,
-        signal: controller.signal,
-      });
-
-      if (!result.ok) {
-        const payload = await result.json().catch(() => ({}));
-        throw new Error(payload.detail ?? "Docling preview request failed.");
-      }
-
-      const payload = (await result.json()) as DoclingPreviewResponse;
-      setDoclingPreview(payload.docling_view ?? null);
-      const blockCount = payload.docling_view?.blocks?.length ?? 0;
-      const tableCount = payload.docling_view?.tables?.length ?? 0;
-      setDoclingStatusMessage(`Docling output loaded: ${blockCount} blocks and ${tableCount} tables.`);
-    } catch (submissionError) {
-      if (submissionError instanceof Error && submissionError.name === "AbortError") {
-        setError("Docling preview cancelled.");
-        setDoclingStatusMessage("Docling run cancelled.");
-      } else {
-        const message = submissionError instanceof Error ? submissionError.message : "Unknown error";
-        setError(message);
-        setDoclingError(message);
-        setDoclingStatusMessage(null);
-      }
-    } finally {
-      setLoading(false);
-      setLoadingAction(null);
-      setValidationStartedAt(null);
-      abortControllerRef.current = null;
-    }
+    await runValidation({
+      extractorStrategy: "docling",
+      actionLabel: "docling",
+    });
   }
 
   function cancelValidation() {
@@ -775,11 +739,11 @@ export default function HomePage() {
       <section className="panel intake-panel">
         <div className="section-header">
           <div>
-            <span className="eyebrow">Validate pair</span>
-            <h2>Load a PDF and XML source</h2>
+            <span className="eyebrow">PDF Review</span>
+            <h2>Load a PDF with optional XML reference</h2>
             <p className="muted">
-              Start a new ingestion run, then review the candidate workspace and structured validation output
-              below.
+              Build a review workspace from the PDF parsing engine, then inspect candidates, clauses, and
+              validation output below.
             </p>
           </div>
         </div>
@@ -796,7 +760,7 @@ export default function HomePage() {
               />
             </div>
             <div className="field-shell">
-              <label htmlFor="xml">XML source</label>
+              <label htmlFor="xml">XML source (optional reference)</label>
               <input
                 id="xml"
                 type="file"
@@ -807,14 +771,14 @@ export default function HomePage() {
             </div>
             <div className="action-row">
               <button type="submit" disabled={loading}>
-                {loading && loadingAction === "validate" ? "Validating..." : "Validate ingestion"}
+                {loading && loadingAction === "validate" ? "Building review..." : "Run PDF review"}
               </button>
               <button type="button" className="button-secondary" disabled={loading || !pdfFile} onClick={() => void runDoclingInspection()}>
-                {loading && loadingAction === "docling" ? "Running Docling..." : "Run Docling"}
+                {loading && loadingAction === "docling" ? "Running Docling..." : "Run Docling review"}
               </button>
               {loading ? (
                 <button type="button" className="button-secondary" onClick={cancelValidation}>
-                  Cancel validation
+                  Cancel run
                 </button>
               ) : null}
             </div>
@@ -846,11 +810,11 @@ export default function HomePage() {
           <div className="validation-progress" aria-live="polite">
             <div className="validation-progress-header">
               <div>
-                <h2>Validation in progress</h2>
+                <h2>Review build in progress</h2>
                 <p>
                   {loadingAction === "docling"
-                    ? "Running Docling extraction and assembling the source/output inspection payload. Exact stage progress is not yet available."
-                    : "Running XML validation, PDF extraction, alignment, and transitional review payload assembly. Exact stage progress is not yet available."}
+                    ? "Running Docling extraction and assembling the PDF-native review payload. Exact stage progress is not yet available."
+                    : "Running PDF extraction and assembling the PDF-native review workspace. XML, when attached, is treated as secondary reference data."}
                 </p>
               </div>
               <span className="status warn">{loadingAction === "docling" ? "Docling" : "Working"}</span>
@@ -870,7 +834,7 @@ export default function HomePage() {
               </div>
               <div className="metric-list">
                 <div>
-                  <strong>Status</strong>: Waiting for the validation response from the backend.
+                  <strong>Status</strong>: Waiting for the review response from the backend.
                 </div>
                 <div>
                   <strong>Previous results</strong>: {response ? "Still visible below for comparison." : "No earlier run loaded."}
@@ -1001,13 +965,36 @@ export default function HomePage() {
               <span className="eyebrow">Review output</span>
               <h2>No workspace loaded</h2>
               <p className="muted">
-                Validate a new PDF/XML pair above, or reopen a retained run from the retention list below using
-                `Load workspace`. The console will also try to reopen the last retained workspace after refresh
-                when that run is still available.
+                Build a new PDF-native review workspace above, or reopen a retained run from the retention list
+                below using `Load workspace`. The console will also try to reopen the last retained workspace
+                after refresh when that run is still available.
               </p>
+              {hasDoclingOnlyState ? (
+                <p className="muted">
+                  A Docling source preview is loaded, but no review response has been mounted yet. Run PDF review to
+                  derive candidates directly from the PDF parsing engine.
+                </p>
+              ) : null}
+              {hasDoclingOnlyState && !xmlFile ? (
+                <p className="muted">XML is optional here. Run PDF review now, or attach XML if you want secondary reference context.</p>
+              ) : null}
               {workspaceRestoreMessage ? <p className="muted">{workspaceRestoreMessage}</p> : null}
             </div>
           </div>
+          {hasDoclingOnlyState ? (
+            <div className="action-row">
+              <button
+                type="button"
+                disabled={!pdfFile || loading}
+                onClick={() => void runValidation({ actionLabel: "validate" })}
+              >
+                Run PDF review
+              </button>
+              <button type="button" className="button-secondary" onClick={() => void refreshRuns()} disabled={runLoading}>
+                {runLoading ? "Refreshing..." : "Refresh retained runs"}
+              </button>
+            </div>
+          ) : null}
         </section>
       )}
 

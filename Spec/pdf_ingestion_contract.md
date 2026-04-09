@@ -1,6 +1,6 @@
 # PDF Ingestion Validation Contract
 ## NCC PDF Ingestion Constraint Manual
-### Version 1.11.0
+### Version 1.12.0
 
 ---
 
@@ -34,7 +34,8 @@ The PDF must therefore be suitable for:
 - downstream candidate extraction and later semantic progression
 
 Current staged runtime model:
-- XML semantic units define the candidate inventory
+- full paired-validation mode remains XML-led: XML semantic units define the candidate inventory
+- a temporary PDF-only review mode may derive candidate inventory directly from assembled PDF clauses and fallback structured blocks, while XML remains optional secondary reference context
 - PDF evidence packets are gathered against those XML semantic units
 - a `CandidateObject` engine reconciles XML structure and PDF evidence
 - a `CandidateRelation` engine extracts explicit XML links plus text-resolved, text-unresolved, and layout-inferred dependencies over the same candidate inventory
@@ -252,6 +253,7 @@ Companion ingestion responses may additionally surface a candidate-first review 
 - `lineage.xml_nodes`
 - `lineage.xml_semantic_units`
 - `lineage.pdf_fragments`
+- `lineage.pdf_clause_candidates`
 - `lineage.alignments`
 - `lineage.pdf_evidence_packets`
 - `lineage.candidate_objects` (each object may include `semantic_enrichment` and/or top-level `candidate_relations`, `reconciliation_records`, `graph_edges`, and `enrichment_hints` mirrors per `Spec/Candidate_Extraction_Layer.md`)
@@ -269,7 +271,8 @@ Companion ingestion responses may additionally surface a candidate-first review 
 - `summary.enrichment_drift_advisory` (optional human-readable advisory when enrichment could diverge from stored validation state; not a blocking gate)
 
 Current-state expectation for lineage-oriented review payloads:
-- the runtime should treat XML semantic units as the primary candidate inventory, even when legacy alignment fields are still surfaced for compatibility
+- the runtime should treat XML semantic units as the primary candidate inventory in full paired-validation mode, even when legacy alignment fields are still surfaced for compatibility
+- a temporary review-only `pdf_only` mode may derive candidate identity from assembled PDF clauses and fallback structured blocks when XML is absent or intentionally downgraded to secondary context
 - PDF evidence should be gathered per XML semantic unit rather than treating fragments as long-term candidate identity
 - candidate objects and candidate relations should be retained as first-class lineage payloads and review-workspace payloads
 - reconciliation records should make any object-vs-relation gaps, contradictions, or unresolved dependencies inspectable rather than burying them inside enrichment notes
@@ -278,6 +281,10 @@ Current-state expectation for lineage-oriented review payloads:
 - focused narrow-artifact review may preferentially surface row-level XML nodes and row-level PDF fragments when those matches exist
 - review units may surface a three-schema classification bundle:
   `xml_structural_class`, `pdf_evidence_class`, and `candidate_semantic_class`
+- assembled PDF clause payloads may surface structured header fields such as:
+  `clause_code`, `heading_text`, `header_blocks`, `body_blocks`, and `marginalia_blocks`
+- when structured clause headers are available, PDF-native candidate titles should prefer `clause_code + heading_text` rather than editorial notes or marginal annotations
+- editorial annotations such as bracketed amendment notes (for example `[New for 2022]`) should remain annotation metadata and must not become the candidate anchor or primary title
 - review units may also surface triage facets such as `review_issue_class`, `review_source_emphasis`, and `needs_human_review`
 - `candidate_type` should be treated as a compatibility alias for `candidate_semantic_class`
 - XML structural class is the primary semantic typing signal when a linked XML node exists
@@ -289,6 +296,7 @@ Current-state expectation for lineage-oriented review payloads:
   and `candidate_needs_review` for the subset still requiring human review
 - `candidate_total` should reflect semantic-unit-seeded candidate objects, not just surviving fragment alignments
 - candidate identifiers should be stable and semantic-unit-led rather than using fragment ids as the long-term primary identity
+- in temporary `pdf_only` review mode, candidate identifiers may use PDF-native ids such as `pdf_clause:{anchor_block_id}` and may omit `xml_node_id` without invalidating the review payload
 - relation identifiers should be stable across lineage, workspace, and persisted review payloads for the same ingestion run
 - `document_family_id` may be truncated and suffixed with a deterministic hash when needed to stay within persistence limits
 - storage-safe identifier shortening must not make the family identifier nondeterministic for the same PDF/XML pair

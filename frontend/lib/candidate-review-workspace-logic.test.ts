@@ -51,6 +51,8 @@ function candidate(overrides: Partial<CandidateWithDisplayStatus>): CandidateWit
     semanticEnrichment: null,
     enrichmentHints: null,
     dependsOn: [],
+    assembledClause: null,
+    displayProjection: null,
     ...overrides,
   };
 }
@@ -216,5 +218,58 @@ describe("candidate review workspace logic", () => {
     expect(mapped.reviewSourceEmphasis).toBe("mixed");
     expect(mapped.candidateRelations[0]?.relation_authority).toBe("xml_explicit");
     expect(mapped.nodeId).toBe("clause_ref_source");
+  });
+
+  it("maps PDF-only candidate objects without XML lineage as first-class records", () => {
+    const input: CandidateObjectInput = {
+      candidate_id: "candidate:pdf_clause:clause_1",
+      semantic_unit_id: "pdf_clause:clause_1",
+      xml_node_id: null,
+      title: "A1 A building must provide safe egress.",
+      candidate_type: "rule",
+      candidate_semantic_class: "rule",
+      source: {
+        pdf_fragment_id: "clause_1",
+      },
+      proposed: {
+        content: "A1 A building must provide safe egress.",
+      },
+      evidence: [
+        {
+          fragment_id: "clause_1",
+          page: 1,
+          bbox: [0, 0, 1, 1],
+          text: "A1 A building must provide safe egress.",
+          confidence: 0.95,
+          pdf_evidence_class: "paragraph",
+        },
+      ],
+      review: {
+        base_status: "match",
+        needs_human_review: false,
+        issue_class: "clean_match",
+        source_emphasis: "pdf",
+        issues: [],
+        xml_only_terms: [],
+        pdf_only_terms: [],
+      },
+      assembled_clause: {
+        clause_candidate_id: "pdf_clause:clause_1",
+        title_or_lead: "A1 A building must provide safe egress.",
+        rendered_blocks: [],
+      },
+      display_projection: {
+        title: "A1 A building must provide safe egress.",
+        rendered_blocks: [],
+      },
+    };
+
+    const mapped = mapCandidateObjectToCandidate(input);
+
+    expect(mapped.nodeId).toBeNull();
+    expect(mapped.xmlPath).toBe("No XML node linked yet");
+    expect(mapped.pdfText).toBe("A1 A building must provide safe egress.");
+    expect(mapped.reviewSourceEmphasis).toBe("pdf");
+    expect(mapped.assembledClause?.clause_candidate_id).toBe("pdf_clause:clause_1");
   });
 });

@@ -401,6 +401,7 @@ Backend ingestion may emit additive, inspectable payloads on `lineage` and `revi
 - **`candidate_quality`**: counts for the current run—semantic units, PDF evidence packets, candidate objects, review units, promoted canonical snippets, and foundational baseline slice eligibility, inclusion, and coverage ratio. Carries `schema_version` and `generated_at`.
 - **`graph_readiness`**: deterministic summary with `ready_for_graph_handoff` and a `gates` list (`gate_id`, `passed`, `detail`). Gates are conservative and advisory; they do not replace PDF/XML validation or candidate promotion rules.
 - **`foundational_baseline_corpus`**: deterministic slice (sorted, capped) over lower-risk categories such as definitions/glossary, titles and context keys, notes, and interpretive paths (for example intro or title bands). Items expose candidate/node identifiers, baseline category, status, text preview, and evidence summary for UI tabs.
+- **`pdf_clause_candidates` / `assembled_clause` / `display_projection`**: review-oriented PDF clause projections may be emitted for UI inspection. In temporary `pdf_only` review mode, they may define candidate identity before XML reconciliation is restored as the primary inventory driver.
 
 **Authority vs heuristic:** Top-level `explicit_relations`, `glossary_links`, `applicability_conditions`, and `implicit_relation_candidates` are unchanged. Each enriched candidate may include nested `semantic_enrichment` with `field_authority`—explicit XML-sourced relations are `xml_authoritative`; text-resolved relations are `mixed`; glossary links, applicability extraction, and implicit text hints are marked as heuristic unless separately promoted. `enrichment_summary` may include the same `field_authority` map for aggregate use.
 
@@ -425,6 +426,7 @@ For each slice, operators should inspect:
 - semantic unit creation defines inventory only
 - PDF evidence gathering attaches traceable support only
 - candidate extraction creates workflow-bearing candidate state
+- temporary `pdf_only` review may derive those candidate records from structured PDF clauses first, but this remains a review-stage projection rather than a canonical promotion authority change
 - relation extraction and reconciliation create inspectable dependency state without replacing candidate identity
 - semantic enrichment annotates those same candidates without replacing them
 - canonical promotion remains downstream of candidate validation
@@ -455,6 +457,15 @@ Candidate storage and review payloads should preserve graph-ready facets includi
 - reconciliation classifications and promotion effects (`reconciliation_records`)
 - implicit relation candidates (for review, not authoritative until validated)
 - graph edge endpoints (`graph_edges`) for future graph queries
+- when assembled PDF clauses are emitted for review:
+  - `clause_code`
+  - `heading_text`
+  - `header_blocks`
+  - `body_blocks`
+  - `marginalia_blocks`
+
+Review-projection rule:
+- editorial annotations such as bracketed amendment notes must remain marginalia metadata and must not replace the candidate title when a recoverable clause header tuple is available
 
 ---
 
