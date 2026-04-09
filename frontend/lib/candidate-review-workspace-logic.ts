@@ -85,6 +85,15 @@ export type ClauseStyleSpan = {
   is_italic?: boolean;
 };
 
+export type StructuralPathEntry = {
+  kind?: string | null;
+  label?: string | null;
+  text?: string | null;
+  title?: string | null;
+  block_id?: string | null;
+  candidate_id?: string | null;
+};
+
 export type RenderedClauseBlock = {
   block_id: string;
   page: number;
@@ -106,8 +115,17 @@ export type AssembledClause = {
   clause_path?: string[];
   clause_code?: string | null;
   heading_text?: string | null;
+  parent_heading_clause_id?: string | null;
+  parent_heading_block_id?: string | null;
+  parent_heading_label?: string | null;
+  parent_heading_text?: string | null;
+  parent_heading_title?: string | null;
+  structural_path?: StructuralPathEntry[];
   title_or_lead?: string;
+  candidate_title?: string;
   bbox?: number[];
+  start_page?: number | null;
+  end_page?: number | null;
   pages?: number[];
   source_block_ids?: string[];
   matched_xml_node_id?: string | null;
@@ -128,9 +146,16 @@ export type CandidateDisplayProjection = {
   clause_path?: string[];
   clause_code?: string | null;
   heading_text?: string | null;
+  parent_heading_clause_id?: string | null;
+  parent_heading_block_id?: string | null;
+  parent_heading_label?: string | null;
+  parent_heading_text?: string | null;
+  parent_heading_title?: string | null;
+  structural_path?: StructuralPathEntry[];
   header_blocks?: RenderedClauseBlock[];
   marginalia_blocks?: RenderedClauseBlock[];
   rendered_blocks?: RenderedClauseBlock[];
+  page_context?: Record<string, unknown> | null;
   source_provenance?: Record<string, unknown>;
   added_fields?: Record<string, unknown>;
   review_signals?: Record<string, unknown>;
@@ -179,9 +204,71 @@ export type CandidateRecord = {
   displayProjection: CandidateDisplayProjection | null;
 };
 
+export function renderedClausePageChipLabel(
+  block: Pick<RenderedClauseBlock, "page">,
+  previousBlock: Pick<RenderedClauseBlock, "page"> | null = null
+): string | null {
+  if (typeof block.page !== "number" || block.page <= 0) {
+    return null;
+  }
+  if (previousBlock && previousBlock.page === block.page) {
+    return null;
+  }
+  if (previousBlock && previousBlock.page !== block.page) {
+    return `Continues on page ${block.page}`;
+  }
+  return `Page ${block.page}`;
+}
+
 export type CandidateWithDisplayStatus = CandidateRecord & {
   displayStatus: ReviewStatus;
 };
+
+export function pdfClauseCandidateIdFromAnchorBlockId(anchorBlockId: string | null | undefined): string | null {
+  const cleaned = (anchorBlockId ?? "").trim();
+  if (!cleaned) {
+    return null;
+  }
+  return `candidate:pdf_clause:${cleaned}`;
+}
+
+export function childPdfClauseCandidatesForParent<T extends Pick<CandidateRecord, "id" | "displayProjection">>(
+  candidates: T[],
+  parentCandidateId: string | null | undefined
+): T[] {
+  const cleanedParentId = (parentCandidateId ?? "").trim();
+  if (!cleanedParentId) {
+    return [];
+  }
+  return candidates.filter(
+    (candidate) =>
+      pdfClauseCandidateIdFromAnchorBlockId(candidate.displayProjection?.parent_heading_block_id) === cleanedParentId
+  );
+}
+
+export function immediateStructuralParentCandidateId(
+  projection: Pick<CandidateDisplayProjection, "parent_heading_block_id" | "structural_path"> | null | undefined
+): string | null {
+  const directParentId = pdfClauseCandidateIdFromAnchorBlockId(projection?.parent_heading_block_id);
+  if (directParentId) {
+    return directParentId;
+  }
+  const path = projection?.structural_path ?? [];
+  if (!path.length) {
+    return null;
+  }
+  const lastEntry = path[path.length - 1];
+  const candidateId = (lastEntry?.candidate_id ?? "").trim();
+  return candidateId || null;
+}
+
+export function structuralPathLabel(path: StructuralPathEntry[] | null | undefined): string | null {
+  const labels = (path ?? [])
+    .map((entry) => entry.title ?? entry.label ?? entry.text ?? "")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return labels.length ? labels.join(" > ") : null;
+}
 
 export type SortKey =
   | "priority"
@@ -239,6 +326,7 @@ export type CandidateObjectInput = {
   candidate_id: string;
   semantic_unit_id?: string;
   xml_node_id?: string | null;
+  page?: number | null;
   title?: string;
   candidate_type?: string;
   xml_structural_class?: string;
@@ -288,6 +376,7 @@ export type CandidateObjectInput = {
   enrichment_hints?: SemanticEnrichmentHints;
   depends_on?: string[];
   assembled_clause?: AssembledClause | null;
+  page_context?: Record<string, unknown> | null;
   display_projection?: CandidateDisplayProjection | null;
 };
 
@@ -524,7 +613,7 @@ export function mapCandidateObjectToCandidate(candidate: CandidateObjectInput): 
     baseStatus: normalizeReviewStatus(candidate.review?.base_status ?? "review required"),
     needsHumanReview: candidate.review?.needs_human_review ?? false,
     matched: Boolean(primaryEvidence),
-    page: primaryEvidence?.page ?? null,
+    page: candidate.page ?? candidate.assembled_clause?.start_page ?? primaryEvidence?.page ?? null,
     fragmentId: primaryEvidence?.fragment_id ?? `xml_only:${candidate.xml_node_id ?? candidate.candidate_id}`,
     nodeId: candidate.xml_node_id ?? null,
     xmlPath: candidate.xml_path ?? "No XML node linked yet",

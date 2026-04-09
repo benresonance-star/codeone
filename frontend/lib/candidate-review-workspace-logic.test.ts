@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  childPdfClauseCandidatesForParent,
   filterCandidatesByRelationState,
+  immediateStructuralParentCandidateId,
   mapCandidateObjectToCandidate,
   mapReviewUnitToCandidate,
+  pdfClauseCandidateIdFromAnchorBlockId,
   sortCandidates,
+  structuralPathLabel,
   type CandidateObjectInput,
   type CandidateWithDisplayStatus,
   type ReviewUnitInput,
@@ -183,6 +187,60 @@ describe("candidate review workspace logic", () => {
     expect(mapped.dependsOn).toEqual(["candidate:unit:C3D16"]);
   });
 
+  it("prefers backend primary page semantics over primary evidence page", () => {
+    const input: CandidateObjectInput = {
+      candidate_id: "candidate:pdf_clause:multi_page",
+      title: "Multi-page clause",
+      candidate_type: "rule",
+      candidate_semantic_class: "rule",
+      page: 3,
+      evidence: [
+        {
+          fragment_id: "frag_4",
+          page: 4,
+          bbox: [0, 0, 2, 2],
+          text: "continued on next page",
+          confidence: 0.91,
+          pdf_evidence_class: "paragraph",
+        },
+      ],
+      review: {
+        base_status: "match",
+        needs_human_review: false,
+        issue_class: "clean_match",
+        source_emphasis: "pdf",
+        issues: [],
+        xml_only_terms: [],
+        pdf_only_terms: [],
+      },
+      assembled_clause: {
+        clause_candidate_id: "assembled_clause:multi_page",
+        start_page: 3,
+        end_page: 4,
+        pages: [3, 4],
+        rendered_blocks: [],
+      },
+      display_projection: {
+        title: "Multi-page clause",
+        rendered_blocks: [],
+        page_context: {
+          start_page: 3,
+          end_page: 4,
+          pages: [3, 4],
+        },
+      },
+    };
+
+    const mapped = mapCandidateObjectToCandidate(input);
+
+    expect(mapped.page).toBe(3);
+    expect(mapped.displayProjection?.page_context).toEqual({
+      start_page: 3,
+      end_page: 4,
+      pages: [3, 4],
+    });
+  });
+
   it("maps review units from backend payload fields into candidate records", () => {
     const input: ReviewUnitInput = {
       candidate_id: "candidate:unit:clause_ref_source",
@@ -261,6 +319,19 @@ describe("candidate review workspace logic", () => {
       display_projection: {
         title: "A1 A building must provide safe egress.",
         rendered_blocks: [],
+        parent_heading_label: "Part A1",
+        parent_heading_text: "Interpreting the NCC",
+        parent_heading_title: "Part A1 Interpreting the NCC",
+        structural_path: [
+          {
+            kind: "part",
+            label: "Part A1",
+            text: "Interpreting the NCC",
+            title: "Part A1 Interpreting the NCC",
+            block_id: "docling_1_10",
+            candidate_id: "candidate:pdf_clause:docling_1_10",
+          },
+        ],
       },
     };
 
@@ -271,5 +342,62 @@ describe("candidate review workspace logic", () => {
     expect(mapped.pdfText).toBe("A1 A building must provide safe egress.");
     expect(mapped.reviewSourceEmphasis).toBe("pdf");
     expect(mapped.assembledClause?.clause_candidate_id).toBe("pdf_clause:clause_1");
+    expect(mapped.displayProjection?.parent_heading_label).toBe("Part A1");
+    expect(mapped.displayProjection?.structural_path?.[0]?.candidate_id).toBe("candidate:pdf_clause:docling_1_10");
+  });
+
+  it("derives the parent heading candidate id from the anchor block id", () => {
+    expect(pdfClauseCandidateIdFromAnchorBlockId("docling_1_10")).toBe("candidate:pdf_clause:docling_1_10");
+    expect(pdfClauseCandidateIdFromAnchorBlockId("")).toBeNull();
+  });
+
+  it("finds child pdf clause candidates for a parent heading candidate", () => {
+    const parent = candidate({
+      id: "candidate:pdf_clause:docling_1_10",
+      displayProjection: {
+        title: "Part A1 Interpreting the NCC",
+      },
+    });
+    const child = candidate({
+      id: "candidate:pdf_clause:docling_1_11",
+      displayProjection: {
+        title: "A1G1 Scope of NCC Volume One",
+        parent_heading_block_id: "docling_1_10",
+      },
+    });
+    const unrelated = candidate({
+      id: "candidate:pdf_clause:docling_2_10",
+      displayProjection: {
+        title: "Part B1 Something Else",
+        parent_heading_block_id: "docling_2_01",
+      },
+    });
+
+    const children = childPdfClauseCandidatesForParent([parent, child, unrelated], parent.id);
+
+    expect(children.map((item) => item.id)).toEqual(["candidate:pdf_clause:docling_1_11"]);
+  });
+
+  it("falls back to structural path when deriving the immediate parent candidate id", () => {
+    expect(
+      immediateStructuralParentCandidateId({
+        structural_path: [
+          {
+            title: "Part A1 Interpreting the NCC",
+            candidate_id: "candidate:pdf_clause:docling_1_10",
+          },
+        ],
+      })
+    ).toBe("candidate:pdf_clause:docling_1_10");
+  });
+
+  it("formats structural ancestry into a compact label", () => {
+    expect(
+      structuralPathLabel([
+        { title: "Part A1 Interpreting the NCC" },
+        { title: "Section A" },
+      ])
+    ).toBe("Part A1 Interpreting the NCC > Section A");
+    expect(structuralPathLabel([])).toBeNull();
   });
 });

@@ -114,18 +114,19 @@ class DoclingExtractor:
                     },
                 )
             )
-        return blocks
+        return self._tag_page_frame_blocks(blocks, page_heights=page_heights)
 
     def _collect_tables(
         self,
         result: Any,
         decision: DocumentStrategyDecision,
         *,
-        page_heights: dict[int, float],
+        page_heights: dict[int, float] | None = None,
     ) -> list[ExtractedTable]:
         document = result.document
         items = list(document.iterate_items())
         tables: list[ExtractedTable] = []
+        page_heights = page_heights or {}
         table_index = 0
         for item_index, (item, _) in enumerate(items):
             if self._label_name(item) != "table":
@@ -173,6 +174,86 @@ class DoclingExtractor:
             runtime_mode="fallback_pdfplumber",
             notes=notes,
         )
+
+    def _tag_page_frame_blocks(
+        self,
+        blocks: list[StructuredBlock],
+        *,
+        page_heights: dict[int, float],
+    ) -> list[StructuredBlock]:
+        if not blocks:
+            return []
+
+        grouped: dict[tuple[str, str], list[str]] = {}
+        for block in blocks:
+            page_region = self._candidate_page_band(block.bbox, page_heights.get(block.page))
+            if page_region == "body":
+                continue
+            normalized = self._normalize_page_frame_text(block.text)
+            if not normalized:
+                continue
+            grouped.setdefault((page_region, normalized), []).append(block.block_id)
+
+        repeated_keys = {
+            key
+            for key, block_ids in grouped.items()
+            if len(block_ids) >= 2
+        }
+
+        tagged_blocks: list[StructuredBlock] = []
+        for block in blocks:
+            page_height = page_heights.get(block.page)
+            page_region = self._candidate_page_band(block.bbox, page_height)
+            normalized = self._normalize_page_frame_text(block.text)
+            looks_like_page_number = self._looks_like_page_number(block.text)
+            repeated = bool(normalized and (page_region, normalized) in repeated_keys)
+            is_page_frame = (
+                page_region != "body"
+                and not self._looks_like_structural_heading(block.text)
+                and (repeated or looks_like_page_number)
+            )
+            metadata = dict(block.metadata)
+            metadata["page_band"] = page_region
+            metadata["page_height"] = round(float(page_height), 2) if page_height else None
+            if is_page_frame:
+                metadata["page_region"] = page_region
+                metadata["page_frame_confidence"] = 0.98 if repeated else 0.9
+                metadata["page_frame_role"] = self._page_frame_role(block.text, page_region=page_region)
+                metadata["page_frame_normalized_text"] = normalized
+            tagged_blocks.append(replace(block, metadata=metadata))
+        return tagged_blocks
+
+    def _candidate_page_band(self, bbox: list[float], page_height: float | None) -> str:
+        if not bbox or len(bbox) != 4 or not page_height or page_height <= 0:
+            return "body"
+        _, top, _, bottom = bbox
+        if top <= page_height * 0.12:
+            return "header"
+        if bottom >= page_height * 0.9:
+            return "footer"
+        return "body"
+
+    def _normalize_page_frame_text(self, text: str) -> str:
+        normalized = re.sub(r"(?i)\bpage\s+\d+\b", "page", text or "")
+        normalized = re.sub(r"\b\d+\b", "#", normalized)
+        normalized = re.sub(r"\s+", " ", normalized).strip().lower()
+        return normalized
+
+    def _looks_like_page_number(self, text: str) -> bool:
+        cleaned = re.sub(r"\s+", " ", text or "").strip()
+        return bool(re.search(r"(?i)\bpage\s+\d+\b", cleaned) or re.fullmatch(r"\d{1,4}", cleaned))
+
+    def _page_frame_role(self, text: str, *, page_region: str) -> str:
+        cleaned = re.sub(r"\s+", " ", text or "").strip()
+        if self._looks_like_page_number(cleaned):
+            return "page_number"
+        if page_region == "header":
+            return "running_header"
+        return "running_footer"
+
+    def _looks_like_structural_heading(self, text: str) -> bool:
+        cleaned = re.sub(r"\s+", " ", text or "").strip()
+        return bool(re.match(r"(?i)^(part|section|schedule)\s+[a-z0-9.-]+\b", cleaned))
 
     def _apply_style_enrichment(
         self,

@@ -1267,6 +1267,74 @@ class DoclingExtractorTests(unittest.TestCase):
         self.assertEqual(rows, [["Header", "Value"], ["A", "1"]])
         self.assertTrue(self.extractor._headers_present(rows))
 
+    def test_tag_page_frame_blocks_marks_repeated_headers_and_page_footer(self) -> None:
+        blocks = [
+            StructuredBlock(
+                block_id="docling_1_1",
+                page=1,
+                bbox=[40.0, 20.0, 250.0, 34.0],
+                block_type="paragraph",
+                text="Governing requirements",
+                source_strategy="docling",
+            ),
+            StructuredBlock(
+                block_id="docling_1_2",
+                page=1,
+                bbox=[40.0, 792.0, 340.0, 806.0],
+                block_type="paragraph",
+                text="NCC 2022 Volume Two Page 41",
+                source_strategy="docling",
+            ),
+            StructuredBlock(
+                block_id="docling_2_1",
+                page=2,
+                bbox=[40.0, 20.0, 250.0, 34.0],
+                block_type="paragraph",
+                text="Governing requirements",
+                source_strategy="docling",
+            ),
+            StructuredBlock(
+                block_id="docling_2_2",
+                page=2,
+                bbox=[40.0, 792.0, 340.0, 806.0],
+                block_type="paragraph",
+                text="NCC 2022 Volume Two Page 42",
+                source_strategy="docling",
+            ),
+        ]
+
+        tagged = self.extractor._tag_page_frame_blocks(blocks, page_heights={1: 820.0, 2: 820.0})
+
+        self.assertEqual(tagged[0].metadata["page_region"], "header")
+        self.assertEqual(tagged[0].metadata["page_frame_role"], "running_header")
+        self.assertEqual(tagged[1].metadata["page_region"], "footer")
+        self.assertEqual(tagged[1].metadata["page_frame_role"], "page_number")
+
+    def test_tag_page_frame_blocks_keeps_structural_part_heading_as_content(self) -> None:
+        blocks = [
+            StructuredBlock(
+                block_id="docling_1_1",
+                page=1,
+                bbox=[40.0, 20.0, 320.0, 38.0],
+                block_type="heading",
+                text="Part A1 Interpreting the NCC",
+                source_strategy="docling",
+            ),
+            StructuredBlock(
+                block_id="docling_2_1",
+                page=2,
+                bbox=[40.0, 20.0, 320.0, 38.0],
+                block_type="heading",
+                text="Part A1 Interpreting the NCC",
+                source_strategy="docling",
+            ),
+        ]
+
+        tagged = self.extractor._tag_page_frame_blocks(blocks, page_heights={1: 820.0, 2: 820.0})
+
+        self.assertNotIn("page_region", tagged[0].metadata)
+        self.assertNotIn("page_region", tagged[1].metadata)
+
     def test_rows_from_table_cells_reconstructs_grid(self) -> None:
         data = SimpleNamespace(
             num_rows=3,

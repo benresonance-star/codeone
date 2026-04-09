@@ -3,14 +3,19 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 
 import {
+  childPdfClauseCandidatesForParent,
   filterCandidatesByRelationState,
+  immediateStructuralParentCandidateId,
   mapCandidateObjectToCandidate,
   mapReviewUnitToCandidate,
+  renderedClausePageChipLabel,
   sortCandidates,
+  structuralPathLabel,
   type AssembledClause,
   type CandidateDisplayProjection,
   type ClauseStyleSpan,
   type RenderedClauseBlock,
+  type StructuralPathEntry,
 } from "../lib/candidate-review-workspace-logic";
 
 type ValidationItem = {
@@ -293,7 +298,7 @@ type CandidateWithDisplayStatus = CandidateRecord & {
 
 type ContextFilter =
   | {
-      mode: "parent" | "root";
+      mode: "parent" | "root" | "pdf_parent" | "pdf_root";
       value: string;
     }
   | null;
@@ -1107,11 +1112,18 @@ export function CandidateReviewWorkspace({
     if (!contextFilter) {
       return statusFilteredCandidates;
     }
-    return statusFilteredCandidates.filter((candidate) =>
-      contextFilter.mode === "parent"
-        ? candidate.xmlParentNodeId === contextFilter.value
-        : candidate.xmlRootNodeId === contextFilter.value
-    );
+    return statusFilteredCandidates.filter((candidate) => {
+      if (contextFilter.mode === "parent") {
+        return candidate.xmlParentNodeId === contextFilter.value;
+      }
+      if (contextFilter.mode === "root") {
+        return candidate.xmlRootNodeId === contextFilter.value;
+      }
+      if (contextFilter.mode === "pdf_parent") {
+        return immediateStructuralParentCandidateId(candidate.displayProjection) === contextFilter.value;
+      }
+      return candidate.displayProjection?.structural_path?.[0]?.candidate_id?.trim() === contextFilter.value;
+    });
   }, [contextFilter, statusFilteredCandidates]);
 
   const relationFilteredCandidates = useMemo(() => {
@@ -1122,6 +1134,7 @@ export function CandidateReviewWorkspace({
     () => sortCandidates(relationFilteredCandidates, sortKey),
     [relationFilteredCandidates, sortKey]
   );
+  const sortedAllCandidates = useMemo(() => sortCandidates(candidatesWithStatus, sortKey), [candidatesWithStatus, sortKey]);
   const totalPages = Math.max(1, Math.ceil(sortedCandidates.length / CANDIDATE_PAGE_SIZE));
   const currentPageSafe = Math.min(currentPage, totalPages);
   const paginatedCandidates = useMemo(
@@ -1230,20 +1243,6 @@ export function CandidateReviewWorkspace({
     [selectedRelations]
   );
 
-  const parentContextCount = useMemo(() => {
-    if (!selectedCandidate?.xmlParentNodeId) {
-      return 0;
-    }
-    return candidatesWithStatus.filter((candidate) => candidate.xmlParentNodeId === selectedCandidate.xmlParentNodeId).length;
-  }, [candidatesWithStatus, selectedCandidate]);
-
-  const rootContextCount = useMemo(() => {
-    if (!selectedCandidate?.xmlRootNodeId) {
-      return 0;
-    }
-    return candidatesWithStatus.filter((candidate) => candidate.xmlRootNodeId === selectedCandidate.xmlRootNodeId).length;
-  }, [candidatesWithStatus, selectedCandidate]);
-
   const workspaceSnippets = useMemo(
     () => response.review_workspace?.canonical_snippets ?? response.lineage?.canonical_snippets ?? [],
     [response]
@@ -1322,6 +1321,69 @@ export function CandidateReviewWorkspace({
     [selectedCandidate, selectedCandidateSourceObject]
   );
 
+  const selectedStructuralPathEntries = useMemo<StructuralPathEntry[]>(
+    () => selectedDisplayProjection?.structural_path ?? [],
+    [selectedDisplayProjection]
+  );
+
+  const selectedStructuralPathText = useMemo(
+    () => structuralPathLabel(selectedStructuralPathEntries),
+    [selectedStructuralPathEntries]
+  );
+
+  const selectedRootStructuralCandidateId = useMemo(
+    () => selectedStructuralPathEntries[0]?.candidate_id?.trim() || null,
+    [selectedStructuralPathEntries]
+  );
+
+  const selectedParentHeadingCandidateId = useMemo(
+    () => immediateStructuralParentCandidateId(selectedDisplayProjection),
+    [selectedDisplayProjection]
+  );
+
+  const selectedParentHeadingCandidate = useMemo(
+    () =>
+      selectedParentHeadingCandidateId
+        ? candidatesWithStatus.find((candidate) => candidate.id === selectedParentHeadingCandidateId) ?? null
+        : null,
+    [candidatesWithStatus, selectedParentHeadingCandidateId]
+  );
+
+  const selectedChildHeadingCandidates = useMemo(
+    () => (selectedCandidate ? childPdfClauseCandidatesForParent(candidatesWithStatus, selectedCandidate.id) : []),
+    [candidatesWithStatus, selectedCandidate]
+  );
+
+  const parentLineageCount = useMemo(() => {
+    if (isPdfOnlyWorkspace) {
+      if (!selectedParentHeadingCandidateId) {
+        return 0;
+      }
+      return candidatesWithStatus.filter(
+        (candidate) => immediateStructuralParentCandidateId(candidate.displayProjection) === selectedParentHeadingCandidateId
+      ).length;
+    }
+    if (!selectedCandidate?.xmlParentNodeId) {
+      return 0;
+    }
+    return candidatesWithStatus.filter((candidate) => candidate.xmlParentNodeId === selectedCandidate.xmlParentNodeId).length;
+  }, [candidatesWithStatus, isPdfOnlyWorkspace, selectedCandidate, selectedParentHeadingCandidateId]);
+
+  const rootLineageCount = useMemo(() => {
+    if (isPdfOnlyWorkspace) {
+      if (!selectedRootStructuralCandidateId) {
+        return 0;
+      }
+      return candidatesWithStatus.filter(
+        (candidate) => candidate.displayProjection?.structural_path?.[0]?.candidate_id?.trim() === selectedRootStructuralCandidateId
+      ).length;
+    }
+    if (!selectedCandidate?.xmlRootNodeId) {
+      return 0;
+    }
+    return candidatesWithStatus.filter((candidate) => candidate.xmlRootNodeId === selectedCandidate.xmlRootNodeId).length;
+  }, [candidatesWithStatus, isPdfOnlyWorkspace, selectedCandidate, selectedRootStructuralCandidateId]);
+
   const projectionAddedFieldRows = useMemo<ComparisonRow[]>(() => {
     const addedFields = asRecord(selectedDisplayProjection?.added_fields);
     if (!addedFields) {
@@ -1353,6 +1415,39 @@ export function CandidateReviewWorkspace({
       label: label.replace(/_/g, " "),
       value: formatProjectionValue(value),
     }));
+  }, [selectedDisplayProjection]);
+
+  const projectionPageContextRows = useMemo<ComparisonRow[]>(() => {
+    const pageContext = asRecord(selectedDisplayProjection?.page_context);
+    if (!pageContext) {
+      return [];
+    }
+    const rows: ComparisonRow[] = [];
+    if ("start_page" in pageContext) {
+      rows.push({ label: "Start page", value: formatProjectionValue(pageContext.start_page) });
+    }
+    if ("end_page" in pageContext) {
+      rows.push({ label: "End page", value: formatProjectionValue(pageContext.end_page) });
+    }
+    if ("pages" in pageContext) {
+      rows.push({ label: "Candidate pages", value: formatProjectionValue(pageContext.pages) });
+    }
+    if ("primary_volume_label" in pageContext) {
+      rows.push({ label: "Volume", value: formatProjectionValue(pageContext.primary_volume_label) });
+    }
+    if ("primary_ncc_page_number" in pageContext) {
+      rows.push({ label: "NCC page", value: formatProjectionValue(pageContext.primary_ncc_page_number) });
+    }
+    if ("ncc_page_numbers" in pageContext) {
+      rows.push({ label: "NCC pages", value: formatProjectionValue(pageContext.ncc_page_numbers) });
+    }
+    if ("running_header_texts" in pageContext) {
+      rows.push({ label: "Running header", value: formatProjectionValue(pageContext.running_header_texts) });
+    }
+    if ("running_footer_texts" in pageContext) {
+      rows.push({ label: "Running footer", value: formatProjectionValue(pageContext.running_footer_texts) });
+    }
+    return rows.filter((row) => row.value && row.value !== "n/a");
   }, [selectedDisplayProjection]);
 
   const projectionHeaderBlocks = useMemo<RenderedClauseBlock[]>(() => {
@@ -1445,10 +1540,29 @@ export function CandidateReviewWorkspace({
       { label: "Reconciliation records", value: String(selectedReconciliations.length) },
       { label: "Matched", value: String(selectedCandidate.matched) },
       { label: "Confidence", value: selectedCandidate.confidence.toFixed(3) },
-      { label: "Candidate page", value: selectedCandidate.page ? String(selectedCandidate.page) : "n/a" },
+      { label: "Start page", value: selectedCandidate.page ? String(selectedCandidate.page) : "n/a" },
       { label: "BBox", value: formatBbox(selectedCandidate.bbox) },
+      {
+        label: "Page context volume",
+        value: formatProjectionValue(asRecord(selectedDisplayProjection?.page_context)?.primary_volume_label),
+      },
+      {
+        label: "Page context NCC page",
+        value: formatProjectionValue(asRecord(selectedDisplayProjection?.page_context)?.primary_ncc_page_number),
+      },
+      {
+        label: "Page span",
+        value: formatProjectionValue(asRecord(selectedDisplayProjection?.page_context)?.pages),
+      },
     ];
-  }, [isPdfOnlyWorkspace, selectedCandidate, selectedReconciliations.length, selectedRelationSummary.total, selectedSnippet]);
+  }, [
+    isPdfOnlyWorkspace,
+    selectedCandidate,
+    selectedDisplayProjection,
+    selectedReconciliations.length,
+    selectedRelationSummary.total,
+    selectedSnippet,
+  ]);
 
   const xmlComparisonRows = useMemo<ComparisonRow[]>(() => {
     if (!selectedCandidate) {
@@ -1471,14 +1585,18 @@ export function CandidateReviewWorkspace({
     if (!selectedCandidate) {
       return [];
     }
+    const evidencePage = asRecord(selectedCandidateSourceObject?.evidence?.[0])?.page;
     return [
       { label: "Fragment id", value: selectedCandidate.fragmentId },
-      { label: "Page", value: selectedCandidate.page ? String(selectedCandidate.page) : "n/a" },
+      {
+        label: "Primary evidence page",
+        value: typeof evidencePage === "number" ? String(evidencePage) : "n/a",
+      },
       { label: "Missing in XML", value: formatList(selectedCandidate.pdfOnlyTerms) },
       { label: "Raw PDF-only terms", value: formatList(selectedCandidate.rawPdfOnlyTerms) },
       { label: "PDF text length", value: String(cleanText(selectedCandidate.pdfText).length) },
     ];
-  }, [selectedCandidate]);
+  }, [selectedCandidate, selectedCandidateSourceObject]);
 
   const snippetComparisonRows = useMemo<ComparisonRow[]>(() => {
     if (!selectedSnippet) {
@@ -1600,6 +1718,18 @@ export function CandidateReviewWorkspace({
     } finally {
       setSavingCandidateId(null);
     }
+  }
+
+  function jumpToCandidate(candidateId: string) {
+    const targetIndex = sortedAllCandidates.findIndex((candidate) => candidate.id === candidateId);
+    if (targetIndex < 0) {
+      return;
+    }
+    setFilter("all");
+    setRelationFilter("all");
+    setContextFilter(null);
+    setCurrentPage(Math.floor(targetIndex / CANDIDATE_PAGE_SIZE) + 1);
+    setSelectedCandidateId(candidateId);
   }
 
   return (
@@ -1774,7 +1904,8 @@ export function CandidateReviewWorkspace({
             aria-pressed="true"
             onClick={() => setContextFilter(null)}
           >
-            Clear XML {contextFilter.mode} filter: {contextFilter.value}
+            Clear {contextFilter.mode.startsWith("pdf_") ? "PDF" : "XML"}{" "}
+            {contextFilter.mode.endsWith("parent") ? "parent" : "root"} filter: {contextFilter.value}
           </button>
         ) : null}
       </div>
@@ -1919,18 +2050,30 @@ export function CandidateReviewWorkspace({
                     <p className="muted">{describeCandidateStatus(selectedCandidate)}</p>
                     <div className="candidate-context-cluster">
                       <span className="candidate-context-chip">
-                        {parentContextCount > 1
-                          ? `${parentContextCount} candidates share parent ${selectedCandidate.xmlParentNodeId ?? "n/a"}`
-                          : selectedCandidate.xmlParentNodeId
-                            ? `Only candidate under parent ${selectedCandidate.xmlParentNodeId}`
-                            : "No parent lineage id available"}
+                        {isPdfOnlyWorkspace
+                          ? parentLineageCount > 1
+                            ? `${parentLineageCount} candidates share parent ${selectedParentHeadingCandidate?.title ?? selectedParentHeadingCandidateId ?? "n/a"}`
+                            : selectedParentHeadingCandidate?.title ?? selectedParentHeadingCandidateId
+                              ? `Only candidate under parent ${selectedParentHeadingCandidate?.title ?? selectedParentHeadingCandidateId}`
+                              : "No parent lineage id available"
+                          : parentLineageCount > 1
+                            ? `${parentLineageCount} candidates share parent ${selectedCandidate.xmlParentNodeId ?? "n/a"}`
+                            : selectedCandidate.xmlParentNodeId
+                              ? `Only candidate under parent ${selectedCandidate.xmlParentNodeId}`
+                              : "No parent lineage id available"}
                       </span>
                       <span className="candidate-context-chip">
-                        {rootContextCount > 1
-                          ? `${rootContextCount} candidates share root ${selectedCandidate.xmlRootNodeId ?? "n/a"}`
-                          : selectedCandidate.xmlRootNodeId
-                            ? `Only candidate under root ${selectedCandidate.xmlRootNodeId}`
-                            : "No root lineage id available"}
+                        {isPdfOnlyWorkspace
+                          ? rootLineageCount > 1
+                            ? `${rootLineageCount} candidates share root ${selectedStructuralPathEntries[0]?.title ?? selectedRootStructuralCandidateId ?? "n/a"}`
+                            : selectedStructuralPathEntries[0]?.title ?? selectedRootStructuralCandidateId
+                              ? `Only candidate under root ${selectedStructuralPathEntries[0]?.title ?? selectedRootStructuralCandidateId}`
+                              : "No root lineage id available"
+                          : rootLineageCount > 1
+                            ? `${rootLineageCount} candidates share root ${selectedCandidate.xmlRootNodeId ?? "n/a"}`
+                            : selectedCandidate.xmlRootNodeId
+                              ? `Only candidate under root ${selectedCandidate.xmlRootNodeId}`
+                              : "No root lineage id available"}
                       </span>
                     </div>
                   </div>
@@ -2035,26 +2178,34 @@ export function CandidateReviewWorkspace({
                       <button
                         type="button"
                         className="button-secondary"
-                        disabled={!selectedCandidate.xmlParentNodeId}
+                        disabled={isPdfOnlyWorkspace ? !selectedParentHeadingCandidateId : !selectedCandidate.xmlParentNodeId}
                         onClick={() =>
-                          selectedCandidate.xmlParentNodeId
-                            ? setContextFilter({ mode: "parent", value: selectedCandidate.xmlParentNodeId })
-                            : undefined
+                          isPdfOnlyWorkspace
+                            ? selectedParentHeadingCandidateId
+                              ? setContextFilter({ mode: "pdf_parent", value: selectedParentHeadingCandidateId })
+                              : undefined
+                            : selectedCandidate.xmlParentNodeId
+                              ? setContextFilter({ mode: "parent", value: selectedCandidate.xmlParentNodeId })
+                              : undefined
                         }
                       >
-                        Same parent ({parentContextCount || 0})
+                        Same parent ({parentLineageCount || 0})
                       </button>
                       <button
                         type="button"
                         className="button-secondary"
-                        disabled={!selectedCandidate.xmlRootNodeId}
+                        disabled={isPdfOnlyWorkspace ? !selectedRootStructuralCandidateId : !selectedCandidate.xmlRootNodeId}
                         onClick={() =>
-                          selectedCandidate.xmlRootNodeId
-                            ? setContextFilter({ mode: "root", value: selectedCandidate.xmlRootNodeId })
-                            : undefined
+                          isPdfOnlyWorkspace
+                            ? selectedRootStructuralCandidateId
+                              ? setContextFilter({ mode: "pdf_root", value: selectedRootStructuralCandidateId })
+                              : undefined
+                            : selectedCandidate.xmlRootNodeId
+                              ? setContextFilter({ mode: "root", value: selectedCandidate.xmlRootNodeId })
+                              : undefined
                         }
                       >
-                        Same root ({rootContextCount || 0})
+                        Same root ({rootLineageCount || 0})
                       </button>
                       {contextFilter ? (
                         <button type="button" className="button-secondary" onClick={() => setContextFilter(null)}>
@@ -2261,6 +2412,82 @@ export function CandidateReviewWorkspace({
                             </div>
                           </div>
                         ) : null}
+                        {selectedStructuralPathText ? (
+                          <div className="comparison-field-list relation-field-list">
+                            <div className="comparison-field-row">
+                              <strong>Structural path</strong>
+                              <span>{selectedStructuralPathText}</span>
+                              <div className="candidate-context-cluster">
+                                {selectedStructuralPathEntries.map((entry, index) => {
+                                  const entryCandidateId = entry.candidate_id?.trim();
+                                  const entryLabel = entry.title ?? entry.label ?? entry.text ?? `Level ${index + 1}`;
+                                  return entryCandidateId ? (
+                                    <button
+                                      key={`${entryCandidateId}:${index}`}
+                                      type="button"
+                                      className="button-secondary parent-jump-button"
+                                      onClick={() => jumpToCandidate(entryCandidateId)}
+                                    >
+                                      {entryLabel}
+                                    </button>
+                                  ) : (
+                                    <span key={`${entryLabel}:${index}`} className="candidate-context-chip">
+                                      {entryLabel}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
+                        {selectedDisplayProjection?.parent_heading_title ? (
+                          <div className="comparison-field-list relation-field-list">
+                            <div className="comparison-field-row">
+                              <strong>Parent part</strong>
+                              <span>{selectedDisplayProjection.parent_heading_label ?? selectedDisplayProjection.parent_heading_title}</span>
+                            </div>
+                            <div className="comparison-field-row">
+                              <strong>Parent heading</strong>
+                              <span>{selectedDisplayProjection.parent_heading_text ?? selectedDisplayProjection.parent_heading_title}</span>
+                            </div>
+                            {selectedParentHeadingCandidate ? (
+                              <div className="comparison-field-row">
+                                <strong>Parent candidate</strong>
+                                <span>{selectedParentHeadingCandidate.title}</span>
+                                <button
+                                  type="button"
+                                  className="button-secondary parent-jump-button"
+                                  onClick={() => jumpToCandidate(selectedParentHeadingCandidate.id)}
+                                >
+                                  Jump to parent part
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
+                        {selectedChildHeadingCandidates.length ? (
+                          <div className="comparison-field-list relation-field-list">
+                            <div className="comparison-field-row">
+                              <strong>Child clauses</strong>
+                              <span>
+                                {selectedChildHeadingCandidates.length} clause
+                                {selectedChildHeadingCandidates.length === 1 ? "" : "s"} linked to this part
+                              </span>
+                              <div className="candidate-context-cluster">
+                                {selectedChildHeadingCandidates.map((candidate) => (
+                                  <button
+                                    key={candidate.id}
+                                    type="button"
+                                    className="button-secondary parent-jump-button"
+                                    onClick={() => jumpToCandidate(candidate.id)}
+                                  >
+                                    {candidate.displayProjection?.clause_code ?? candidate.title}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
                         {projectionMarginaliaBlocks.length ? (
                           <div className="comparison-field-list relation-field-list">
                             <div className="comparison-field-row">
@@ -2269,40 +2496,74 @@ export function CandidateReviewWorkspace({
                             </div>
                           </div>
                         ) : null}
+                        {projectionPageContextRows.length ? (
+                          <div className="comparison-field-list relation-field-list">
+                            <div className="comparison-field-row">
+                              <strong>Volume</strong>
+                              <span>
+                                {projectionPageContextRows.find((row) => row.label === "Volume")?.value ?? "n/a"}
+                              </span>
+                            </div>
+                            <div className="comparison-field-row">
+                              <strong>NCC page</strong>
+                              <span>
+                                {projectionPageContextRows.find((row) => row.label === "NCC page")?.value ?? "n/a"}
+                              </span>
+                            </div>
+                          </div>
+                        ) : null}
                         {projectionHeaderBlocks.length ? (
                           <div className="rendered-clause-block-list">
-                            {projectionHeaderBlocks.map((block) => (
-                              <div
-                                key={`${block.block_id}-${block.render_role ?? "block"}`}
-                                className={`rendered-clause-block rendered-clause-block-${block.render_role ?? "continuation"} rendered-clause-depth-${block.relative_depth ?? 0}`}
-                              >
-                                {block.label ? <span className="rendered-clause-label">{block.label}</span> : null}
-                                <div className="rendered-clause-text">{renderStyledClauseText(block)}</div>
-                              </div>
-                            ))}
+                            {projectionHeaderBlocks.map((block, index) => {
+                              const pageChip = renderedClausePageChipLabel(
+                                block,
+                                index > 0 ? projectionHeaderBlocks[index - 1] : null
+                              );
+                              return (
+                                <div
+                                  key={`${block.block_id}-${block.render_role ?? "block"}`}
+                                  className={`rendered-clause-block rendered-clause-block-${block.render_role ?? "continuation"} rendered-clause-depth-${block.relative_depth ?? 0}`}
+                                >
+                                  {pageChip ? <span className="rendered-clause-page-chip">{pageChip}</span> : null}
+                                  {block.label ? <span className="rendered-clause-label">{block.label}</span> : null}
+                                  <div className="rendered-clause-text">{renderStyledClauseText(block)}</div>
+                                </div>
+                              );
+                            })}
                           </div>
                         ) : null}
                         <div className="rendered-clause-block-list">
                           {projectionBodyBlocks.length ? (
-                            projectionBodyBlocks.map((block) => (
-                              <div
-                                key={`${block.block_id}-${block.render_role ?? "block"}`}
-                                className={`rendered-clause-block rendered-clause-block-${block.render_role ?? "continuation"} rendered-clause-depth-${block.relative_depth ?? 0}`}
-                              >
-                                {block.label ? <span className="rendered-clause-label">{block.label}</span> : null}
-                                <div className="rendered-clause-text">{renderStyledClauseText(block)}</div>
-                              </div>
-                            ))
+                            projectionBodyBlocks.map((block, index) => {
+                              const pageChip = renderedClausePageChipLabel(
+                                block,
+                                index > 0 ? projectionBodyBlocks[index - 1] : null
+                              );
+                              return (
+                                <div
+                                  key={`${block.block_id}-${block.render_role ?? "block"}`}
+                                  className={`rendered-clause-block rendered-clause-block-${block.render_role ?? "continuation"} rendered-clause-depth-${block.relative_depth ?? 0}`}
+                                >
+                                  {pageChip ? <span className="rendered-clause-page-chip">{pageChip}</span> : null}
+                                  {block.label ? <span className="rendered-clause-label">{block.label}</span> : null}
+                                  <div className="rendered-clause-text">{renderStyledClauseText(block)}</div>
+                                </div>
+                              );
+                            })
                           ) : (selectedDisplayProjection?.rendered_blocks ?? []).length ? (
-                            (selectedDisplayProjection?.rendered_blocks ?? []).map((block) => (
-                              <div
-                                key={`${block.block_id}-${block.render_role ?? "block"}`}
-                                className={`rendered-clause-block rendered-clause-block-${block.render_role ?? "continuation"} rendered-clause-depth-${block.relative_depth ?? 0}`}
-                              >
-                                {block.label ? <span className="rendered-clause-label">{block.label}</span> : null}
-                                <div className="rendered-clause-text">{renderStyledClauseText(block)}</div>
-                              </div>
-                            ))
+                            (selectedDisplayProjection?.rendered_blocks ?? []).map((block, index, blocks) => {
+                              const pageChip = renderedClausePageChipLabel(block, index > 0 ? blocks[index - 1] : null);
+                              return (
+                                <div
+                                  key={`${block.block_id}-${block.render_role ?? "block"}`}
+                                  className={`rendered-clause-block rendered-clause-block-${block.render_role ?? "continuation"} rendered-clause-depth-${block.relative_depth ?? 0}`}
+                                >
+                                  {pageChip ? <span className="rendered-clause-page-chip">{pageChip}</span> : null}
+                                  {block.label ? <span className="rendered-clause-label">{block.label}</span> : null}
+                                  <div className="rendered-clause-text">{renderStyledClauseText(block)}</div>
+                                </div>
+                              );
+                            })
                           ) : (
                             <div className="empty-state comparison-empty-state">
                               No clause projection is available yet for this candidate.
@@ -2326,6 +2587,14 @@ export function CandidateReviewWorkspace({
                             renderComparisonRows(projectionReviewSignalRows)
                           ) : (
                             <p className="muted">No review signals were attached to this projection.</p>
+                          )}
+                        </div>
+                        <div className="evidence-panel">
+                          <h4>Page Context</h4>
+                          {projectionPageContextRows.length ? (
+                            renderComparisonRows(projectionPageContextRows)
+                          ) : (
+                            <p className="muted">No page-frame context is attached to this projection.</p>
                           )}
                         </div>
                         <div className="evidence-panel">

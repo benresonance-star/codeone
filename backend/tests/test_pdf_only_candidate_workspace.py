@@ -134,9 +134,9 @@ class PdfOnlyCandidateWorkspaceTests(unittest.TestCase):
                 StructuredBlock(
                     block_id="docling_1_10",
                     page=1,
-                    bbox=[50.0, 40.0, 200.0, 58.0],
+                    bbox=[50.0, 40.0, 320.0, 58.0],
                     block_type="heading",
-                    text="Part A1",
+                    text="Part A1 Interpreting the NCC",
                     source_strategy="docling",
                 ),
                 StructuredBlock(
@@ -193,6 +193,22 @@ class PdfOnlyCandidateWorkspaceTests(unittest.TestCase):
         self.assertEqual(clause_candidate["title"], "A1G2 Scope of NCC Volume Two")
         self.assertEqual(clause_candidate["display_projection"]["heading_text"], "Scope of NCC Volume Two")
         self.assertEqual(clause_candidate["display_projection"]["clause_code"], "A1G2")
+        self.assertEqual(clause_candidate["display_projection"]["parent_heading_label"], "Part A1")
+        self.assertEqual(clause_candidate["display_projection"]["parent_heading_text"], "Interpreting the NCC")
+        self.assertEqual(clause_candidate["display_projection"]["parent_heading_title"], "Part A1 Interpreting the NCC")
+        self.assertEqual(
+            clause_candidate["display_projection"]["structural_path"],
+            [
+                {
+                    "kind": "part",
+                    "label": "Part A1",
+                    "text": "Interpreting the NCC",
+                    "title": "Part A1 Interpreting the NCC",
+                    "block_id": "docling_1_10",
+                    "candidate_id": "candidate:pdf_clause:docling_1_10",
+                }
+            ],
+        )
         self.assertEqual(
             [block["text"] for block in clause_candidate["display_projection"]["marginalia_blocks"]],
             ["[New for 2022]"],
@@ -200,6 +216,60 @@ class PdfOnlyCandidateWorkspaceTests(unittest.TestCase):
         self.assertFalse(
             any(candidate.get("title") == "[New for 2022]" for candidate in payload["lineage"]["candidate_objects"])
         )
+
+    def test_process_pdf_only_sets_start_page_and_page_span_for_multi_page_clause(self) -> None:
+        extracted = ExtractedPdf(
+            pages_processed=2,
+            total_words=18,
+            blocks=[
+                StructuredBlock(
+                    block_id="docling_3_10",
+                    page=3,
+                    bbox=[50.0, 700.0, 540.0, 720.0],
+                    block_type="paragraph",
+                    text="(1) Compliance is achieved when the following applies-",
+                    source_strategy="docling",
+                ),
+                StructuredBlock(
+                    block_id="docling_4_11",
+                    page=4,
+                    bbox=[50.0, 50.0, 540.0, 72.0],
+                    block_type="paragraph",
+                    text="continued on the next page with the same requirement wording.",
+                    source_strategy="docling",
+                ),
+                StructuredBlock(
+                    block_id="docling_4_12",
+                    page=4,
+                    bbox=[50.0, 100.0, 540.0, 120.0],
+                    block_type="paragraph",
+                    text="(2) A new numbered item begins here.",
+                    source_strategy="docling",
+                ),
+            ],
+            tables=[],
+            strategy_name="docling",
+            runtime_mode="native_text",
+        )
+        self.service._extract_pdf = lambda pdf_bytes, strategy: extracted  # type: ignore[method-assign]
+
+        payload = self.service.process_pdf_only(
+            pdf_bytes=b"%PDF-1.4\n%",
+            pdf_name="multi-page.pdf",
+        )
+
+        clause_candidate = next(
+            candidate
+            for candidate in payload["lineage"]["candidate_objects"]
+            if candidate.get("candidate_id") == "candidate:pdf_clause:docling_3_10"
+        )
+
+        self.assertEqual(clause_candidate["page"], 3)
+        self.assertEqual(clause_candidate["assembled_clause"]["start_page"], 3)
+        self.assertEqual(clause_candidate["assembled_clause"]["end_page"], 4)
+        self.assertEqual(clause_candidate["display_projection"]["page_context"]["start_page"], 3)
+        self.assertEqual(clause_candidate["display_projection"]["page_context"]["end_page"], 4)
+        self.assertEqual(clause_candidate["display_projection"]["page_context"]["pages"], [3, 4])
 
 
 if __name__ == "__main__":

@@ -105,6 +105,8 @@ class ClauseAssemblyTests(unittest.TestCase):
         clauses = self.service._build_assembled_clauses(blocks)
         root_clause = next(clause for clause in clauses if clause["anchor"]["block_id"] == "docling_3_10")
 
+        self.assertEqual(root_clause["start_page"], 3)
+        self.assertEqual(root_clause["end_page"], 4)
         self.assertEqual(root_clause["pages"], [3, 4])
         self.assertEqual(root_clause["source_block_ids"], ["docling_3_10", "docling_4_11"])
         self.assertEqual(root_clause["rendered_blocks"][1]["render_role"], "continuation")
@@ -198,6 +200,7 @@ class ClauseAssemblyTests(unittest.TestCase):
         enriched = self.service._attach_clause_projections_to_candidates(
             candidates=[candidate],
             assembled_clauses=clauses,
+            structured_blocks=blocks,
         )[0]
 
         self.assertIsNotNone(enriched["assembled_clause"])
@@ -208,7 +211,8 @@ class ClauseAssemblyTests(unittest.TestCase):
 
     def test_build_assembled_clauses_recovers_header_and_annotation_separately(self) -> None:
         blocks = [
-            _block("docling_1_10", page=1, block_type="heading", text="Part A1", bbox=[50, 40, 200, 58]),
+            _block("docling_1_10", page=1, block_type="paragraph", text="Part A1 Interpreting the NCC", bbox=[50, 40, 320, 58]),
+            _block("docling_1_10b", page=1, block_type="heading", text="Governing Requirements", bbox=[50, 80, 260, 96]),
             _block("docling_1_11", page=1, block_type="paragraph", text="A1G2", bbox=[50, 110, 90, 124]),
             _block(
                 "docling_1_12",
@@ -255,12 +259,326 @@ class ClauseAssemblyTests(unittest.TestCase):
         self.assertEqual(clause["clause_code"], "A1G2")
         self.assertEqual(clause["heading_text"], "Scope of NCC Volume Two")
         self.assertEqual(clause["title_or_lead"], "A1G2 Scope of NCC Volume Two")
+        self.assertEqual(clause["candidate_title"], "A1G2 Scope of NCC Volume Two")
         self.assertEqual([block["text"] for block in clause["header_blocks"]], ["A1G2", "Scope of NCC Volume Two"])
         self.assertEqual([block["text"] for block in clause["marginalia_blocks"]], ["[New for 2022]"])
         self.assertEqual(clause["body_blocks"][0]["text"], "NCC Volume Two contains the requirements for-")
+        self.assertIsNone(clause["parent_heading_label"])
+        self.assertEqual(clause["parent_heading_text"], "Governing Requirements")
+        self.assertEqual(clause["parent_heading_title"], "Governing Requirements")
+        self.assertEqual(
+            clause["structural_path"],
+            [
+                {
+                    "kind": "part",
+                    "label": "Part A1",
+                    "text": "Interpreting the NCC",
+                    "title": "Part A1 Interpreting the NCC",
+                    "block_id": "docling_1_10",
+                    "candidate_id": "candidate:pdf_clause:docling_1_10",
+                },
+                {
+                    "kind": "heading",
+                    "label": None,
+                    "text": "Governing Requirements",
+                    "title": "Governing Requirements",
+                    "block_id": "docling_1_10b",
+                    "candidate_id": "candidate:pdf_clause:docling_1_10b",
+                },
+            ],
+        )
         self.assertEqual([item["label"] for item in clause["child_items"]], ["(a)", "(b)", "(c)"])
         self.assertEqual(clause["rendered_blocks"][1]["render_role"], "header")
         self.assertEqual(clause["rendered_blocks"][2]["render_role"], "annotation")
+
+    def test_build_assembled_clauses_ignores_page_frame_blocks(self) -> None:
+        blocks = [
+            _block(
+                "docling_1_hdr",
+                page=1,
+                block_type="paragraph",
+                text="Governing requirements",
+                bbox=[50, 18, 300, 32],
+                metadata={"page_region": "header"},
+            ),
+            _block("docling_1_11", page=1, block_type="paragraph", text="A1G2", bbox=[50, 110, 90, 124]),
+            _block(
+                "docling_1_12",
+                page=1,
+                block_type="paragraph",
+                text="Scope of NCC Volume Two",
+                bbox=[120, 110, 340, 124],
+                metadata={"style_summary": {"is_bold": True}},
+            ),
+            _block(
+                "docling_1_ftr",
+                page=1,
+                block_type="paragraph",
+                text="NCC 2022 Volume Two Page 41",
+                bbox=[50, 790, 320, 806],
+                metadata={"page_region": "footer"},
+            ),
+            _block(
+                "docling_1_14",
+                page=1,
+                block_type="paragraph",
+                text="NCC Volume Two contains the requirements for-",
+                bbox=[50, 145, 520, 162],
+            ),
+        ]
+
+        clauses = self.service._build_assembled_clauses(blocks)
+        clause = next(clause for clause in clauses if clause["anchor"]["block_id"] == "docling_1_11")
+
+        self.assertNotIn("docling_1_hdr", clause["source_block_ids"])
+        self.assertNotIn("docling_1_ftr", clause["source_block_ids"])
+
+    def test_build_assembled_clauses_keeps_structural_banner_in_header_band_when_style_exempts_it(self) -> None:
+        blocks = [
+            _block(
+                "docling_1_part",
+                page=1,
+                block_type="paragraph",
+                text="Part A1 Interpreting the NCC",
+                bbox=[50, 18, 320, 36],
+                metadata={
+                    "page_region": "header",
+                    "page_band": "header",
+                    "page_frame_normalized_text": "part a# interpreting the ncc",
+                    "style_summary": {"font_size_pt": 16, "is_bold": True},
+                },
+            ),
+            _block(
+                "docling_2_part",
+                page=2,
+                block_type="paragraph",
+                text="Part A1 Interpreting the NCC",
+                bbox=[50, 18, 320, 36],
+                metadata={
+                    "page_region": "header",
+                    "page_band": "header",
+                    "page_frame_normalized_text": "part a# interpreting the ncc",
+                    "style_summary": {"font_size_pt": 16, "is_bold": True},
+                },
+            ),
+            _block(
+                "docling_1_11",
+                page=1,
+                block_type="paragraph",
+                text="A1G2",
+                bbox=[50, 110, 90, 124],
+            ),
+            _block(
+                "docling_1_12",
+                page=1,
+                block_type="paragraph",
+                text="Scope of NCC Volume Two",
+                bbox=[120, 110, 340, 124],
+                metadata={"style_summary": {"font_size_pt": 12, "is_bold": True}},
+            ),
+            _block(
+                "docling_1_14",
+                page=1,
+                block_type="paragraph",
+                text="NCC Volume Two contains the requirements for-",
+                bbox=[50, 145, 520, 162],
+            ),
+        ]
+
+        clauses = self.service._build_assembled_clauses(blocks)
+        part_clause = next(clause for clause in clauses if clause["anchor"]["block_id"] == "docling_1_part")
+        child_clause = next(clause for clause in clauses if clause["anchor"]["block_id"] == "docling_1_11")
+
+        self.assertEqual(part_clause["candidate_title"], "Part A1 Interpreting the NCC")
+        self.assertEqual(child_clause["parent_heading_title"], "Part A1 Interpreting the NCC")
+        self.assertEqual(
+            child_clause["structural_path"],
+            [
+                {
+                    "kind": "part",
+                    "label": "Part A1",
+                    "text": "Interpreting the NCC",
+                    "title": "Part A1 Interpreting the NCC",
+                    "block_id": "docling_1_part",
+                    "candidate_id": "candidate:pdf_clause:docling_1_part",
+                }
+            ],
+        )
+
+    def test_attach_clause_projections_to_candidates_includes_page_context(self) -> None:
+        blocks = [
+            _block(
+                "docling_1_hdr",
+                page=1,
+                block_type="paragraph",
+                text="Governing requirements",
+                bbox=[50, 18, 300, 32],
+                metadata={"page_region": "header", "page_frame_role": "running_header"},
+            ),
+            _block("docling_1_11", page=1, block_type="paragraph", text="A1G2", bbox=[50, 110, 90, 124]),
+            _block(
+                "docling_1_12",
+                page=1,
+                block_type="paragraph",
+                text="Scope of NCC Volume Two",
+                bbox=[120, 110, 340, 124],
+                metadata={"style_summary": {"is_bold": True}},
+            ),
+            _block(
+                "docling_1_14",
+                page=1,
+                block_type="paragraph",
+                text="NCC Volume Two contains the requirements for-",
+                bbox=[50, 145, 520, 162],
+            ),
+            _block(
+                "docling_1_ftr",
+                page=1,
+                block_type="paragraph",
+                text="NCC 2022 Volume Two - Building Code of Australia Page 41",
+                bbox=[50, 790, 420, 806],
+                metadata={"page_region": "footer", "page_frame_role": "running_footer"},
+            ),
+        ]
+        clauses = self.service._build_assembled_clauses(blocks)
+        candidate = {
+            "candidate_id": "candidate:pdf_clause:docling_1_11",
+            "semantic_unit_id": "pdf_clause:docling_1_11",
+            "xml_node_id": None,
+            "title": "A1G2 Scope of NCC Volume Two",
+            "candidate_type": "rule",
+            "candidate_semantic_class": "rule",
+            "confidence": {"overall": 0.93},
+            "source": {"pdf_fragment_id": "docling_1_11"},
+            "proposed": {"content": "NCC Volume Two contains the requirements for-"},
+            "evidence": [
+                {
+                    "fragment_id": "docling_1_11",
+                    "page": 1,
+                    "bbox": [50, 110, 90, 124],
+                    "text": "A1G2",
+                    "confidence": 0.93,
+                    "pdf_evidence_class": "paragraph",
+                }
+            ],
+            "review": {
+                "base_status": "review required",
+                "needs_human_review": True,
+                "issue_class": "pdf_mismatch",
+                "source_emphasis": "pdf",
+                "issues": [],
+                "xml_only_terms": [],
+                "pdf_only_terms": [],
+            },
+            "candidate_relations": [],
+            "reconciliation_records": [],
+            "depends_on": [],
+        }
+
+        enriched = self.service._attach_clause_projections_to_candidates(
+            candidates=[candidate],
+            assembled_clauses=clauses,
+            structured_blocks=blocks,
+        )[0]
+
+        self.assertEqual(enriched["page"], 1)
+        self.assertEqual(enriched["page_context"]["primary_volume_label"], "Volume Two")
+        self.assertEqual(enriched["page_context"]["primary_ncc_page_number"], 41)
+        self.assertEqual(enriched["page_context"]["start_page"], 1)
+        self.assertEqual(enriched["page_context"]["end_page"], 1)
+        self.assertEqual(enriched["page_context"]["running_header_texts"], ["Governing requirements"])
+        self.assertEqual(
+            enriched["display_projection"]["page_context"]["running_footer_texts"],
+            ["NCC 2022 Volume Two - Building Code of Australia Page 41"],
+        )
+
+    def test_attach_clause_projections_to_candidates_uses_clause_start_page_for_multi_page_clause(self) -> None:
+        blocks = [
+            _block(
+                "docling_3_hdr",
+                page=3,
+                block_type="paragraph",
+                text="Volume Two Governing requirements",
+                bbox=[50, 18, 320, 32],
+                metadata={"page_region": "header", "page_frame_role": "running_header"},
+            ),
+            _block(
+                "docling_3_10",
+                page=3,
+                block_type="paragraph",
+                text="(1) Compliance is achieved when the following applies-",
+                bbox=[50.0, 700.0, 540.0, 720.0],
+            ),
+            _block(
+                "docling_4_11",
+                page=4,
+                block_type="paragraph",
+                text="continued on the next page with the same requirement wording.",
+                bbox=[50.0, 50.0, 540.0, 72.0],
+            ),
+            _block(
+                "docling_4_ftr",
+                page=4,
+                block_type="paragraph",
+                text="NCC 2022 Volume Two Page 44",
+                bbox=[50, 790, 320, 806],
+                metadata={"page_region": "footer", "page_frame_role": "running_footer"},
+            ),
+            _block(
+                "docling_4_12",
+                page=4,
+                block_type="paragraph",
+                text="(2) A new numbered item begins here.",
+                bbox=[50.0, 100.0, 540.0, 120.0],
+            ),
+        ]
+        clauses = self.service._build_assembled_clauses(blocks)
+        candidate = {
+            "candidate_id": "candidate:pdf_clause:docling_3_10",
+            "semantic_unit_id": "pdf_clause:docling_3_10",
+            "xml_node_id": None,
+            "title": "(1) Compliance is achieved when the following applies-",
+            "candidate_type": "rule",
+            "candidate_semantic_class": "rule",
+            "confidence": {"overall": 0.93},
+            "source": {"pdf_fragment_id": "docling_3_10"},
+            "proposed": {"content": "continued on the next page with the same requirement wording."},
+            "evidence": [
+                {
+                    "fragment_id": "docling_3_10",
+                    "page": 4,
+                    "bbox": [50.0, 50.0, 540.0, 72.0],
+                    "text": "continued on the next page with the same requirement wording.",
+                    "confidence": 0.93,
+                    "pdf_evidence_class": "paragraph",
+                }
+            ],
+            "review": {
+                "base_status": "review required",
+                "needs_human_review": True,
+                "issue_class": "pdf_mismatch",
+                "source_emphasis": "pdf",
+                "issues": [],
+                "xml_only_terms": [],
+                "pdf_only_terms": [],
+            },
+            "candidate_relations": [],
+            "reconciliation_records": [],
+            "depends_on": [],
+        }
+
+        enriched = self.service._attach_clause_projections_to_candidates(
+            candidates=[candidate],
+            assembled_clauses=clauses,
+            structured_blocks=blocks,
+        )[0]
+
+        self.assertEqual(enriched["assembled_clause"]["start_page"], 3)
+        self.assertEqual(enriched["assembled_clause"]["end_page"], 4)
+        self.assertEqual(enriched["page"], 3)
+        self.assertEqual(enriched["page_context"]["start_page"], 3)
+        self.assertEqual(enriched["page_context"]["end_page"], 4)
+        self.assertEqual(enriched["page_context"]["pages"], [3, 4])
 
 
 if __name__ == "__main__":

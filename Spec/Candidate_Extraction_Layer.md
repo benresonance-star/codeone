@@ -402,6 +402,9 @@ Backend ingestion may emit additive, inspectable payloads on `lineage` and `revi
 - **`graph_readiness`**: deterministic summary with `ready_for_graph_handoff` and a `gates` list (`gate_id`, `passed`, `detail`). Gates are conservative and advisory; they do not replace PDF/XML validation or candidate promotion rules.
 - **`foundational_baseline_corpus`**: deterministic slice (sorted, capped) over lower-risk categories such as definitions/glossary, titles and context keys, notes, and interpretive paths (for example intro or title bands). Items expose candidate/node identifiers, baseline category, status, text preview, and evidence summary for UI tabs.
 - **`pdf_clause_candidates` / `assembled_clause` / `display_projection`**: review-oriented PDF clause projections may be emitted for UI inspection. In temporary `pdf_only` review mode, they may define candidate identity before XML reconciliation is restored as the primary inventory driver.
+- **style-aware PDF codification**: when a secondary appearance pass is available, structured PDF blocks may carry additive `metadata.style_codification` signals such as relative font size, emphasis, heading-likeness, likely-running-chrome detection, page-frame exemptions, and structural-heading kind/title. These signals are review-facing and inspectable; they refine PDF-native clause assembly and ancestry without replacing candidate identity.
+- **explicit PDF structural ancestry**: `assembled_clause` and `display_projection` may carry `parent_heading_clause_id`, `parent_heading_block_id`, `parent_heading_label`, `parent_heading_text`, `parent_heading_title`, and `structural_path`. `structural_path` is an ordered ancestry stack whose entries may expose `kind`, `label`, `text`, `title`, `block_id`, and `candidate_id` where available.
+- **page-span and page-frame context**: PDF-native projections may additionally expose `start_page`, `end_page`, `pages`, and `page_context` so multi-page clauses and running page metadata remain inspectable in review mode.
 
 **Authority vs heuristic:** Top-level `explicit_relations`, `glossary_links`, `applicability_conditions`, and `implicit_relation_candidates` are unchanged. Each enriched candidate may include nested `semantic_enrichment` with `field_authority`—explicit XML-sourced relations are `xml_authoritative`; text-resolved relations are `mixed`; glossary links, applicability extraction, and implicit text hints are marked as heuristic unless separately promoted. `enrichment_summary` may include the same `field_authority` map for aggregate use.
 
@@ -427,6 +430,7 @@ For each slice, operators should inspect:
 - PDF evidence gathering attaches traceable support only
 - candidate extraction creates workflow-bearing candidate state
 - temporary `pdf_only` review may derive those candidate records from structured PDF clauses first, but this remains a review-stage projection rather than a canonical promotion authority change
+- in that `pdf_only` mode, parent/root lineage for review may be derived from PDF structural ancestry (`parent_heading_*` and `structural_path`) rather than XML node lineage
 - relation extraction and reconciliation create inspectable dependency state without replacing candidate identity
 - semantic enrichment annotates those same candidates without replacing them
 - canonical promotion remains downstream of candidate validation

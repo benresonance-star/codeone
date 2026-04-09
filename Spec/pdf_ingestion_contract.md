@@ -1,6 +1,6 @@
 # PDF Ingestion Validation Contract
 ## NCC PDF Ingestion Constraint Manual
-### Version 1.12.0
+### Version 1.13.0
 
 ---
 
@@ -239,6 +239,7 @@ Companion ingestion metadata may additionally surface:
 - runtime notes explaining whether text-first or table-aware extraction was used
 - additive Docling inspection payloads such as `docling_view.blocks`, `docling_view.tables`, and `docling_view.page_index` for source/output inspection UIs
 - optional block-level style enrichments under block metadata, such as `style_summary` and `style_spans`, when a secondary PDF appearance pass is available
+- optional block-level style codification under block metadata, such as `style_codification.relative_font_size`, `style_codification.heading_like`, `style_codification.likely_running_chrome`, `style_codification.page_frame_exempt`, and structural-heading labels/titles, when the runtime reuses appearance signals to classify page chrome versus structural content
 - candidate-stage readiness notes while the schema remains backward-compatible
 
 Current-state expectation for additive PDF appearance enrichment:
@@ -246,6 +247,8 @@ Current-state expectation for additive PDF appearance enrichment:
 - when appearance enrichment joins a secondary PDF engine to Docling structural blocks, bbox comparison must normalize both coordinate ordering and coordinate origin before overlap checks are applied
 - implementations must account for provenance bboxes that may be emitted in top-left or bottom-left page coordinates and convert them to a common page-space before style matching
 - page-height-aware origin conversion is acceptable implementation detail so long as the resulting enrichment remains traceable to the original extracted block and page
+- when style-aware codification is emitted, it must remain additive metadata over the extracted block rather than silently replacing the extracted block type or deleting source traceability
+- page-frame classification may use these style codification signals to preserve structural banners that appear in top-page or footer bands when they are materially distinct from repeated running chrome
 
 Companion ingestion responses may additionally surface **candidate robustness** payloads (additive, backward-compatible): `lineage.candidate_quality` (unit/evidence/candidate/review/snippet/baseline coverage counts), `lineage.graph_readiness` (inspectable gates and `ready_for_graph_handoff`), and `lineage.foundational_baseline_corpus` (deterministic baseline slice for glossary/title/interpretive categories). The same keys may appear on `review_workspace` for UI tabs. Graph-readiness gates are conservative and deterministic; they do not override PDF or XML validation outcomes. See `Spec/Candidate_Extraction_Layer.md` section 14 for authority vs heuristic enrichment markers on candidates.
 
@@ -276,6 +279,10 @@ Current-state expectation for lineage-oriented review payloads:
 - PDF evidence should be gathered per XML semantic unit rather than treating fragments as long-term candidate identity
 - candidate objects and candidate relations should be retained as first-class lineage payloads and review-workspace payloads
 - reconciliation records should make any object-vs-relation gaps, contradictions, or unresolved dependencies inspectable rather than burying them inside enrichment notes
+- `lineage.pdf_clause_candidates`, `candidate_objects[].assembled_clause`, and `candidate_objects[].display_projection` may carry additive PDF-native clause codification fields including `clause_code`, `heading_text`, `candidate_title`, `start_page`, `end_page`, `pages`, `page_context`, and separated `header_blocks`, `body_blocks`, and `marginalia_blocks`
+- PDF-native review projections may carry explicit structural ancestry fields including `parent_heading_clause_id`, `parent_heading_block_id`, `parent_heading_label`, `parent_heading_text`, `parent_heading_title`, and `structural_path`
+- `structural_path` entries may expose `kind`, `label`, `text`, `title`, `block_id`, and `candidate_id`, and should preserve order from broad structural context to immediate review context
+- in temporary `pdf_only` review mode, parent/root lineage shown in the workspace may be derived from this PDF structural ancestry rather than XML node ids
 - review units should be derived from candidate objects rather than emitted directly from fragment alignments
 - the payload may operate in `full` or `focused` mode depending on XML artifact type and fragment volume
 - focused narrow-artifact review may preferentially surface row-level XML nodes and row-level PDF fragments when those matches exist

@@ -240,6 +240,7 @@ class RetentionService:
         candidate_objects = ingestion_service._attach_clause_projections_to_candidates(
             candidates=candidate_objects,
             assembled_clauses=assembled_clauses,
+            structured_blocks=structured_blocks,
         )
         review_workspace = ingestion_service._build_review_workspace(
             pdf_name=pdf_document.file_name,

@@ -110,6 +110,8 @@ This document intentionally does not restate the full field-level detail already
 
 Those documents remain the foundation for ingestion-first and candidate-first behavior. This document adds the missing normalized query-layer contract boundary and points to the authoritative schemas.
 
+Review-facing additive projections such as `pdf_clause_candidates`, `assembled_clause`, and `display_projection` remain runtime inspection objects, not new canonical object families. They may expose PDF-native codification fields such as structural ancestry (`parent_heading_*`, `structural_path`), page-span metadata, and page-context projections, but those fields do not change the canonical object boundary defined above.
+
 ## Change Discipline
 Any change to:
 - object identity rules
